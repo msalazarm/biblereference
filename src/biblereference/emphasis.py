@@ -36,6 +36,19 @@ _HEBREW_PUNCTUATION: Final = {
     "׆",  # nun hafukha
 }
 
+#: Ligatures NFD does not decompose. The Clementine writes *flammæ*, an anchor will not.
+_LIGATURES: Final[dict[str, str]] = {"æ": "ae", "œ": "oe", "ﬁ": "fi", "ﬂ": "fl"}
+
+#: Latin only. The Clementine writes *Jesus*, *justitia*, *ejus*; the Nova Vulgata writes
+#: *Iesus*, *iustitia*, *eius*. The letters are the same letters -- j and v are late
+#: typographic distinctions of i and u -- so an anchor should find either spelling.
+#: Applied only to Latin: folding v to u would turn English *have* into *haue*.
+_LATIN_LETTERS: Final[dict[str, str]] = {"j": "i", "v": "u"}
+
+#: The Clementine brackets quoted speech and canticles, often opening in one verse and
+#: closing in another. An anchor will not include a stray bracket, so it folds away.
+_LATIN_PUNCTUATION: Final = {"[", "]"}
+
 
 class SpanNotFoundError(ValueError):
     """An emphasis span's anchors do not appear in the text, or appear out of order."""
@@ -55,7 +68,8 @@ class _Folded:
     ``text[i]``."""
 
 
-def _fold(text: str) -> _Folded:
+def _fold(text: str, language: str | None = None) -> _Folded:
+    latin = language == "la"
     out: list[str] = []
     offsets: list[int] = []
     pending_space = False
@@ -64,6 +78,8 @@ def _fold(text: str) -> _Folded:
         if character.isspace() or character in _HEBREW_PUNCTUATION:
             pending_space = bool(out)
             continue
+        if latin and character in _LATIN_PUNCTUATION:
+            continue
 
         decomposed = unicodedata.normalize("NFD", character)
         kept = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
@@ -71,6 +87,10 @@ def _fold(text: str) -> _Folded:
             continue
 
         kept = kept.lower().replace("ς", "σ")
+        kept = "".join(_LIGATURES.get(c, c) for c in kept)
+        if latin:
+            kept = "".join(_LATIN_LETTERS.get(c, c) for c in kept)
+
         if pending_space:
             out.append(" ")
             offsets.append(index)
@@ -82,12 +102,17 @@ def _fold(text: str) -> _Folded:
     return _Folded("".join(out), tuple(offsets))
 
 
-def fold(text: str) -> str:
+def fold(text: str, language: str | None = None) -> str:
     """The searchable form of ``text``: no accents, no points, collapsed whitespace.
 
-    Exposed because it is also the right comparison for checking a supplied quotation.
+    :param language: Where given, applies that language's own equivalences. ``"la"``
+        treats *j* and *i* and *v* and *u* as the same letters, which they are -- the
+        distinction is typographic, and the two Vulgates use opposite conventions.
+
+    Exposed because it is also the right comparison for checking a supplied quotation and
+    for telling two editions of one text apart.
     """
-    return _fold(text).text
+    return _fold(text, language).text
 
 
 def _after_cluster(text: str, index: int) -> int:
@@ -103,21 +128,22 @@ def _after_cluster(text: str, index: int) -> int:
     return end
 
 
-def apply_spans(text: str, spans: Sequence[Emphasis]) -> str:
+def apply_spans(text: str, spans: Sequence[Emphasis], language: str | None = None) -> str:
     """Wrap each span of ``text`` in its marker.
 
+    :param language: Passed to :func:`fold`, so a Latin anchor finds either spelling.
     :raises SpanNotFoundError: an anchor is missing, the end precedes the start, or two
         spans overlap.
     """
     if not spans:
         return text
 
-    folded = _fold(text)
+    folded = _fold(text, language)
     located: list[tuple[int, int, str]] = []
 
     for span in spans:
-        start_anchor = fold(span.start)
-        end_anchor = fold(span.end)
+        start_anchor = fold(span.start, language)
+        end_anchor = fold(span.end, language)
         if not start_anchor or not end_anchor:
             raise SpanNotFoundError(f"emphasis anchor {span.start!r} is empty", text)
 

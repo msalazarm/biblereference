@@ -149,6 +149,12 @@ def test_original_rejects_contradictions() -> None:
         list(find_citations("{{Gen 1:1 | original=auto,hebrew}}"))
 
 
+def test_latin_is_available_but_never_automatic() -> None:
+    """The Vulgate is a translation; printing it beside the originals is a choice."""
+    assert one("{{John 1:1 | original=latin}}").original == ("latin",)
+    assert one("{{Ps 23:1 | original=hebrew,lxx,latin}}").original == ("hebrew", "lxx", "latin")
+
+
 def test_original_rejects_unknown_values() -> None:
     with pytest.raises(TagSyntaxError, match="unknown original"):
         list(find_citations("{{Gen 1:1 | original=aramaic}}"))

@@ -62,7 +62,9 @@ _LANGUAGES: Final[Mapping[str, str]] = {
 
 #: What ``original=`` accepts. See :class:`~biblereference.canon.Canon` for how ``auto``
 #: decides between them.
-ORIGINAL_CHOICES: Final = frozenset({"auto", "hebrew", "lxx", "greek", "theodotion", "none"})
+ORIGINAL_CHOICES: Final = frozenset(
+    {"auto", "hebrew", "lxx", "greek", "theodotion", "latin", "nova", "none"}
+)
 
 _STYLES: Final = frozenset({"bold", "italic"})
 

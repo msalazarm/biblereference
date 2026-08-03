@@ -61,6 +61,8 @@ DEFAULT_ROLES: Final[Mapping[str, tuple[str, ...]]] = {
     "lxx": ("swete", "swete-daniel"),
     "greek": ("n1904",),
     "theodotion": ("swete-daniel",),
+    "latin": ("latvuc",),
+    "nova": ("novavulgata",),
 }
 
 
@@ -419,7 +421,10 @@ class Renderer:
         if not spans:
             return rendition
         try:
-            return replace(rendition, text=apply_spans(rendition.text, spans))
+            return replace(
+                rendition,
+                text=apply_spans(rendition.text, spans, rendition.language),
+            )
         except SpanNotFoundError as exc:
             raise CitationError(str(exc)) from exc
 
@@ -430,7 +435,8 @@ class Renderer:
 
         ``auto`` reads the book's canon: Hebrew for the Hebrew canon, Greek for the New
         Testament, the Septuagint for the deuterocanon -- where, for most books, no
-        Hebrew survives to print.
+        Hebrew survives to print. Latin is never automatic: the Vulgate is a translation,
+        and printing one alongside the originals is a choice about what you are arguing.
         """
         default = self.config.inline_original if citation.inline else self.config.original
         choices = citation.original or (default,)

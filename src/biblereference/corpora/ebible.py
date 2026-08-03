@@ -1,4 +1,4 @@
-"""English Bibles with the deuterocanon, from eBible.org.
+"""Bibles from eBible.org: the English deuterocanon, and the Latin.
 
 The ASV and KJV stop at the sixty-six books of the Protestant canon, so a Catholic
 treatise citing Tobit or Sirach in English needs another text. Two are used, because they
@@ -13,7 +13,11 @@ numbered. Jerome's Tobit, Judith and Sirach come from source texts that differ f
 Greek by whole clauses, which is exactly why the versification data refuses to map them;
 so the Douay-Rheims answers citations written in Vulgate numbering, and only those.
 
-Both are public domain.
+**Clementine Vulgate** -- Jerome's Latin as the Church received it, numbered exactly as
+the Douay-Rheims is, because the Douay-Rheims translates it. Sixty-five of its seventy-three
+books agree with the Douay-Rheims verse for verse.
+
+All three are public domain.
 """
 
 from __future__ import annotations
@@ -28,7 +32,7 @@ from ..refs import VerseRef
 from ..sources import BuiltCorpus, RemoteFile, Source
 from .usfm import parse_usfm
 
-__all__ = ["DRA", "WEBC", "build_dra", "build_webc"]
+__all__ = ["DRA", "LATVUC", "WEBC", "build_dra", "build_latvuc", "build_webc"]
 
 
 def _build(archive: Path, name: str, corpus: BuiltCorpus) -> BuiltCorpus:
@@ -74,6 +78,7 @@ def _build(archive: Path, name: str, corpus: BuiltCorpus) -> BuiltCorpus:
 
 _DRA_FILE: Final = "engDRA_usfm.zip"
 _WEBC_FILE: Final = "eng-web-c_usfm.zip"
+_LATVUC_FILE: Final = "latVUC_usfm.zip"
 
 
 def build_dra(archive: Path) -> Iterator[BuiltCorpus]:
@@ -112,6 +117,24 @@ def build_webc(archive: Path) -> Iterator[BuiltCorpus]:
     )
 
 
+def build_latvuc(archive: Path) -> Iterator[BuiltCorpus]:
+    yield _build(
+        archive,
+        _LATVUC_FILE,
+        BuiltCorpus(
+            id="latvuc",
+            label="Clementine Vulgate",
+            language="la",
+            versification="vul",
+            verses=[],
+            notes=[
+                "Numbered exactly as the Douay-Rheims is, which translates it: sixteen "
+                "chapters of Esther, fourteen of Daniel, Susanna at Daniel 13.",
+            ],
+        ),
+    )
+
+
 DRA: Final = Source(
     id="dra",
     label="Douay-Rheims 1899 American Edition",
@@ -132,4 +155,15 @@ WEBC: Final = Source(
     files=(RemoteFile(url=f"https://ebible.org/Scriptures/{_WEBC_FILE}", name=_WEBC_FILE),),
     build=build_webc,
     note="The English deuterocanon, in Greek numbering.",
+)
+
+LATVUC: Final = Source(
+    id="latvuc",
+    label="Clementine Vulgate",
+    homepage="https://ebible.org/find/details.php?id=latVUC",
+    license="Public domain.",
+    attribution=None,
+    files=(RemoteFile(url=f"https://ebible.org/Scriptures/{_LATVUC_FILE}", name=_LATVUC_FILE),),
+    build=build_latvuc,
+    note="Jerome's Latin as the Church received it, in Vulgate numbering.",
 )

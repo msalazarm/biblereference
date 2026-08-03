@@ -41,9 +41,9 @@ def test_every_source_declares_its_licence_and_files() -> None:
 
 
 def test_the_catholic_canon_is_covered_by_the_registered_sources() -> None:
-    """Hebrew, Greek, Septuagint, and two English texts -- one Greek-numbered for the
-    deuterocanon, one Vulgate-numbered."""
-    assert set(all_sources()) == {"oshb", "swete", "nestle1904", "webc", "dra"}
+    """Hebrew, Greek, Septuagint, the Latin, and two English texts -- one Greek-numbered
+    for the deuterocanon, one Vulgate-numbered."""
+    assert set(all_sources()) == {"oshb", "swete", "nestle1904", "webc", "dra", "latvuc"}
 
 
 def test_an_unknown_source_names_the_known_ones() -> None:

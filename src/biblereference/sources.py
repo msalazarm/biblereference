@@ -70,6 +70,7 @@ def _sources() -> dict[str, Source]:
             nestle1904.SOURCE,
             ebible.WEBC,
             ebible.DRA,
+            ebible.LATVUC,
         )
     }
 
@@ -94,4 +95,4 @@ def get_source(source_id: str) -> Source:
 
 
 #: Order the CLI fetches in, smallest first, so a failure surfaces quickly.
-FETCH_ORDER: Final = ("webc", "dra", "nestle1904", "oshb", "swete")
+FETCH_ORDER: Final = ("webc", "dra", "latvuc", "nestle1904", "oshb", "swete")

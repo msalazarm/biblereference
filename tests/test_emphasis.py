@@ -130,3 +130,57 @@ def test_overlapping_spans_raise() -> None:
 
 def test_no_spans_leaves_the_text_alone() -> None:
     assert apply_spans(ASV_LUKE, []) == ASV_LUKE
+
+
+# --------------------------------------------------------------------------------------
+# Latin
+# --------------------------------------------------------------------------------------
+
+CLEMENTINE = "[Exultavit cor meum in Domino, et exaltatum est cornu meum in Deo meo;"
+
+
+@pytest.mark.parametrize(
+    ("written", "folded"),
+    [("flammæ", "flammae"), ("cælis", "caelis"), ("pœna", "poena")],
+)
+def test_ligatures_fold_in_every_language(written: str, folded: str) -> None:
+    """NFD does not decompose them, and no one types an anchor with a ligature."""
+    assert fold(written) == folded
+
+
+@pytest.mark.parametrize(
+    ("written", "latin"),
+    [("Jesus", "iesus"), ("justitia", "iustitia"), ("ejus", "eius"), ("universa", "uniuersa")],
+)
+def test_latin_folds_j_to_i_and_v_to_u(written: str, latin: str) -> None:
+    """The Clementine writes Jesus, the Nova Vulgata Iesus. Same word, same letters."""
+    assert fold(written, "la") == latin
+
+
+def test_that_folding_is_not_applied_to_other_languages() -> None:
+    """Folding v to u globally would turn English 'have' into 'haue'."""
+    assert fold("have") == "have"
+    assert fold("Jesus") == "jesus"
+
+
+def test_a_latin_anchor_finds_either_spelling() -> None:
+    assert "**Exultavit cor meum in Domino**" in apply_spans(
+        CLEMENTINE, [bold("exultauit cor meum", "Domino")], "la"
+    )
+    assert "**Exultavit cor meum in Domino**" in apply_spans(
+        CLEMENTINE, [bold("Exultavit", "Domino")], "la"
+    )
+
+
+def test_the_clementines_quotation_brackets_do_not_block_an_anchor() -> None:
+    """It brackets canticles and quoted speech, often opening in one verse and closing in
+    another, so a single verse can carry a stray bracket an anchor will not include."""
+    assert fold("[Dominus regit me", "la") == "dominus regit me"
+    out = apply_spans("[Dominus regit me, et nihil", [bold("Dominus", "me")], "la")
+    assert out.startswith("[**Dominus regit me**")
+
+
+def test_the_two_vulgates_differ_where_they_really_differ() -> None:
+    """Folding must not hide a real textual variant: regit against pascit."""
+    assert fold("Dominus regit me", "la") != fold("Dominus pascit me", "la")
+    assert fold("vocabitur nomen ejus", "la") == fold("uocabitur nomen eius", "la")
