@@ -23,6 +23,7 @@ from .canon import (
     book_title,
     resolve_book,
 )
+from .compare import BookComparison, VerseDifference, compare_corpora
 from .corpora import Corpus, CorpusError, VerseText, VerseUnavailable
 from .emphasis import SpanNotFoundError, apply_spans, fold
 from .quotecheck import QuoteCheck, check_quotation
@@ -48,6 +49,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "AmbiguousBookError",
+    "BookComparison",
     "Canon",
     "Citation",
     "CitationError",
@@ -66,6 +68,7 @@ __all__ = [
     "TagSyntaxError",
     "UnknownBookError",
     "UnknownVersificationError",
+    "VerseDifference",
     "VerseOutOfRangeError",
     "VerseRange",
     "VerseRef",
@@ -79,6 +82,7 @@ __all__ = [
     "book_canon",
     "book_title",
     "check_quotation",
+    "compare_corpora",
     "find_citations",
     "fold",
     "parse_reference",

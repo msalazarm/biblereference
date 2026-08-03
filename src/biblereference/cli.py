@@ -12,7 +12,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from .canon import NamingScheme
+from .canon import NamingScheme, resolve_book
+from .compare import BookComparison, compare_corpora
 from .fetch import build_source, fetch_source, iter_sources
 from .render import Config, Renderer
 from .store import DataHome, SqliteCorpus, read_meta, stored_chapters
@@ -100,6 +101,53 @@ def cmd_verify(args: argparse.Namespace) -> int:
     _, report = renderer.render_text(Path(args.input).read_text(encoding="utf-8"))
     _report(report, verbose=True)
     return 0 if report.ok else 1
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    """Report how far two editions of one text have drifted apart, book by book."""
+    home = _home(args)
+    corpora = SqliteCorpus.load_all(home)
+    missing = [name for name in (args.left, args.right) if name not in corpora]
+    if missing:
+        _say(f"not built: {', '.join(missing)}. Available: {', '.join(sorted(corpora))}.")
+        return 1
+
+    left, right = corpora[args.left], corpora[args.right]
+    versification = Versification.load()
+    books = [resolve_book(args.book)] if args.book else None
+
+    results = list(compare_corpora(left, right, versification, books=books))
+    if args.book and results and args.verbose:
+        _print_verse_differences(results[0])
+        return 0
+
+    print(f"# {left.label} against {right.label}\n")
+    print("| Book | Verses | Differ | Share | Mean similarity | Only in one |")
+    print("| --- | ---: | ---: | ---: | ---: | ---: |")
+    total = differing = 0
+    for result in results:
+        only = result.missing_left + result.missing_right
+        print(
+            f"| {result.title} | {result.compared} | {len(result.differing)} | "
+            f"{result.share_differing:.0%} | {result.mean_similarity:.0%} | {only} |"
+        )
+        total += result.compared
+        differing += len(result.differing)
+
+    share = differing / total if total else 0.0
+    print(
+        f"\n{differing:,} of {total:,} verses differ ({share:.0%}), comparing on folded "
+        f"text so that spelling is not counted as substance."
+    )
+    return 0
+
+
+def _print_verse_differences(result: BookComparison) -> None:
+    print(f"# {result.title}: {len(result.differing)} of {result.compared} verses differ\n")
+    for difference in result.differing:
+        print(f"**{difference.ref.pretty()}** — {difference.similarity:.0%} alike\n")
+        print(f"- {difference.left}")
+        print(f"- {difference.right}\n")
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -222,6 +270,14 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--vrs", default="eng", help="versification references are written in")
         command.add_argument("--strict", action="store_true", help="treat warnings as errors")
         command.set_defaults(func=function)
+
+    compare = subparsers.add_parser(
+        "compare", help="report how far two editions of one text differ, book by book"
+    )
+    compare.add_argument("left", help="corpus id, e.g. latvuc")
+    compare.add_argument("right", help="corpus id, e.g. novavulgata")
+    compare.add_argument("--book", help="just this book; with -v, print the verses")
+    compare.set_defaults(func=cmd_compare)
 
     doctor = subparsers.add_parser("doctor", help="report what is cached and built")
     doctor.set_defaults(func=cmd_doctor)

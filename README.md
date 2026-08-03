@@ -24,7 +24,13 @@ biblereference render treatise.md -o treatise.out.md
 
 `biblereference verify treatise.md` checks every citation and writes nothing — the one to
 put in a pre-commit hook. `biblereference doctor` says what is cached, what is built, and
-which chapters cannot be converted between numbering systems.
+which chapters cannot be converted between numbering systems. `biblereference render
+--appendix` adds the passage register.
+
+`biblereference compare latvuc novavulgata` reports how far the two Latin Bibles have
+drifted apart, book by book — aligned through the pivot, since they are not numbered
+alike, and compared on words so that commas and the j/i spelling shift are not counted as
+substance.
 
 ## Usage
 
@@ -58,7 +64,21 @@ original: [lxx]
 
 `original=` takes `auto` (Hebrew for the Hebrew canon, Greek for the New Testament, the
 Septuagint for the deuterocanon), or any of `hebrew`, `lxx`, `greek`, `theodotion`,
-`none`, or a list.
+`latin`, `nova`, `none`, or a list. Latin is never automatic: the Vulgate is a
+translation, and setting it beside the originals is a choice about what you are arguing.
+
+## Appendices
+
+`Config(appendix=True)` adds **Appendix Y**, every passage the work cites, merged and
+printed whole — cite 1 Timothy 2:7, then 2:4, then 2:1-6 and the register shows
+1 Timothy 2:1-7 once, in every language available, with a line saying where to find it in
+other numbering and naming traditions.
+
+**Appendix Z** is on by default: the copyright notices assembled from what was actually
+quoted, plus a check against each publisher's stated limit. The units differ — the
+National Council of Churches permits 500 *verses*, the Confraternity of Christian Doctrine
+5,000 *words* — and over the limit the note says so and recommends the Berean Standard
+Bible, which went public domain in 2023. `--strict` makes it a failing exit code.
 
 ## Texts
 
@@ -72,6 +92,8 @@ Public domain or freely licensed, fetched once and then archived:
 | English | ASV, KJV and two dozen more via [pythonbible](https://github.com/avendesora/pythonbible) | public domain |
 | English deuterocanon | [WEB Catholic Edition](https://ebible.org/find/details.php?id=eng-web-c) | translated from the Greek, so numbered like the Greek |
 | English of the Vulgate | [Douay-Rheims 1899](https://ebible.org/find/details.php?id=engDRA) | for citations written in Vulgate numbering |
+| Latin | [Clementine Vulgate](https://ebible.org/find/details.php?id=latVUC) | Jerome as the Church received him; public domain |
+| Latin | [Nova Vulgata](https://www.vatican.va/archive/bible/nova_vulgata/documents/nova-vulgata_index_lt.html) | the 1979 revision; © Libreria Editrice Vaticana |
 | Versification | [Copenhagen Alliance](https://github.com/Copenhagen-Alliance/versification-specification) | org / eng / lxx / vul maps |
 
 NA28, the BHS apparatus, and Rahlfs-Hanhart are under copyright and cannot be included.
