@@ -124,6 +124,22 @@ Douay-Rheims gives it 72, and the versification data declares 72. So two corpora
 verse the data does not know about — an upstream count that follows the Latin where the
 Greek tradition has one more.
 
+**Exodus 39 (three pairs, three different offsets).** The most tempting of the lot, and the
+one that looked most like a second Jonah: the Clementine puts the golden plate at 39:29
+where the Nova Vulgata and the World English Bible put it at 39:30, all four editions have
+exactly 43 verses, and there is no mapping entry at all — the data asserts identity.
+
+Mapping the offset verse by verse is what settles it. It is not a shift. It swings +1, 0,
+−1, +2 and back across the chapter, with similarities between 0.10 and 0.73, and Brenton's
+Septuagint has 23 verses where the others have 43. This is the tabernacle account of
+Exodus 36–40, which the traditions genuinely rearrange rather than renumber. Asserting
+identity is a simplification, but no offset mapping would be less wrong, because the
+material is not in the same order on both sides.
+
+The lesson generalises: *a run of flagged verses is necessary evidence of a fault, not
+sufficient.* What made Jonah provable was a mechanical impossibility — a mapping keyed on a
+verse the system does not have. Nothing else so far has one.
+
 ## The English family
 
 All 46 corpora filed under `eng`, each checked against the World English Bible verse by
@@ -148,9 +164,9 @@ not that these belong somewhere else.
 - **1 mapping fault found, confirmed from four independent witnesses, and fixed** — the
   Vulgate's Jonah. Pinned by `tests/test_alignment.py`; Jonah now scores 100% agreement
   across all seven pairs.
-- **39 runs where both instruments agree the content is offset.** Six examined by hand so
-  far — Bel and the Dragon, Daniel 14, Deuteronomy 29, the Letter of Jeremiah twice, and
-  Sirach 6 — and **none is a mapping fault**. Every one is an edition difference or a
+- **39 runs where both instruments agree the content is offset.** Seven examined by hand —
+  Bel and the Dragon, Daniel 14, Deuteronomy 29, the Letter of Jeremiah twice, Sirach 6 and
+  Exodus 39 — and **none is a mapping fault**. Every one is an edition difference or a
   quirk of the witness. The remaining ~33 are candidates, not defects, and the prior
   established by the six is that most will be the same thing: the deuterocanon is where the
   Latin and Greek traditions genuinely transmit different texts, and that is precisely
