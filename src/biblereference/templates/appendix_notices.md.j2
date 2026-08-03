@@ -1,0 +1,44 @@
+{# Appendix Z: the notices publishers require, and any limit passed. #}
+---
+
+## {{ title }}
+
+{% if attributions %}
+### Texts quoted
+
+{% for a in attributions %}
+- {{ a }}
+{% endfor %}
+
+{% endif %}
+{% if public_domain %}
+### Public domain
+
+{% for note in public_domain %}
+- {{ note }}
+{% endfor %}
+
+{% endif %}
+{% if entries %}
+### Permissions
+
+{% for e in entries %}
+**{{ e.label }}**
+
+{{ e.note }}
+{% if e.source %}
+
+Terms: {{ e.source }}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+### About this document
+
+This work contains {{ "{:,}".format(document_words) }} words in total. Scripture
+references were resolved with **biblereference** (MIT licence), using versification
+mappings from the Copenhagen Alliance for Open Biblical Language Resources, licensed
+CC BY-SA 4.0.
+{% if uses_register %}
+Appendix Y reproduces reference correspondences derived from that data.
+{% endif %}

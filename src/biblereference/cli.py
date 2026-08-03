@@ -31,6 +31,8 @@ def _renderer(args: argparse.Namespace) -> Renderer:
         default_english=args.english,
         strict=getattr(args, "strict", False),
         template=getattr(args, "template", None) or "blockquote",
+        appendix=getattr(args, "appendix", False),
+        notices=not getattr(args, "no_notices", False),
         naming=NamingScheme(args.naming),
         vrs=args.vrs,
         data_home=home.root,
@@ -199,6 +201,17 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("-o", "--output", help="write here instead of stdout")
             command.add_argument("--template", help="template name, e.g. footnote")
             command.add_argument("--template-dir", help="directory of your own templates")
+        command.add_argument(
+            "--appendix",
+            action="store_true",
+            help="append the passage register: every passage cited, merged and in full",
+        )
+        command.add_argument(
+            "--no-notices",
+            action="store_true",
+            help="omit the copyright notices (they are required wherever you quote "
+            "copyrighted text)",
+        )
         command.add_argument("--english", default="ASV", help="default English version")
         command.add_argument(
             "--naming",

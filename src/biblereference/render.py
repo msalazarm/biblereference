@@ -11,6 +11,7 @@ something needs attention -- never a quietly wrong verse.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -18,11 +19,20 @@ from typing import Final
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFound
 
+from .appendix import (
+    QuotaFinding,
+    RegisterEntry,
+    Usage,
+    check_quota,
+    cross_scheme_references,
+    public_domain_note,
+    recommended_alternative,
+)
 from .canon import AmbiguousBookError, Canon, NamingScheme, UnknownBookError, book_canon
 from .corpora.base import Corpus, CorpusError, VerseText, VerseUnavailable
 from .emphasis import SpanNotFoundError, apply_spans
 from .quotecheck import DEFAULT_THRESHOLD, check_quotation
-from .refs import ReferenceParseError, VerseRange, parse_reference
+from .refs import ReferenceParseError, VerseRange, VerseRef, parse_reference
 from .tags import Citation, TagSyntaxError, find_citations
 from .versification import Versification, VersificationError
 
@@ -84,7 +94,8 @@ class Config:
     :param strict: Turn warnings -- an unverified quotation, a missing original -- into
         errors.
     :param template_dir: Directory of your own templates, searched before the built-ins.
-    :param attribution: Append the credit lines that the texts' licences require.
+    :param appendix: Append the passage register.
+    :param notices: Append the copyright notices and permissions check.
     """
 
     default_english: str = "ASV"
@@ -105,7 +116,17 @@ class Config:
     strict: bool = False
     data_home: Path | None = None
     template_dir: Path | None = None
-    attribution: bool = True
+    appendix: bool = False
+    """Append the passage register -- every passage the work cites, merged and printed in
+    full. Off while drafting; a deliberate act for a finished piece."""
+    notices: bool = True
+    """Append the copyright notices. On, because they are an obligation rather than a
+    preference wherever copyrighted text is quoted."""
+    appendix_originals: tuple[str, ...] = ("hebrew", "lxx", "greek", "latin")
+    """Which texts the register prints beside the English. The fullest form the corpora
+    can supply, since the register is where a reader goes to check."""
+    appendix_title: str = "Appendix Y — Passages Cited"
+    notices_title: str = "Appendix Z — Sources and Permissions"
     online: bool = True
     """Whether a version that exists only online may be fetched. Naming such a version
     is itself the request, so this is on; set it False to guarantee no network use."""
@@ -140,6 +161,9 @@ class Rendition:
     renumbered: bool = False
     """Whether this corpus numbers the passage differently from the citation, in which
     case the reference above is worth printing."""
+    refs: tuple[VerseRef, ...] = ()
+    """The verses this rendition actually covers, in the corpus's own numbering. Kept so
+    that a permissions check can count distinct verses rather than estimate."""
 
     @property
     def short_label(self) -> str:
@@ -163,6 +187,8 @@ class ResolvedCitation:
     reference: str
     renditions: tuple[Rendition, ...]
     warnings: tuple[str, ...] = ()
+    span: VerseRange | None = None
+    """The reference as parsed, for merging into the register."""
 
 
 @dataclass
@@ -225,6 +251,7 @@ class Renderer:
         self._corpora: dict[str, Corpus] = (
             dict(corpora) if corpora is not None else self._load_built()
         )
+        self._usage: dict[str, Usage] = {}
         self._env = self._build_environment()
 
     def _load_built(self) -> dict[str, Corpus]:
@@ -304,6 +331,8 @@ class Renderer:
         report = RenderReport()
         pieces: list[str] = []
         footnotes: list[str] = []
+        resolutions: list[ResolvedCitation] = []
+        self._usage = {}
         cursor = 0
 
         for citation in self._scan(text, report):
@@ -319,6 +348,7 @@ class Renderer:
                 continue
 
             report.resolved += 1
+            resolutions.append(resolved)
             report.warnings.extend(resolved.warnings)
             for rendition in resolved.renditions:
                 if rendition.attribution and rendition.attribution not in report.attributions:
@@ -331,8 +361,10 @@ class Renderer:
 
         if footnotes:
             out = out.rstrip("\n") + "\n\n" + "\n".join(footnotes) + "\n"
-        if self.config.attribution and report.attributions:
-            out = out.rstrip("\n") + "\n\n" + _attribution_block(report.attributions)
+        if self.config.appendix and resolutions:
+            out = out.rstrip("\n") + "\n\n" + self._passage_register(resolutions, report)
+        if self.config.notices and self._usage:
+            out = out.rstrip("\n") + "\n\n" + self._notices(out, report)
         return out, report
 
     def _scan(self, text: str, report: RenderReport) -> list[Citation]:
@@ -380,6 +412,7 @@ class Renderer:
             reference=span.pretty(),
             renditions=tuple(renditions),
             warnings=tuple(warnings),
+            span=span,
         )
 
     def _with_supplied_quotation(
@@ -530,7 +563,7 @@ class Renderer:
                 raise VerseUnavailable(segment.start, corpus.label)
             verses.extend(corpus.fetch(self.versification.expand(segment)))
 
-        return Rendition(
+        rendition = Rendition(
             corpus_id=corpus.id,
             label=corpus.label,
             language=corpus.language,
@@ -538,7 +571,28 @@ class Renderer:
             text=" ".join(verse.text for verse in verses).strip(),
             attribution=corpus.attribution,
             renumbered=[str(s) for s in segments] != [str(span)],
+            refs=tuple(verse.ref for verse in verses),
         )
+        self._record_usage(rendition)
+        return rendition
+
+    def _record_usage(self, rendition: Rendition) -> None:
+        """Accumulate what has been quoted, for the permissions check.
+
+        Counted here rather than at the end, so that the appendices -- which reprint
+        passages, and so put those words on the page a second time -- are counted too.
+        """
+        usage = self._usage.get(rendition.corpus_id)
+        if usage is None:
+            usage = Usage(
+                corpus_id=rendition.corpus_id,
+                label=rendition.label,
+                attribution=rendition.attribution,
+            )
+            self._usage[rendition.corpus_id] = usage
+        if usage.attribution is None:
+            usage.attribution = rendition.attribution
+        usage.record(rendition.refs, rendition.text)
 
     # -- templates ---------------------------------------------------------------------
 
@@ -580,6 +634,110 @@ class Renderer:
         )
         return out.strip("\n") if "\n" in out else out
 
+    # -- appendices --------------------------------------------------------------------
+
+    def _passage_register(
+        self, resolutions: Sequence[ResolvedCitation], report: RenderReport
+    ) -> str:
+        """Appendix Y: every passage the work cites, merged and printed whole."""
+        spans = [r.span for r in resolutions if r.span is not None]
+        entries: list[RegisterEntry] = []
+
+        for span in self.versification.merge(spans):
+            renditions: list[Rendition] = []
+            english = self._register_english(span)
+            if english is not None:
+                renditions.append(english)
+            for role in self.config.appendix_originals:
+                rendition, _ = self._by_role(role, span)
+                if rendition is not None:
+                    renditions.append(rendition)
+            if not renditions:
+                report.warnings.append(f"no text for {span.pretty()} in the register")
+                continue
+            entries.append(
+                RegisterEntry(
+                    span=span,
+                    renditions=tuple(renditions),
+                    equivalents=cross_scheme_references(self.versification, span),
+                )
+            )
+
+        for entry in entries:
+            for rendition in entry.renditions:
+                if rendition.attribution and rendition.attribution not in report.attributions:
+                    report.attributions.append(rendition.attribution)
+
+        return (
+            self._env.get_template("appendix_passages.md.j2")
+            .render(title=self.config.appendix_title, entries=entries)
+            .strip("\n")
+            + "\n"
+        )
+
+    def _register_english(self, span: VerseRange) -> Rendition | None:
+        """The English for a register entry, without failing the document over it."""
+        try:
+            return self._english_rendition(Citation(reference=str(span)), span, [])
+        except _CITATION_FAILURES:
+            return None
+
+    def _notices(self, document: str, report: RenderReport) -> str:
+        """Appendix Z: the copyright notices, and whether any limit has been passed."""
+        document_words = len(re.findall(r"[^\W_]+", document))
+        public_domain: list[str] = []
+        restricted: list[tuple[Usage, QuotaFinding | None]] = []
+
+        for usage in sorted(self._usage.values(), key=lambda u: u.label):
+            finding = check_quota(usage, document_words)
+            if finding is not None:
+                restricted.append((usage, finding))
+                continue
+            note = public_domain_note(usage.corpus_id)
+            if note is not None:
+                public_domain.append(note)
+            # A text with neither a quota nor a public-domain entry is one whose licence
+            # asks only for attribution, and that is already in the list above.
+
+        alternative = recommended_alternative()
+        overages = [f for _, f in restricted if f is not None and f.exceeded]
+        for finding in overages:
+            report.warnings.append(
+                f"{finding.usage.label}: {'; '.join(finding.reasons)} — see the notices"
+            )
+        if overages and self.config.strict:
+            report.errors.append(
+                "quoted more than the publisher permits without written permission: "
+                + "; ".join(f.usage.label for f in overages)
+            )
+
+        entries = [
+            {
+                "label": usage.label,
+                "verses": usage.verse_count,
+                "words": usage.words,
+                "note": finding.message(alternative),
+                "exceeded": finding.exceeded,
+                "source": finding.quota.source,
+            }
+            for usage, finding in restricted
+            if finding is not None
+        ]
+
+        return (
+            self._env.get_template("appendix_notices.md.j2")
+            .render(
+                title=self.config.notices_title,
+                attributions=report.attributions,
+                public_domain=public_domain,
+                entries=entries,
+                document_words=document_words,
+                uses_register=self.config.appendix,
+            )
+            .strip("\n")
+            + "\n"
+        )
+
 
 def _isolate(text: str, rtl: bool = True) -> str:
     """Wrap right-to-left text in a Unicode directional isolate.
@@ -588,8 +746,3 @@ def _isolate(text: str, rtl: bool = True) -> str:
     punctuation on the wrong side.
     """
     return f"⁨{text}⁩" if rtl else text
-
-
-def _attribution_block(attributions: Sequence[str]) -> str:
-    lines = "\n".join(f"- {a}" for a in attributions)
-    return f"---\n\n*Texts quoted above:*\n\n{lines}\n"

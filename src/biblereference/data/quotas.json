@@ -1,0 +1,93 @@
+{
+  "_comment": [
+    "What each publisher permits without written permission.",
+    "",
+    "Every entry records where the rule came from, because these terms change and an",
+    "unsourced number in a file like this is worse than no number at all. Checked",
+    "2026-08-03. If you are preparing something for publication, confirm against the",
+    "publisher's current page -- this is a warning system, not legal advice.",
+    "",
+    "Note that the units differ. The National Council of Churches counts verses; the",
+    "Confraternity of Christian Doctrine counts words. A single limit would be wrong for",
+    "one of them."
+  ],
+
+  "quotas": {
+    "nrsvce": {
+      "holder": "National Council of the Churches of Christ in the United States of America",
+      "verses": 500,
+      "work_fraction": 0.5,
+      "whole_book": false,
+      "contact": "the NRSV Permissions Office",
+      "summary": "up to 500 verses, provided the total is less than one whole book and less than 50% of the work's words",
+      "source": "https://nrsvbibles.org/index.php/licensing"
+    },
+    "nrsvace": { "same_as": "nrsvce" },
+    "nrsvue": { "same_as": "nrsvce" },
+    "rsvce": { "same_as": "nrsvce" },
+    "rsv": { "same_as": "nrsvce" },
+    "nrsv": { "same_as": "nrsvce" },
+
+    "nabre": {
+      "holder": "Confraternity of Christian Doctrine, Washington, D.C.",
+      "words": 5000,
+      "work_fraction": 0.4,
+      "book_fraction": 0.4,
+      "contact": "the Associate Director, Permissions, Confraternity of Christian Doctrine",
+      "summary": "up to 5,000 words, provided the use is less than 40% of a single book of the Bible and less than 40% of the work",
+      "source": "https://www.usccb.org/offices/new-american-bible/permissions"
+    },
+
+    "rsv2ce": {
+      "holder": "Ignatius Press (translation copyright National Council of the Churches)",
+      "contact": "Ignatius Press permissions",
+      "summary": "no quota is published; Ignatius Press handles permissions for this edition directly",
+      "source": "https://ignatius.com/permission-requests/"
+    },
+
+    "gntce": {
+      "holder": "American Bible Society",
+      "contact": "American Bible Society rights and permissions",
+      "summary": "no quota is published here; confirm with the American Bible Society",
+      "source": "https://www.americanbible.org/rights-and-permissions/"
+    },
+
+    "ncb": {
+      "holder": "Catholic Book Publishing Corp.",
+      "contact": "Catholic Book Publishing Corp.",
+      "summary": "no quota is published here; confirm with the publisher"
+    },
+
+    "novavulgata": {
+      "holder": "Libreria Editrice Vaticana",
+      "contact": "Libreria Editrice Vaticana",
+      "summary": "no quota is published; the Nova Vulgata is under Vatican copyright and reuse should be confirmed with Libreria Editrice Vaticana",
+      "source": "https://www.vatican.va/archive/bible/nova_vulgata/documents/nova-vulgata_index_lt.html"
+    }
+  },
+
+  "public_domain": {
+    "asv": "American Standard Version (1901). Public domain.",
+    "kjv": "King James Version. Public domain.",
+    "akjv": "American King James Version. Public domain.",
+    "web": "World English Bible. Public domain.",
+    "webc": "World English Bible, Catholic Edition. Public domain.",
+    "dra": "Douay-Rheims 1899 American Edition. Public domain.",
+    "latvuc": "Clementine Vulgate. Public domain.",
+    "ylt": "Young's Literal Translation. Public domain.",
+    "darby": "Darby Translation. Public domain.",
+    "geneva": "Geneva Bible. Public domain.",
+    "webster": "Webster's Revision. Public domain.",
+    "tyndale": "Tyndale Bible. Public domain.",
+    "nheb": "New Heart English Bible. Public domain.",
+    "bbe": "Bible in Basic English. Public domain.",
+    "bsb": "Berean Standard Bible. Dedicated to the public domain on 30 April 2023."
+  },
+
+  "recommended_alternative": {
+    "name": "Berean Standard Bible",
+    "abbreviation": "BSB",
+    "note": "dedicated to the public domain on 30 April 2023, and so carries no quota at all",
+    "source": "https://berean.bible/licensing.htm"
+  }
+}

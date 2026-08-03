@@ -9,7 +9,13 @@ from biblereference import Config, Renderer
 
 @pytest.fixture(scope="module")
 def renderer() -> Renderer:
-    return Renderer()
+    """These tests are about the body of a document.
+
+    Appendix Z is appended by default, since copyright notices are an obligation, but it
+    would be trailing noise in every assertion here. It has its own tests in
+    test_appendix.py.
+    """
+    return Renderer(Config(notices=False))
 
 
 def render(renderer: Renderer, text: str) -> str:
@@ -121,8 +127,8 @@ def test_one_bad_citation_does_not_stop_the_others(renderer: Renderer) -> None:
 def test_strict_mode_turns_warnings_into_errors() -> None:
     """A citation that resolved but lost something -- a missing original -- is an error
     when the author has asked for certainty."""
-    lenient = Renderer(Config(strict=False))
-    strict = Renderer(Config(strict=True))
+    lenient = Renderer(Config(strict=False, notices=False))
+    strict = Renderer(Config(strict=True, notices=False))
     text = '[passage="Sir 24:1" en="ASV"]'
     assert not lenient.render_text(text)[1].ok  # no deuterocanon in the ASV either way
     assert not strict.render_text(text)[1].ok
@@ -161,7 +167,9 @@ def test_a_missing_template_is_reported(renderer: Renderer) -> None:
 
 def test_custom_template_directory_wins(tmp_path: Path) -> None:
     (tmp_path / "blockquote.md.j2").write_text("<<{{ reference }}>>", encoding="utf-8")
-    out, report = Renderer(Config(template_dir=tmp_path)).render_text('[passage="Ps 23:1"]')
+    out, report = Renderer(Config(template_dir=tmp_path, notices=False)).render_text(
+        '[passage="Ps 23:1"]'
+    )
     assert report.ok
     assert out == "<<Psalms 23:1>>"
 

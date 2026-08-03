@@ -349,6 +349,68 @@ class Versification:
         converted = [out for ref in self.expand(span) for out in self.convert_all(ref, target)]
         return _coalesce(converted)
 
+    def merge(self, spans: Iterable[VerseRange]) -> list[VerseRange]:
+        """Join ranges that overlap or touch, in reading order.
+
+        Built for a register of everything a work cites, where the same passage gets
+        quoted in pieces across an argument. Citing 1 Timothy 2:7, then 2:4, then 2:1-6
+        should produce one entry -- 1 Timothy 2:1-7 -- not three.
+
+        Touching counts, not only overlapping: 2:1-6 and 2:7 are one passage with a
+        seam, and printing them separately would be pedantry. Ranges join across a
+        chapter boundary too, where the earlier one ends its chapter.
+
+        Ranges in different versifications are merged within each, not across: they are
+        different coordinate systems, and joining them would be meaningless.
+        """
+        by_system: dict[str, list[VerseRange]] = {}
+        for span in spans:
+            resolved = span
+            if span.start.is_letter_chapter:
+                resolved = VerseRange(
+                    self.resolve_letter_chapter(span.start),
+                    self.resolve_letter_chapter(span.end),
+                )
+            by_system.setdefault(resolved.vrs, []).append(resolved)
+
+        out: list[VerseRange] = []
+        for group in by_system.values():
+            out.extend(self._merge_one_system(group))
+        return sorted(out, key=lambda s: s.start)
+
+    def _merge_one_system(self, spans: list[VerseRange]) -> list[VerseRange]:
+        merged: list[VerseRange] = []
+        for span in sorted(spans, key=lambda s: (s.start, s.end)):
+            if merged and self._joins(merged[-1], span):
+                previous = merged[-1]
+                merged[-1] = VerseRange(previous.start, max(previous.end, span.end))
+                continue
+            merged.append(span)
+        return merged
+
+    def _joins(self, first: VerseRange, second: VerseRange) -> bool:
+        """Whether ``second`` overlaps ``first`` or takes up immediately after it."""
+        if first.book != second.book:
+            return False
+        if second.start <= first.end:
+            return True
+        return second.start == self._next_verse(first.end)
+
+    def _next_verse(self, ref: VerseRef) -> VerseRef | None:
+        """The verse after this one, or ``None`` at the end of the book."""
+        if ref.is_letter_chapter or ref.subverse:
+            return None
+        assert isinstance(ref.chapter, int)
+        try:
+            if ref.verse < self.max_verse(ref.vrs, ref.book, ref.chapter):
+                return VerseRef(ref.book, ref.chapter, ref.verse + 1, vrs=ref.vrs)
+            if ref.chapter < self.chapter_count(ref.vrs, ref.book):
+                first = self.first_verse(ref.vrs, ref.book, ref.chapter + 1)
+                return VerseRef(ref.book, ref.chapter + 1, first, vrs=ref.vrs)
+        except VerseOutOfRangeError:
+            return None
+        return None
+
     def expand(self, span: VerseRange) -> list[VerseRef]:
         """List every verse in a range, walking across chapter boundaries if needed."""
         self.validate(span)

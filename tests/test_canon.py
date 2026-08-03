@@ -170,3 +170,46 @@ def test_every_ordered_book_has_a_title_and_a_canon() -> None:
     for book in CANONICAL_ORDER:
         assert book_title(book) != book or book in {"EZA", "JSA"}
         assert isinstance(book_canon(book), Canon)
+
+
+# --------------------------------------------------------------------------------------
+# Titles per tradition
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("code", "modern", "dr"),
+    [
+        ("1CH", "1 Chronicles", "1 Paralipomenon"),
+        ("SIR", "Sirach", "Ecclesiasticus"),
+        ("REV", "Revelation", "Apocalypse"),
+        ("SNG", "Song of Songs", "Canticle of Canticles"),
+        ("1SA", "1 Samuel", "1 Kings"),
+        ("1KI", "1 Kings", "3 Kings"),
+        ("HOS", "Hosea", "Osee"),
+        ("TOB", "Tobit", "Tobias"),
+        ("ZEP", "Zephaniah", "Sophonias"),
+    ],
+)
+def test_douay_rheims_titles(code: str, modern: str, dr: str) -> None:
+    """A reader checking a citation in a Douay-Rheims will not find '1 Chronicles' in it."""
+    assert book_title(code) == modern
+    assert book_title(code, NamingScheme.DR) == dr
+
+
+def test_books_the_vulgate_prints_inside_another_say_where_to_look() -> None:
+    assert book_title("SUS", NamingScheme.DR) == "Daniel 13"
+    assert book_title("BEL", NamingScheme.DR) == "Daniel 14"
+    assert book_title("LJE", NamingScheme.DR) == "Baruch 6"
+
+
+def test_septuagint_titles() -> None:
+    assert book_title("1SA", NamingScheme.LXX) == "1 Kingdoms"
+    assert book_title("1ES", NamingScheme.LXX) == "Esdras A"
+    assert book_title("SIR", NamingScheme.LXX) == "Wisdom of Sirach"
+
+
+def test_a_book_with_no_special_title_keeps_the_modern_one() -> None:
+    for scheme in NamingScheme:
+        assert book_title("LUK", scheme) == "Luke"
+        assert book_title("GEN", scheme) == "Genesis"

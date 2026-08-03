@@ -1,0 +1,19 @@
+{# Appendix Y: every passage cited, merged and printed whole. #}
+---
+
+## {{ title }}
+
+{% for entry in entries %}
+### {{ entry.heading }}
+
+{% for r in entry.renditions %}
+**{{ r.language_name }}** ({{ r.label }}){% if r.renumbered %} — {{ r.reference }}{% endif %}
+
+{{ r.text | isolate(r.rtl) }}
+
+{% endfor %}
+{% if entry.equivalents %}
+*Also found as:* {{ entry.equivalents | join(" · ") }}
+
+{% endif %}
+{% endfor %}

@@ -500,9 +500,86 @@ def book_canon(code: str) -> Canon:
         raise UnknownBookError(code) from None
 
 
-def book_title(code: str) -> str:
-    """Human-readable title for a USFM code, for rendering and error messages."""
-    return _TITLES.get(code, code)
+#: Titles under the Douay-Rheims and Clementine Vulgate, where they differ from modern
+#: usage. Samuel and Kings are the four books of Kings; Chronicles is Paralipomenon; the
+#: prophets keep their Greek-through-Latin spellings.
+_DR_TITLES: Final[dict[str, str]] = {
+    "1SA": "1 Kings",
+    "2SA": "2 Kings",
+    "1KI": "3 Kings",
+    "2KI": "4 Kings",
+    "1CH": "1 Paralipomenon",
+    "2CH": "2 Paralipomenon",
+    "EZR": "1 Esdras",
+    "NEH": "2 Esdras",
+    "JOS": "Josue",
+    "JDG": "Judges",
+    "JOB": "Job",
+    "SNG": "Canticle of Canticles",
+    "ECC": "Ecclesiastes",
+    "SIR": "Ecclesiasticus",
+    "WIS": "Wisdom",
+    "ISA": "Isaias",
+    "JER": "Jeremias",
+    "EZK": "Ezechiel",
+    "HOS": "Osee",
+    "JOL": "Joel",
+    "OBA": "Abdias",
+    "JON": "Jonas",
+    "MIC": "Micheas",
+    "NAM": "Nahum",
+    "HAB": "Habacuc",
+    "ZEP": "Sophonias",
+    "HAG": "Aggeus",
+    "ZEC": "Zacharias",
+    "MAL": "Malachias",
+    "TOB": "Tobias",
+    "1MA": "1 Machabees",
+    "2MA": "2 Machabees",
+    "REV": "Apocalypse",
+    # The Vulgate prints these inside their host book rather than standing alone.
+    "SUS": "Daniel 13",
+    "BEL": "Daniel 14",
+    "S3Y": "Daniel 3:24-90",
+    "LJE": "Baruch 6",
+    "ESG": "Esther 10:4-16:24",
+}
+
+#: Titles under Septuagint usage, where they differ.
+_LXX_TITLES: Final[dict[str, str]] = {
+    "1SA": "1 Kingdoms",
+    "2SA": "2 Kingdoms",
+    "1KI": "3 Kingdoms",
+    "2KI": "4 Kingdoms",
+    "1CH": "1 Paraleipomenon",
+    "2CH": "2 Paraleipomenon",
+    "1ES": "Esdras A",
+    "EZR": "Esdras B",
+    "NEH": "Esdras B",
+    "SIR": "Wisdom of Sirach",
+    "WIS": "Wisdom of Solomon",
+    "SNG": "Song of Songs",
+    "LJE": "Epistle of Jeremiah",
+    "DAG": "Daniel",
+    "ESG": "Esther",
+}
+
+_SCHEME_TITLES: Final[dict[NamingScheme, dict[str, str]]] = {
+    NamingScheme.MODERN: {},
+    NamingScheme.DR: _DR_TITLES,
+    NamingScheme.LXX: _LXX_TITLES,
+}
+
+
+def book_title(code: str, scheme: NamingScheme = NamingScheme.MODERN) -> str:
+    """Human-readable title for a USFM code, for rendering and error messages.
+
+    :param scheme: Which tradition to name the book in. A reader checking a citation
+        against a Douay-Rheims will not find "1 Chronicles" or "Revelation" in it, and
+        telling them to look for Paralipomenon and the Apocalypse is the difference
+        between a reference they can follow and one they cannot.
+    """
+    return _SCHEME_TITLES[scheme].get(code) or _TITLES.get(code, code)
 
 
 def canonical_order(code: str) -> int:

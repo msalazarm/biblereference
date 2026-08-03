@@ -60,7 +60,7 @@ def test_the_threshold_is_configurable() -> None:
 
 
 def test_a_supplied_quotation_is_what_gets_printed() -> None:
-    renderer = Renderer()
+    renderer = Renderer(Config(notices=False))
     out, report = renderer.render_text(
         f'[passage="Luke 2:42" original="none" context="{NRSV_ISH}"]'
     )
@@ -71,7 +71,7 @@ def test_a_supplied_quotation_is_what_gets_printed() -> None:
 
 
 def test_a_mismatched_quotation_is_warned_about_but_still_rendered() -> None:
-    renderer = Renderer()
+    renderer = Renderer(Config(notices=False))
     out, report = renderer.render_text(
         f'[passage="Luke 2:42" original="none" context="{DIFFERENT}"]'
     )
@@ -82,7 +82,7 @@ def test_a_mismatched_quotation_is_warned_about_but_still_rendered() -> None:
 
 
 def test_strict_mode_makes_a_mismatched_quotation_an_error() -> None:
-    renderer = Renderer(Config(strict=True))
+    renderer = Renderer(Config(strict=True, notices=False))
     out, report = renderer.render_text(
         f'[passage="Luke 2:42" original="none" context="{DIFFERENT}"]'
     )
@@ -92,7 +92,7 @@ def test_strict_mode_makes_a_mismatched_quotation_an_error() -> None:
 
 
 def test_emphasis_applies_to_the_supplied_text() -> None:
-    renderer = Renderer()
+    renderer = Renderer(Config(notices=False))
     out, report = renderer.render_text(
         f'[passage="Luke 2:42" original="none" context="{NRSV_ISH}" '
         f'bold.en="twelve years .. festival"]'
@@ -103,7 +103,7 @@ def test_emphasis_applies_to_the_supplied_text() -> None:
 
 def test_an_emphasis_anchor_missing_from_the_supplied_text_is_an_error() -> None:
     """Silently skipping it would claim an emphasis the output does not carry."""
-    renderer = Renderer()
+    renderer = Renderer(Config(notices=False))
     _, report = renderer.render_text(
         f'[passage="Luke 2:42" original="none" context="{NRSV_ISH}" bold.en="custom .. feast"]'
     )
@@ -113,6 +113,6 @@ def test_an_emphasis_anchor_missing_from_the_supplied_text_is_an_error() -> None
 
 @pytest.mark.parametrize("threshold", [0.0, 1.0])
 def test_the_renderer_honours_the_configured_threshold(threshold: float) -> None:
-    renderer = Renderer(Config(quote_threshold=threshold))
+    renderer = Renderer(Config(quote_threshold=threshold, notices=False))
     _, report = renderer.render_text(f'[passage="Luke 2:42" original="none" context="{NRSV_ISH}"]')
     assert bool(report.warnings) is (threshold == 1.0)

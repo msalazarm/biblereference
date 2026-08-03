@@ -168,7 +168,7 @@ def test_several_corpora_live_side_by_side(home: DataHome) -> None:
 
 def test_a_built_corpus_renders(home: DataHome) -> None:
     write_corpus(home, META, VERSES)
-    renderer = Renderer(Config(roles={"lxx": ("demo",)}))
+    renderer = Renderer(Config(roles={"lxx": ("demo",)}, notices=False))
     for corpus in SqliteCorpus.load_all(home).values():
         renderer.add_corpus(corpus)
 
@@ -180,6 +180,7 @@ def test_a_built_corpus_renders(home: DataHome) -> None:
 
 
 def test_attribution_is_emitted_for_texts_that_require_it(home: DataHome) -> None:
+    """This one keeps the notices on -- they are what carries the attribution."""
     write_corpus(home, META, VERSES)
     renderer = Renderer(Config(roles={"lxx": ("demo",)}))
     for corpus in SqliteCorpus.load_all(home).values():
