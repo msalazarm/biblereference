@@ -67,6 +67,10 @@
 
   "add_mapped": {
     "eng": {
+      "DAG 3:24-90": {
+        "to": "S3Y 1:1-67",
+        "reason": "English Bibles that print the Greek Daniel carry the Song of the Three inside chapter 3, exactly as the Vulgate and the Septuagint do, but upstream records the correspondence only for those two. Without it, a citation of the Song cannot reach an English text that has it. Both sides are 67 verses (90-24+1, and org gives S3Y 67), matching the entries this file's siblings state for lxx and vul. This replaces the broken S3Y-to-DAG chain dropped above, in the direction that is actually well-defined."
+      },
       "ISA 64:1": {
         "to": "ISA 63:19",
         "reason": "Missing upstream, leaving English Isaiah 64:1 to fall through to Hebrew 64:1 and collide with English 64:2. English Isaiah 64 has 12 verses to the Hebrew's 11, and upstream's own 'ISA 64:2-12 -> ISA 64:1-11' already accounts for all eleven, leaving 64:1 with nowhere to go inside the chapter. It belongs to Hebrew 63:19: 'Oh that thou wouldest rend the heavens, that thou wouldest come down' is the second half of the Hebrew's last verse of chapter 63. vul.json carries exactly this entry."

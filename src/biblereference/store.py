@@ -1,0 +1,343 @@
+"""Where the texts live on disk, and how they are read back.
+
+The layout is deliberately plain, because the point of it is that you own your corpus
+independently of whether any upstream repository still exists::
+
+    $data_home/
+        sources/                 raw downloads, byte for byte, never rewritten
+            oshb/2026-08-03/…
+            MANIFEST.jsonl       one line per file: url, checksum, licence, when
+        db/corpus.sqlite         the built index, regenerable from sources/ offline
+        export/                  optional JSON dumps, for reading or diffing
+
+``fetch`` only ever writes to ``sources/``. ``build`` only ever reads it. So once fetched,
+everything works with the network off, a rebuild after a code change re-downloads nothing,
+and backing up one directory backs up everything.
+
+Downloads land in a dated subdirectory rather than overwriting, so re-fetching adds to the
+archive instead of replacing it.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import sqlite3
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import closing, contextmanager
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, date, datetime
+from pathlib import Path
+from typing import Final
+
+from platformdirs import user_data_dir
+
+from .corpora.base import VerseText, VerseUnavailable
+from .refs import VerseRef
+
+__all__ = [
+    "ENV_VAR",
+    "DataHome",
+    "ManifestEntry",
+    "SourceMeta",
+    "SqliteCorpus",
+    "default_data_home",
+    "open_store",
+]
+
+#: Point this at a synced or backed-up directory to carry your corpus between machines.
+ENV_VAR: Final = "BIBLEREFERENCE_HOME"
+
+_SCHEMA: Final = """
+CREATE TABLE IF NOT EXISTS verse (
+    corpus    TEXT    NOT NULL,
+    book      TEXT    NOT NULL,
+    chapter   INTEGER NOT NULL,
+    verse     INTEGER NOT NULL,
+    subverse  TEXT    NOT NULL DEFAULT '',
+    text      TEXT    NOT NULL,
+    PRIMARY KEY (corpus, book, chapter, verse, subverse)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS source_meta (
+    corpus        TEXT PRIMARY KEY,
+    label         TEXT NOT NULL,
+    language      TEXT NOT NULL,
+    versification TEXT NOT NULL,
+    license       TEXT,
+    attribution   TEXT,
+    source_url    TEXT,
+    fetched_at    TEXT,
+    built_at      TEXT,
+    verse_count   INTEGER NOT NULL DEFAULT 0
+);
+"""
+
+
+def default_data_home() -> Path:
+    """Where the corpus lives unless told otherwise.
+
+    Honours ``$BIBLEREFERENCE_HOME``, falling back to the platform data directory.
+    """
+    override = os.environ.get(ENV_VAR)
+    if override:
+        return Path(override).expanduser()
+    return Path(user_data_dir("biblereference", appauthor=False))
+
+
+@dataclass(frozen=True, slots=True)
+class ManifestEntry:
+    """One archived download."""
+
+    source: str
+    url: str
+    path: str
+    """Relative to ``sources/``, so the archive stays portable."""
+    sha256: str
+    bytes: int
+    fetched_at: str
+    license: str | None = None
+    note: str | None = None
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), ensure_ascii=False, sort_keys=True)
+
+
+@dataclass(frozen=True, slots=True)
+class SourceMeta:
+    """What the database records about one corpus."""
+
+    corpus: str
+    label: str
+    language: str
+    versification: str
+    license: str | None = None
+    attribution: str | None = None
+    source_url: str | None = None
+    fetched_at: str | None = None
+    built_at: str | None = None
+    verse_count: int = 0
+
+
+@dataclass(frozen=True)
+class DataHome:
+    """The directory holding sources, the database, and exports."""
+
+    root: Path = field(default_factory=default_data_home)
+
+    @property
+    def sources(self) -> Path:
+        return self.root / "sources"
+
+    @property
+    def database(self) -> Path:
+        return self.root / "db" / "corpus.sqlite"
+
+    @property
+    def exports(self) -> Path:
+        return self.root / "export"
+
+    @property
+    def manifest(self) -> Path:
+        return self.sources / "MANIFEST.jsonl"
+
+    def prepare(self) -> None:
+        """Create the directories. Safe to call repeatedly."""
+        for path in (self.sources, self.database.parent, self.exports):
+            path.mkdir(parents=True, exist_ok=True)
+
+    # -- archive -----------------------------------------------------------------------
+
+    def archive_dir(self, source: str, when: date | None = None) -> Path:
+        """Dated directory for one source's downloads."""
+        stamp = (when or datetime.now(UTC).date()).isoformat()
+        return self.sources / source / stamp
+
+    def latest_archive(self, source: str) -> Path | None:
+        """Most recent dated directory for a source, or ``None`` if never fetched."""
+        base = self.sources / source
+        if not base.is_dir():
+            return None
+        dated = sorted((p for p in base.iterdir() if p.is_dir()), reverse=True)
+        return dated[0] if dated else None
+
+    def record(self, entry: ManifestEntry) -> None:
+        """Append one line to the manifest."""
+        self.manifest.parent.mkdir(parents=True, exist_ok=True)
+        with self.manifest.open("a", encoding="utf-8") as handle:
+            handle.write(entry.to_json() + "\n")
+
+    def entries(self, source: str | None = None) -> list[ManifestEntry]:
+        """Read the manifest back, newest last."""
+        if not self.manifest.exists():
+            return []
+        out: list[ManifestEntry] = []
+        for line in self.manifest.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            data = json.loads(line)
+            if source is None or data.get("source") == source:
+                out.append(ManifestEntry(**data))
+        return out
+
+    def store_file(
+        self,
+        source: str,
+        name: str,
+        payload: bytes,
+        *,
+        url: str,
+        license: str | None = None,
+        note: str | None = None,
+    ) -> Path:
+        """Write a downloaded file into the archive and record it."""
+        target = self.archive_dir(source) / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(payload)
+        self.record(
+            ManifestEntry(
+                source=source,
+                url=url,
+                path=str(target.relative_to(self.sources)),
+                sha256=hashlib.sha256(payload).hexdigest(),
+                bytes=len(payload),
+                fetched_at=datetime.now(UTC).isoformat(timespec="seconds"),
+                license=license,
+                note=note,
+            )
+        )
+        return target
+
+
+@contextmanager
+def open_store(home: DataHome) -> Iterator[sqlite3.Connection]:
+    """Open the verse database, creating it if needed."""
+    home.prepare()
+    connection = sqlite3.connect(home.database)
+    try:
+        connection.executescript(_SCHEMA)
+        yield connection
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def write_corpus(home: DataHome, meta: SourceMeta, verses: Iterable[tuple[VerseRef, str]]) -> int:
+    """Replace one corpus's verses wholesale.
+
+    Replacing rather than merging keeps a rebuild honest: a parser that starts dropping a
+    book shows up as a smaller corpus, not as stale rows left behind from last time.
+    """
+    with open_store(home) as connection:
+        connection.execute("DELETE FROM verse WHERE corpus = ?", (meta.corpus,))
+        rows = [
+            (meta.corpus, ref.book, int(ref.chapter), ref.verse, ref.subverse, text)
+            for ref, text in verses
+        ]
+        connection.executemany(
+            "INSERT OR REPLACE INTO verse "
+            "(corpus, book, chapter, verse, subverse, text) VALUES (?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+        connection.execute(
+            "INSERT OR REPLACE INTO source_meta (corpus, label, language, versification, "
+            "license, attribution, source_url, fetched_at, built_at, verse_count) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                meta.corpus,
+                meta.label,
+                meta.language,
+                meta.versification,
+                meta.license,
+                meta.attribution,
+                meta.source_url,
+                meta.fetched_at,
+                datetime.now(UTC).isoformat(timespec="seconds"),
+                len(rows),
+            ),
+        )
+    return len(rows)
+
+
+def read_meta(home: DataHome) -> list[SourceMeta]:
+    """Everything the database knows it holds."""
+    if not home.database.exists():
+        return []
+    with closing(sqlite3.connect(home.database)) as connection:
+        connection.row_factory = sqlite3.Row
+        try:
+            rows = connection.execute("SELECT * FROM source_meta ORDER BY corpus").fetchall()
+        except sqlite3.OperationalError:
+            return []
+    return [SourceMeta(**dict(row)) for row in rows]
+
+
+class SqliteCorpus:
+    """A corpus read from the built database.
+
+    Every fetched text -- Hebrew, Greek, Latin, English -- is served through this one
+    class; what differs between them lives in the parser that filled the table, not in
+    the reading.
+    """
+
+    def __init__(self, home: DataHome, meta: SourceMeta) -> None:
+        self._home = home
+        self._meta = meta
+        self._connection = sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)
+        self._books: frozenset[str] | None = None
+
+    @classmethod
+    def load_all(cls, home: DataHome) -> dict[str, SqliteCorpus]:
+        """Open every corpus the database holds, keyed by id."""
+        return {meta.corpus: cls(home, meta) for meta in read_meta(home)}
+
+    @property
+    def id(self) -> str:
+        return self._meta.corpus
+
+    @property
+    def label(self) -> str:
+        return self._meta.label
+
+    @property
+    def language(self) -> str:
+        return self._meta.language
+
+    @property
+    def versification(self) -> str:
+        return self._meta.versification
+
+    @property
+    def attribution(self) -> str | None:
+        return self._meta.attribution
+
+    @property
+    def meta(self) -> SourceMeta:
+        return self._meta
+
+    def has_book(self, book: str) -> bool:
+        if self._books is None:
+            rows = self._connection.execute(
+                "SELECT DISTINCT book FROM verse WHERE corpus = ?", (self.id,)
+            ).fetchall()
+            self._books = frozenset(row[0] for row in rows)
+        return book in self._books
+
+    def fetch(self, refs: Sequence[VerseRef]) -> list[VerseText]:
+        out: list[VerseText] = []
+        for ref in refs:
+            if ref.is_letter_chapter:
+                raise VerseUnavailable(ref, self.label, "letter chapters are not stored")
+            row = self._connection.execute(
+                "SELECT text FROM verse WHERE corpus = ? AND book = ? AND chapter = ? "
+                "AND verse = ? AND subverse = ?",
+                (self.id, ref.book, int(ref.chapter), ref.verse, ref.subverse),
+            ).fetchone()
+            if row is None:
+                raise VerseUnavailable(ref, self.label)
+            out.append(VerseText(ref=ref, text=row[0]))
+        return out
+
+    def close(self) -> None:
+        self._connection.close()

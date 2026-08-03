@@ -45,6 +45,22 @@ _LANGUAGE_NAMES: Final[Mapping[str, str]] = {
 #: isolate so that neighbouring Markdown punctuation does not reorder on screen.
 _RTL: Final = frozenset({"hbo"})
 
+#: Which corpora answer each ``original=`` value, in order of preference.
+#:
+#: ``lxx`` lists Swete's Daniel second because Swete numbers Greek Daniel like the
+#: Vulgate, so it is a separate corpus; asking for the Septuagint of a Daniel passage
+#: should still find it.
+#: English versions that come from a fetched source rather than from ``pythonbible``,
+#: so that asking for one before building says so instead of reporting it as unknown.
+_FETCHED_ENGLISH: Final = frozenset({"webc", "dra"})
+
+DEFAULT_ROLES: Final[Mapping[str, tuple[str, ...]]] = {
+    "hebrew": ("wlc",),
+    "lxx": ("swete", "swete-daniel"),
+    "greek": ("n1904",),
+    "theodotion": ("swete-daniel",),
+}
+
 
 @dataclass(frozen=True)
 class Config:
@@ -68,8 +84,12 @@ class Config:
     """
 
     default_english: str = "ASV"
-    deuterocanon_english: str = "DRA"
+    deuterocanon_english: str = "WEBC"
     original: str = "auto"
+    inline_original: str = "none"
+    """Default for the short ``{{...}}`` form, which is meant to sit inside a sentence.
+    Dropping a paragraph of Greek into the middle of a clause helps nobody, so the short
+    form quotes English unless a tag asks for more."""
     template: str = "blockquote"
     inline_template: str = "inline"
     naming: NamingScheme = NamingScheme.MODERN
@@ -78,6 +98,9 @@ class Config:
     data_home: Path | None = None
     template_dir: Path | None = None
     attribution: bool = True
+    roles: Mapping[str, tuple[str, ...]] = field(default_factory=lambda: dict(DEFAULT_ROLES))
+    """Which corpora serve each ``original=`` value, in order of preference. The first
+    that carries the passage wins."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +214,12 @@ class Renderer:
         if key in self._corpora:
             return self._corpora[key]
 
+        if key in _FETCHED_ENGLISH:
+            raise CorpusError(
+                f"{name.upper()} is not built. It comes from a downloaded source, so run "
+                f"`biblereference fetch --source {key}` and then `biblereference build`."
+            )
+
         from .corpora.pythonbible_source import PythonBibleCorpus
 
         corpus = PythonBibleCorpus(name)
@@ -274,6 +303,7 @@ class Renderer:
         english = self._english_rendition(citation, span, warnings)
         if english is not None:
             renditions.append(english)
+        renditions.extend(self._original_renditions(citation, span, warnings))
 
         if not renditions:
             raise CitationError("; ".join(warnings) or f"no text found for {span.pretty()}")
@@ -288,15 +318,70 @@ class Renderer:
             warnings=tuple(warnings),
         )
 
+    def _original_renditions(
+        self, citation: Citation, span: VerseRange, warnings: list[str]
+    ) -> list[Rendition]:
+        """Fetch the original-language texts a citation asks for.
+
+        ``auto`` reads the book's canon: Hebrew for the Hebrew canon, Greek for the New
+        Testament, the Septuagint for the deuterocanon -- where, for most books, no
+        Hebrew survives to print.
+        """
+        default = self.config.inline_original if citation.inline else self.config.original
+        choices = citation.original or (default,)
+        if "none" in choices:
+            return []
+        if "auto" in choices:
+            canon = book_canon(span.book)
+            choices = (
+                ("hebrew",)
+                if canon is Canon.HEBREW
+                else ("greek",)
+                if canon is Canon.NT
+                else ("lxx",)
+            )
+
+        out: list[Rendition] = []
+        for role in choices:
+            rendition, error = self._by_role(role, span)
+            if rendition is not None:
+                out.append(rendition)
+            else:
+                warnings.append(
+                    f"no {role} text for {span.pretty()}" + (f" -- {error}" if error else "")
+                )
+        return out
+
+    def _by_role(self, role: str, span: VerseRange) -> tuple[Rendition | None, Exception | None]:
+        """Try each corpus registered for a role until one carries the passage."""
+        last_error: Exception | None = None
+        names = self.config.roles.get(role, ())
+        if not names:
+            return None, CorpusError(f"no corpus is registered for {role!r}")
+        for name in names:
+            corpus = self._corpora.get(name)
+            if corpus is None:
+                last_error = CorpusError(
+                    f"{name} is not built; run `biblereference fetch` then `build`"
+                )
+                continue
+            try:
+                return self._fetch(corpus, span), None
+            except (VerseUnavailable, CorpusError, VersificationError) as exc:
+                last_error = exc
+        return None, last_error
+
     def _english_rendition(
         self, citation: Citation, span: VerseRange, warnings: list[str]
     ) -> Rendition | None:
         """Fetch the English text, falling back for books the chosen version lacks."""
-        requested = citation.english or self.config.default_english
-        candidates = [requested]
-        if book_canon(span.book) is not Canon.HEBREW and book_canon(span.book) is not Canon.NT:
-            # The ASV and KJV stop at Malachi and Revelation; a Catholic Bible does not.
-            candidates.append(self.config.deuterocanon_english)
+        # The fallback is always offered, not only for books that look deuterocanonical:
+        # Vulgate "Daniel 3:24" is the Song of the Three, and which book a citation lands
+        # in is only known after conversion.
+        candidates = [
+            citation.english or self.config.default_english,
+            self.config.deuterocanon_english,
+        ]
 
         last_error: Exception | None = None
         for name in dict.fromkeys(candidates):
@@ -305,12 +390,9 @@ class Renderer:
             except CorpusError as exc:
                 last_error = exc
                 continue
-            if not corpus.has_book(span.book):
-                last_error = VerseUnavailable(span.start, corpus.label)
-                continue
             try:
                 return self._fetch(corpus, span)
-            except (VerseUnavailable, CorpusError) as exc:
+            except (VerseUnavailable, CorpusError, VersificationError) as exc:
                 last_error = exc
                 continue
 
@@ -326,6 +408,10 @@ class Renderer:
         segments = self.versification.convert_range(span, corpus.versification)
         verses: list[VerseText] = []
         for segment in segments:
+            # Check after converting, not before: Susanna is Daniel 13 in a Vulgate text,
+            # so the book that has to exist is the one the conversion landed on.
+            if not corpus.has_book(segment.book):
+                raise VerseUnavailable(segment.start, corpus.label)
             verses.extend(corpus.fetch(self.versification.expand(segment)))
 
         return Rendition(

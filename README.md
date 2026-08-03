@@ -13,9 +13,18 @@ The Catholic canon is in scope throughout — Tobit, Judith, Wisdom, Sirach, Bar
 Letter of Jeremiah, 1–2 Maccabees, and the Greek additions to Esther and Daniel are books,
 not an appendix.
 
-## Status
+## Getting started
 
-Under construction. See `docs/` and the module docstrings for what currently works.
+```bash
+pip install -e .
+biblereference fetch     # download the texts into your archive (~45 MB)
+biblereference build     # index them; from here on, everything works offline
+biblereference render treatise.md -o treatise.out.md
+```
+
+`biblereference verify treatise.md` checks every citation and writes nothing — the one to
+put in a pre-commit hook. `biblereference doctor` says what is cached, what is built, and
+which chapters cannot be converted between numbering systems.
 
 ## Usage
 
@@ -26,24 +35,43 @@ r = Renderer(Config(default_english="ASV"))
 r.render_file("treatise.md", "treatise.out.md")
 ```
 
+Three tag forms. The short one keeps a sentence readable and quotes English only:
+
 ```markdown
 As it says in {{Luke 2:42}}, the child was already about his Father's business.
 ```
 
-Three tag forms are accepted — a bare `{{Luke 2:42}}`, a bracketed attribute form, and a
-fenced ` ```passage ` block for citations that need original languages, emphasis spans, or
-your own quotation checked against the source. See `docs/syntax.md`.
+The bracketed form carries a few options; a fenced ` ```passage ` block takes YAML when
+they outgrow a line:
+
+```markdown
+[passage="Isa 7:14" original="hebrew,lxx"]
+```
+
+````markdown
+```passage
+ref: Dan 3:24-90
+vrs: vul
+original: [lxx]
+```
+````
+
+`original=` takes `auto` (Hebrew for the Hebrew canon, Greek for the New Testament, the
+Septuagint for the deuterocanon), or any of `hebrew`, `lxx`, `greek`, `theodotion`,
+`none`, or a list.
 
 ## Texts
 
-Local corpora are public-domain or freely licensed and are fetched once, then archived:
+Public domain or freely licensed, fetched once and then archived:
 
 | | Source | Note |
 |---|---|---|
 | Hebrew | Westminster Leningrad Codex, via [OSHB](https://github.com/openscriptures/morphhb) | text public domain; morphology CC BY 4.0 |
-| Septuagint | [Swete 1930](https://github.com/eliranwong/LXX-Swete-1930) | 60 books, incl. Theodotion Daniel/Susanna/Bel |
+| Septuagint | [Swete 1930](https://github.com/eliranwong/LXX-Swete-1930) | the whole deuterocanon; Theodotion for Daniel, Susanna and Bel |
 | Greek NT | [Nestle 1904](https://github.com/biblicalhumanities/Nestle1904) | public domain |
-| English | ASV, KJV via [pythonbible](https://github.com/avendesora/pythonbible); Douay-Rheims via [eBible](https://ebible.org) | public domain |
+| English | ASV, KJV and two dozen more via [pythonbible](https://github.com/avendesora/pythonbible) | public domain |
+| English deuterocanon | [WEB Catholic Edition](https://ebible.org/find/details.php?id=eng-web-c) | translated from the Greek, so numbered like the Greek |
+| English of the Vulgate | [Douay-Rheims 1899](https://ebible.org/find/details.php?id=engDRA) | for citations written in Vulgate numbering |
 | Versification | [Copenhagen Alliance](https://github.com/Copenhagen-Alliance/versification-specification) | org / eng / lxx / vul maps |
 
 NA28, the BHS apparatus, and Rahlfs-Hanhart are under copyright and cannot be included.

@@ -74,8 +74,15 @@ def test_vulgate_daniel_14_is_bel_which_no_english_protocanon_carries(
     the ASV simply has no such book, and that must be said rather than guessed around."""
     _, report = renderer.render_text('[passage="Dan 14:1" vrs="vul" en="ASV"]')
     assert not report.ok
-    assert "does not carry" in report.errors[0]
-    assert "protocanonical" in report.errors[0]
+    assert "no English text" in report.errors[0]
+
+
+def test_asking_for_an_unbuilt_text_says_how_to_build_it(renderer: Renderer) -> None:
+    """ "WEBC" is not an unknown version -- it is a downloaded one that isn't there yet,
+    and the difference is the difference between a typo and a missing step."""
+    _, report = renderer.render_text('[passage="Sir 24:1" en="WEBC"]')
+    assert "biblereference fetch" in report.errors[0]
+    assert "not built" in report.errors[0]
 
 
 # --------------------------------------------------------------------------------------
