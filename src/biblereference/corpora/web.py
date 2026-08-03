@@ -1,4 +1,4 @@
-"""Copyrighted English translations, fetched a chapter at a time.
+"""Copyrighted English translations, fetched a whole chapter at a time.
 
 The public-domain texts cover a lot, but not the NRSVCE, the NABRE, or the RSV-2CE --
 the translations a modern Catholic treatise is most likely to quote. Those exist online
@@ -7,9 +7,12 @@ stating plainly:
 
 **It is opt-in.** Nothing here runs unless you name one of these versions.
 
-**It fetches once.** A chapter is requested at most one time, ever. The HTML is written
-into your archive alongside every other source, so re-rendering is offline and you keep
-the page as it was on the day you read it.
+**It fetches whole chapters, once.** Citing a single verse pulls the chapter it sits in,
+because one request costs the site the same either way and the rest of the chapter is very
+likely to be cited next. Every verse of it is then stored -- the page in your archive, the
+parsed verses in the same database as every other corpus -- so a chapter is requested at
+most one time, ever, and later citations from anywhere in it cost nothing at all. A
+citation spanning several chapters is batched into a single request.
 
 **It is slow on purpose.** Requests are serial with a delay between them. This is a tool
 for drafting your own work, not for copying a website; BibleGateway's terms do not
@@ -34,10 +37,10 @@ import httpx
 
 from ..canon import book_title
 from ..refs import VerseRef
-from ..store import DataHome
+from ..store import DataHome, SourceMeta, add_chapter, read_chapter, read_meta
 from .base import CorpusError, VerseText, VerseUnavailable
 
-__all__ = ["KNOWN_VERSIONS", "BibleGatewayCorpus", "parse_chapter"]
+__all__ = ["KNOWN_VERSIONS", "BibleGatewayCorpus", "parse_chapter", "parse_passage"]
 
 _BASE: Final = "https://www.biblegateway.com/passage/"
 
@@ -83,12 +86,13 @@ _STRIP_SELECTORS: Final = (
 _VERSE_CLASS_RE: Final = re.compile(r"^(?P<book>[\w\d]+)-(?P<chapter>\d+)-(?P<verse>\d+)$")
 
 
-def parse_chapter(html: str) -> dict[int, str]:
-    """Read one BibleGateway chapter page into ``{verse number: text}``.
+def parse_passage(html: str) -> dict[int, dict[int, str]]:
+    """Read a BibleGateway page into ``{chapter: {verse: text}}``.
 
     Verse text is split across several spans -- a line of poetry each -- all carrying the
-    same ``Book-Chapter-Verse`` class, so the spans are grouped by that class rather than
-    read one to a verse.
+    same ``Book-Chapter-Verse`` class, so spans are grouped by that class rather than read
+    one to a verse. The chapter comes from the same class, which is what lets one request
+    cover a passage spanning several chapters.
     """
     try:
         from bs4 import BeautifulSoup
@@ -106,7 +110,7 @@ def parse_chapter(html: str) -> dict[int, str]:
         for element in passage.select(selector):
             element.decompose()
 
-    pieces: dict[int, list[str]] = {}
+    pieces: dict[tuple[int, int], list[str]] = {}
     for span in passage.select("span.text"):
         classes = span.get("class") or []
         match = next((m for m in (_VERSE_CLASS_RE.match(str(c)) for c in classes) if m), None)
@@ -114,12 +118,21 @@ def parse_chapter(html: str) -> dict[int, str]:
             continue
         text = span.get_text(" ", strip=True)
         if text:
-            pieces.setdefault(int(match["verse"]), []).append(text)
+            pieces.setdefault((int(match["chapter"]), int(match["verse"])), []).append(text)
 
-    return {
-        verse: re.sub(r"\s+([,;:.!?’”)])", r"\1", " ".join(parts)).strip()
-        for verse, parts in sorted(pieces.items())
-    }
+    out: dict[int, dict[int, str]] = {}
+    for (chapter, verse), parts in sorted(pieces.items()):
+        joined = re.sub(r"\s+([,;:.!?’”)])", r"\1", " ".join(parts)).strip()
+        out.setdefault(chapter, {})[verse] = joined
+    return out
+
+
+def parse_chapter(html: str) -> dict[int, str]:
+    """Read a single-chapter page into ``{verse number: text}``."""
+    chapters = parse_passage(html)
+    if not chapters:
+        return {}
+    return chapters[min(chapters)]
 
 
 def parse_copyright(html: str) -> str | None:
@@ -147,6 +160,9 @@ class BibleGatewayCorpus:
     :param home: Where fetched pages are archived.
     :param delay: Seconds between requests. Lower it and you are the problem.
     :param offline: Serve only what is already archived, never fetch.
+    :param max_chapters: Most chapters to ask for in one request. A citation spanning
+        several chapters becomes one request rather than several; the cap stops a wide
+        citation from asking for a whole book at once.
     """
 
     versification = "eng"
@@ -160,12 +176,14 @@ class BibleGatewayCorpus:
         delay: float = 2.0,
         offline: bool = False,
         timeout: float = 30.0,
+        max_chapters: int = 5,
     ) -> None:
         self._version = version.strip().upper()
         self._home = home
         self._delay = delay
         self._offline = offline
         self._timeout = timeout
+        self._max_chapters = max(1, max_chapters)
         self._cache = _Cache(chapters={})
         self._attribution: str | None = None
         self._last_request = 0.0
@@ -191,40 +209,97 @@ class BibleGatewayCorpus:
         return bool(_BOOK_NAMES.get(book) or book_title(book))
 
     def fetch(self, refs: Sequence[VerseRef]) -> list[VerseText]:
-        out: list[VerseText] = []
         for ref in refs:
             if ref.is_letter_chapter:
                 raise VerseUnavailable(ref, self.label, "letter chapters are not supported")
-            assert isinstance(ref.chapter, int)
-            chapter = self._chapter(ref.book, ref.chapter)
-            text = chapter.get(ref.verse)
+
+        self._ensure({(ref.book, int(ref.chapter)) for ref in refs})  # type: ignore[arg-type]
+
+        out: list[VerseText] = []
+        for ref in refs:
+            text = self._cache.chapters[(ref.book, int(ref.chapter))].get(ref.verse)  # type: ignore[arg-type]
             if not text:
-                raise VerseUnavailable(ref, self.label)
+                # Not a failure to fetch: the chapter was read in full and this verse is
+                # not in it. The NRSV relegates a few verses of Sirach to footnotes.
+                raise VerseUnavailable(ref, self.label, "the version does not print this verse")
             out.append(VerseText(ref=ref, text=text))
         return out
 
-    # -- fetching ----------------------------------------------------------------------
+    # -- getting chapters --------------------------------------------------------------
 
-    def _chapter(self, book: str, chapter: int) -> dict[int, str]:
-        key = (book, chapter)
-        if key in self._cache.chapters:
-            return self._cache.chapters[key]
+    def _ensure(self, wanted: set[tuple[str, int]]) -> None:
+        """Make sure every named chapter is in memory, reading or fetching as needed.
 
-        html = self._archived(book, chapter)
-        if html is None:
-            if self._offline:
-                raise VerseUnavailable(
-                    VerseRef(book, chapter, 1),
-                    self.label,
-                    "not in the archive, and fetching is switched off",
-                )
-            html = self._download(book, chapter)
+        Three places are tried in turn, cheapest first: this run's memory, the database of
+        chapters already read, and the archived HTML. Only what is in none of them is
+        fetched, and then in as few requests as possible.
+        """
+        missing: list[tuple[str, int]] = []
+        for book, chapter in sorted(wanted):
+            if (book, chapter) in self._cache.chapters:
+                continue
+            stored = read_chapter(self._home, self.id, book, chapter)
+            if stored is not None:
+                self._cache.chapters[(book, chapter)] = stored
+                self._recall_attribution()
+                continue
+            html = self._archived(book, chapter)
+            if html is not None:
+                self._absorb(book, {chapter: parse_chapter(html)}, html)
+                continue
+            missing.append((book, chapter))
 
-        verses = parse_chapter(html)
+        if not missing:
+            return
+        if self._offline:
+            book, chapter = missing[0]
+            raise VerseUnavailable(
+                VerseRef(book, chapter, 1),
+                self.label,
+                "not in the archive, and fetching is switched off",
+            )
+        for book, first, last in _runs(missing, self._max_chapters):
+            self._download(book, first, last)
+
+    def _absorb(self, book: str, chapters: dict[int, dict[int, str]], html: str) -> None:
+        """Keep every chapter a page contained, not only the verses that were asked for.
+
+        This is the whole reason for fetching by chapter: one request yields a chapter,
+        and storing all of it means the next citation from anywhere in that chapter costs
+        nothing.
+        """
         if self._attribution is None:
             self._attribution = parse_copyright(html)
-        self._cache.chapters[key] = verses
-        return verses
+
+        for chapter, verses in chapters.items():
+            if not verses:
+                continue
+            self._cache.chapters[(book, chapter)] = verses
+            add_chapter(self._home, self._meta(), book, chapter, verses)
+
+    def _recall_attribution(self) -> None:
+        """Take the copyright line from the database when serving a stored chapter.
+
+        It was read off the page when the chapter was first fetched, and the publisher's
+        notice has to appear whether or not this run touched the network.
+        """
+        if self._attribution is not None:
+            return
+        for meta in read_meta(self._home):
+            if meta.corpus == self.id and meta.attribution:
+                self._attribution = meta.attribution
+                return
+
+    def _meta(self) -> SourceMeta:
+        return SourceMeta(
+            corpus=self.id,
+            label=self.label,
+            language=self.language,
+            versification=self.versification,
+            license=f"{self.label}: under copyright. Fetched for personal study.",
+            attribution=self._attribution,
+            source_url=_BASE,
+        )
 
     def _archive_name(self, book: str, chapter: int) -> str:
         return f"{self._version}/{book}_{chapter}.html"
@@ -240,9 +315,11 @@ class BibleGatewayCorpus:
                 return path.read_text(encoding="utf-8", errors="replace")
         return None
 
-    def _download(self, book: str, chapter: int) -> str:
+    def _download(self, book: str, first: int, last: int) -> None:
+        """One request for a run of consecutive chapters."""
         name = _BOOK_NAMES.get(book) or book_title(book)
-        params = {"search": f"{name} {chapter}", "version": self._version}
+        span = f"{first}" if first == last else f"{first}-{last}"
+        params = {"search": f"{name} {span}", "version": self._version}
 
         elapsed = time.monotonic() - self._last_request
         if self._last_request and elapsed < self._delay:
@@ -258,23 +335,49 @@ class BibleGatewayCorpus:
             )
             response.raise_for_status()
         except httpx.HTTPError as exc:
-            raise CorpusError(f"could not fetch {name} {chapter} ({self._version}): {exc}") from exc
+            raise CorpusError(f"could not fetch {name} {span} ({self._version}): {exc}") from exc
         finally:
             self._last_request = time.monotonic()
 
-        self._home.store_file(
-            "web",
-            self._archive_name(book, chapter),
-            response.content,
-            url=str(response.url),
-            license=f"{self.label}: under copyright. Fetched for personal study.",
-            note="Archived so that re-rendering never fetches again.",
-        )
-        return response.text
+        chapters = parse_passage(response.text)
+        if not chapters:
+            raise CorpusError(
+                f"{self.label} returned no text for {name} {span}; the book may not be in "
+                f"this version, or its name may differ on the site"
+            )
+
+        # Archive the page once per chapter it covers, so that a later run looking for any
+        # one of them finds it without knowing how it was originally batched.
+        for chapter in chapters:
+            self._home.store_file(
+                "web",
+                self._archive_name(book, chapter),
+                response.content,
+                url=str(response.url),
+                license=f"{self.label}: under copyright. Fetched for personal study.",
+                note=f"Covers {name} {span}. Archived so re-rendering never fetches again.",
+            )
+        self._absorb(book, chapters, response.text)
+
+
+def _runs(chapters: list[tuple[str, int]], limit: int) -> list[tuple[str, int, int]]:
+    """Group chapters into consecutive runs of one book, each at most ``limit`` long.
+
+    A citation spanning Sirach 24 to 25 is one request rather than two. The cap keeps a
+    wide citation from asking for a whole book in a single page.
+    """
+    out: list[tuple[str, int, int]] = []
+    for book, chapter in sorted(chapters):
+        if out and out[-1][0] == book and chapter == out[-1][2] + 1:
+            start_book, first, last = out[-1]
+            if last - first + 1 < limit:
+                out[-1] = (start_book, first, chapter)
+                continue
+        out.append((book, chapter, chapter))
+    return out
 
 
 def _user_agent() -> str:
     return (
-        "biblereference/0.1 (personal scripture-citation tool; one chapter at a time, "
-        "cached permanently)"
+        "biblereference/0.1 (personal scripture-citation tool; whole chapters, cached permanently)"
     )

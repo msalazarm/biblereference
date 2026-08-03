@@ -17,12 +17,14 @@ from biblereference.corpora.base import CorpusError, VerseUnavailable
 from biblereference.corpora.web import (
     KNOWN_VERSIONS,
     BibleGatewayCorpus,
+    _runs,
     parse_chapter,
     parse_copyright,
+    parse_passage,
 )
 from biblereference.refs import VerseRef
 from biblereference.render import Config, Renderer
-from biblereference.store import DataHome
+from biblereference.store import DataHome, read_chapter, read_meta, stored_chapters
 
 PAGE = """
 <html><body>
@@ -173,3 +175,79 @@ def test_every_known_version_has_a_full_name() -> None:
     for code, name in KNOWN_VERSIONS.items():
         assert code.isupper()
         assert len(name) > len(code)
+
+
+# --------------------------------------------------------------------------------------
+# Whole chapters, stored once
+# --------------------------------------------------------------------------------------
+
+
+def test_citing_one_verse_stores_the_whole_chapter(archived: DataHome) -> None:
+    """One request costs the site the same whether one verse is wanted or all of them,
+    so all of them are kept."""
+    corpus = BibleGatewayCorpus("NRSVCE", archived, offline=True)
+    corpus.fetch([VerseRef("SIR", 24, 1, vrs="eng")])
+
+    assert stored_chapters(archived, "nrsvce") == [("SIR", 24, 3)]
+    stored = read_chapter(archived, "nrsvce", "SIR", 24)
+    assert stored is not None
+    assert sorted(stored) == [1, 2, 3]
+
+
+def test_a_later_citation_is_served_from_the_database(archived: DataHome) -> None:
+    """No HTML, no network: the second reader of a chapter pays nothing."""
+    BibleGatewayCorpus("NRSVCE", archived, offline=True).fetch([VerseRef("SIR", 24, 1, vrs="eng")])
+
+    fresh = BibleGatewayCorpus("NRSVCE", archived, offline=True)
+    fresh._archived = lambda book, chapter: None  # type: ignore[method-assign]
+    (verse,) = fresh.fetch([VerseRef("SIR", 24, 3, vrs="eng")])
+    assert verse.text.startswith("“I came forth")
+
+
+def test_the_copyright_line_survives_the_round_trip(archived: DataHome) -> None:
+    """It is read off the page once, and owed on every later render."""
+    BibleGatewayCorpus("NRSVCE", archived, offline=True).fetch([VerseRef("SIR", 24, 1, vrs="eng")])
+
+    fresh = BibleGatewayCorpus("NRSVCE", archived, offline=True)
+    fresh._archived = lambda book, chapter: None  # type: ignore[method-assign]
+    fresh.fetch([VerseRef("SIR", 24, 2, vrs="eng")])
+    assert fresh.attribution is not None
+    assert "All rights reserved" in fresh.attribution
+
+
+def test_a_stored_corpus_reports_itself(archived: DataHome) -> None:
+    BibleGatewayCorpus("NRSVCE", archived, offline=True).fetch([VerseRef("SIR", 24, 1, vrs="eng")])
+    (meta,) = [m for m in read_meta(archived) if m.corpus == "nrsvce"]
+    assert meta.label == KNOWN_VERSIONS["NRSVCE"]
+    assert meta.verse_count == 3
+    assert meta.versification == "eng"
+    assert "under copyright" in (meta.license or "")
+
+
+@pytest.mark.parametrize(
+    ("chapters", "limit", "expected"),
+    [
+        # One chapter, one request.
+        ([("SIR", 24)], 5, [("SIR", 24, 24)]),
+        # A citation spanning chapters is a single request, not one per chapter.
+        ([("SIR", 24), ("SIR", 25), ("SIR", 26)], 5, [("SIR", 24, 26)]),
+        # ...but not an unbounded one.
+        ([("SIR", 24), ("SIR", 25), ("SIR", 26)], 2, [("SIR", 24, 25), ("SIR", 26, 26)]),
+        # A gap is not bridged: nothing unrequested is fetched.
+        ([("SIR", 24), ("SIR", 26)], 5, [("SIR", 24, 24), ("SIR", 26, 26)]),
+        # Books are never merged.
+        ([("SIR", 24), ("TOB", 1), ("TOB", 2)], 5, [("SIR", 24, 24), ("TOB", 1, 2)]),
+    ],
+)
+def test_requests_are_batched_into_runs(
+    chapters: list[tuple[str, int]], limit: int, expected: list[tuple[str, int, int]]
+) -> None:
+    assert _runs(chapters, limit) == expected
+
+
+def test_a_multi_chapter_page_is_split_by_chapter() -> None:
+    page = PAGE.replace("Sir-24-3", "Sir-25-1")
+    chapters = parse_passage(page)
+    assert sorted(chapters) == [24, 25]
+    assert sorted(chapters[24]) == [1, 2]
+    assert sorted(chapters[25]) == [1]

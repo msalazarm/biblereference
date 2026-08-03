@@ -86,10 +86,15 @@ Set `default_english` (or a tag's `en=`) to `NRSVCE`, `NABRE`, `RSV2CE`, `RSVCE`
 or `NCB` and they are fetched a chapter at a time from BibleGateway. Naming one is the
 opt-in; nothing reaches the network otherwise.
 
-Each chapter is requested **once, ever** — the page lands in your archive like any other
-source, so every later render is offline. Requests are serial with a 2-second gap. Keep it
-that way: BibleGateway's terms do not contemplate systematic downloading, and staying
-small is how this stays within them.
+**Whole chapters, once.** Citing a single verse pulls the chapter around it — one request
+costs the site the same either way, and the rest of that chapter is very likely what you
+cite next. Every verse of it is then kept twice over: the page in `sources/`, the parsed
+verses in the same database as every other corpus. So a chapter is requested **once, ever**,
+and later citations from anywhere in it are free. A citation spanning several chapters is
+batched into a single request (up to `max_chapters`, default 5).
+
+Requests are serial with a 2-second gap. Keep it that way: BibleGateway's terms do not
+contemplate systematic downloading, and staying small is how this stays within them.
 
 The text remains under its publisher's copyright, and the renderer emits their notice
 automatically. Drafting privately is one thing; a published treatise quoting at length

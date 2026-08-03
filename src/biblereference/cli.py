@@ -15,7 +15,7 @@ from pathlib import Path
 from .canon import NamingScheme
 from .fetch import build_source, fetch_source, iter_sources
 from .render import Config, Renderer
-from .store import DataHome, SqliteCorpus, read_meta
+from .store import DataHome, SqliteCorpus, read_meta, stored_chapters
 from .versification import Versification
 
 __all__ = ["main"]
@@ -125,6 +125,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             f"  {item.corpus:14} {item.verse_count:>7,} verses  "
             f"{item.language:4} {item.versification:4}  {item.label}"
         )
+        chapters = stored_chapters(home, item.corpus)
+        if chapters:
+            # An online translation is whatever has been read so far, so say what that is.
+            books = sorted({book for book, _, _ in chapters})
+            _say(
+                f"                 built up online: {len(chapters)} chapter(s) of "
+                f"{', '.join(books)}"
+            )
         if item.license:
             _say(f"                 licence: {item.license}")
 

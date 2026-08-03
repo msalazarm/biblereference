@@ -24,7 +24,7 @@ import hashlib
 import json
 import os
 import sqlite3
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import closing, contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
@@ -42,8 +42,11 @@ __all__ = [
     "ManifestEntry",
     "SourceMeta",
     "SqliteCorpus",
+    "add_chapter",
     "default_data_home",
     "open_store",
+    "read_chapter",
+    "stored_chapters",
 ]
 
 #: Point this at a synced or backed-up directory to carry your corpus between machines.
@@ -72,6 +75,18 @@ CREATE TABLE IF NOT EXISTS source_meta (
     built_at      TEXT,
     verse_count   INTEGER NOT NULL DEFAULT 0
 );
+
+-- Which chapters of an incrementally-built corpus have been read in full. A corpus
+-- assembled a chapter at a time cannot tell a chapter it has never seen from one whose
+-- verses are simply absent, so completeness is recorded rather than inferred.
+CREATE TABLE IF NOT EXISTS chapter_state (
+    corpus     TEXT    NOT NULL,
+    book       TEXT    NOT NULL,
+    chapter    INTEGER NOT NULL,
+    fetched_at TEXT    NOT NULL,
+    verses     INTEGER NOT NULL,
+    PRIMARY KEY (corpus, book, chapter)
+) WITHOUT ROWID;
 """
 
 
@@ -258,6 +273,102 @@ def write_corpus(home: DataHome, meta: SourceMeta, verses: Iterable[tuple[VerseR
             ),
         )
     return len(rows)
+
+
+def add_chapter(
+    home: DataHome,
+    meta: SourceMeta,
+    book: str,
+    chapter: int,
+    verses: Mapping[int, str],
+) -> int:
+    """Store one whole chapter of a corpus that is built up a chapter at a time.
+
+    Unlike :func:`write_corpus`, this adds rather than replaces: an online translation
+    accumulates as a treatise cites it, and the corpus is whatever has been read so far.
+    The chapter is recorded as complete so that a later lookup can tell a verse that is
+    genuinely absent -- the NRSV relegates a few verses of Sirach to footnotes -- from one
+    that has simply never been fetched.
+    """
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    with open_store(home) as connection:
+        connection.execute(
+            "INSERT INTO source_meta (corpus, label, language, versification, license, "
+            "attribution, source_url, fetched_at, built_at, verse_count) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0) "
+            "ON CONFLICT(corpus) DO UPDATE SET label=excluded.label, "
+            "attribution=COALESCE(excluded.attribution, source_meta.attribution), "
+            "built_at=excluded.built_at",
+            (
+                meta.corpus,
+                meta.label,
+                meta.language,
+                meta.versification,
+                meta.license,
+                meta.attribution,
+                meta.source_url,
+                meta.fetched_at or now,
+                now,
+            ),
+        )
+        connection.execute(
+            "DELETE FROM verse WHERE corpus = ? AND book = ? AND chapter = ?",
+            (meta.corpus, book, chapter),
+        )
+        connection.executemany(
+            "INSERT OR REPLACE INTO verse "
+            "(corpus, book, chapter, verse, subverse, text) VALUES (?, ?, ?, ?, '', ?)",
+            [(meta.corpus, book, chapter, verse, text) for verse, text in verses.items()],
+        )
+        connection.execute(
+            "INSERT OR REPLACE INTO chapter_state "
+            "(corpus, book, chapter, fetched_at, verses) VALUES (?, ?, ?, ?, ?)",
+            (meta.corpus, book, chapter, now, len(verses)),
+        )
+        connection.execute(
+            "UPDATE source_meta SET verse_count = "
+            "(SELECT COUNT(*) FROM verse WHERE corpus = ?) WHERE corpus = ?",
+            (meta.corpus, meta.corpus),
+        )
+    return len(verses)
+
+
+def read_chapter(home: DataHome, corpus: str, book: str, chapter: int) -> dict[int, str] | None:
+    """One stored chapter, or ``None`` if it has never been read in full."""
+    if not home.database.exists():
+        return None
+    with closing(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)) as connection:
+        try:
+            known = connection.execute(
+                "SELECT 1 FROM chapter_state WHERE corpus = ? AND book = ? AND chapter = ?",
+                (corpus, book, chapter),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return None
+        if known is None:
+            return None
+        rows = connection.execute(
+            "SELECT verse, text FROM verse WHERE corpus = ? AND book = ? AND chapter = ? "
+            "ORDER BY verse",
+            (corpus, book, chapter),
+        ).fetchall()
+    return {verse: text for verse, text in rows}
+
+
+def stored_chapters(home: DataHome, corpus: str) -> list[tuple[str, int, int]]:
+    """``(book, chapter, verse count)`` for every chapter held of a corpus."""
+    if not home.database.exists():
+        return []
+    with closing(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)) as connection:
+        try:
+            rows = connection.execute(
+                "SELECT book, chapter, verses FROM chapter_state WHERE corpus = ? "
+                "ORDER BY book, chapter",
+                (corpus,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+    return [(book, chapter, count) for book, chapter, count in rows]
 
 
 def read_meta(home: DataHome) -> list[SourceMeta]:
