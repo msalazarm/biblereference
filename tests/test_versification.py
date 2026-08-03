@@ -11,6 +11,8 @@ import pytest
 
 from biblereference.refs import VerseRef, parse_reference
 from biblereference.versification import (
+    AVAILABLE_SYSTEMS,
+    PIVOT,
     VerseOutOfRangeError,
     Versification,
     VersificationGapError,
@@ -20,6 +22,27 @@ from biblereference.versification import (
 @pytest.fixture(scope="module")
 def vrs() -> Versification:
     return Versification.load()
+
+
+@pytest.mark.parametrize("system", AVAILABLE_SYSTEMS)
+def test_every_advertised_system_actually_loads(system: str) -> None:
+    """AVAILABLE_SYSTEMS is a promise, and for a long time two of its members could not be
+    loaded at all: the Russian Synodal files carried contradictory psalm mappings that made
+    Versification.load raise. Nothing caught it because neither is in DEFAULT_SYSTEMS, so
+    nothing loaded them unless asked by name. Advertised and loadable are now the same
+    list, and this is what keeps them that way."""
+    loaded = Versification.load((PIVOT, system))
+
+    assert system in loaded.system_names
+    assert loaded.chapter_count(system, "PSA") > 0
+
+
+def test_all_systems_load_together() -> None:
+    """Loading them one at a time is not the same test: the loader builds each against the
+    pivot, and a fault in one must not be masked by the others."""
+    loaded = Versification.load(AVAILABLE_SYSTEMS)
+
+    assert loaded.system_names == tuple(AVAILABLE_SYSTEMS)
 
 
 def convert(vrs: Versification, text: str, source: str, target: str) -> str:
