@@ -104,6 +104,13 @@ class Config:
     data_home: Path | None = None
     template_dir: Path | None = None
     attribution: bool = True
+    online: bool = True
+    """Whether a version that exists only online may be fetched. Naming such a version
+    is itself the request, so this is on; set it False to guarantee no network use."""
+    online_delay: float = 2.0
+    """Seconds between online requests. Lower it and you are the problem."""
+    offline: bool = False
+    """Serve online versions only from what is already archived, never fetching."""
     quote_threshold: float = DEFAULT_THRESHOLD
     """How closely a supplied ``context=`` must match the resolved verse before it is
     reported. Loose by default, because your quotation is allowed to be a different
@@ -213,8 +220,23 @@ class Renderer:
     ) -> None:
         self.config = config or Config()
         self.versification = versification or Versification.load()
-        self._corpora: dict[str, Corpus] = dict(corpora or {})
+        self._corpora: dict[str, Corpus] = (
+            dict(corpora) if corpora is not None else self._load_built()
+        )
         self._env = self._build_environment()
+
+    def _load_built(self) -> dict[str, Corpus]:
+        """Open whatever ``biblereference build`` has already indexed.
+
+        Done here rather than only in the CLI so that using the library is the same as
+        using the command: fetch and build once, and every Renderer finds the texts.
+        """
+        from .store import DataHome, SqliteCorpus
+
+        home = DataHome(self.config.data_home) if self.config.data_home else DataHome()
+        if not home.database.exists():
+            return {}
+        return dict(SqliteCorpus.load_all(home))
 
     # -- corpora -----------------------------------------------------------------------
 
@@ -234,11 +256,34 @@ class Renderer:
                 f"`biblereference fetch --source {key}` and then `biblereference build`."
             )
 
+        from .corpora.web import KNOWN_VERSIONS
+
+        if key.upper() in KNOWN_VERSIONS:
+            corpus = self._online(key.upper())
+            self._corpora[corpus.id] = corpus
+            return corpus
+
         from .corpora.pythonbible_source import PythonBibleCorpus
 
         corpus = PythonBibleCorpus(name)
         self._corpora[corpus.id] = corpus
         return corpus
+
+    def _online(self, version: str) -> Corpus:
+        """Build an online provider for a translation that exists nowhere local."""
+        if not self.config.online:
+            raise CorpusError(
+                f"{version} is only available online, and online lookups are switched off "
+                f"(Config(online=False)). Use a public-domain version, or switch them on."
+            )
+
+        from .corpora.web import BibleGatewayCorpus
+        from .store import DataHome
+
+        home = DataHome(self.config.data_home) if self.config.data_home else DataHome()
+        return BibleGatewayCorpus(
+            version, home, delay=self.config.online_delay, offline=self.config.offline
+        )
 
     # -- rendering ---------------------------------------------------------------------
 
@@ -418,17 +463,21 @@ class Renderer:
         names = self.config.roles.get(role, ())
         if not names:
             return None, CorpusError(f"no corpus is registered for {role!r}")
+
+        missing = [name for name in names if name not in self._corpora]
         for name in names:
             corpus = self._corpora.get(name)
             if corpus is None:
-                last_error = CorpusError(
-                    f"{name} is not built; run `biblereference fetch` then `build`"
-                )
                 continue
             try:
                 return self._fetch(corpus, span), None
             except (VerseUnavailable, CorpusError, VersificationError) as exc:
                 last_error = exc
+
+        if last_error is None and missing:
+            last_error = CorpusError(
+                f"{', '.join(missing)} not built; run `biblereference fetch` then `build`"
+            )
         return None, last_error
 
     def _english_rendition(

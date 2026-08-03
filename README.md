@@ -80,9 +80,42 @@ from NA28 across the whole New Testament), the Leningrad Codex that BHS itself p
 Swete's Vaticanus-based Septuagint. Defensible, but not the modern eclectic editions —
 worth knowing before citing.
 
-Copyrighted English translations (NRSVCE, NABRE, RSV-2CE…) are reachable through an
-opt-in online provider. That text stays under its publisher's copyright; private drafting
-is one thing, publishing extensive quotation needs permission.
+## Copyrighted translations
+
+Set `default_english` (or a tag's `en=`) to `NRSVCE`, `NABRE`, `RSV2CE`, `RSVCE`, `GNTCE`
+or `NCB` and they are fetched a chapter at a time from BibleGateway. Naming one is the
+opt-in; nothing reaches the network otherwise.
+
+Each chapter is requested **once, ever** — the page lands in your archive like any other
+source, so every later render is offline. Requests are serial with a 2-second gap. Keep it
+that way: BibleGateway's terms do not contemplate systematic downloading, and staying
+small is how this stays within them.
+
+The text remains under its publisher's copyright, and the renderer emits their notice
+automatically. Drafting privately is one thing; a published treatise quoting at length
+needs permission above the publisher's stated limit. The public-domain path — ASV with the
+WEB Catholic Edition, or the Douay-Rheims throughout — has no such ceiling.
+
+Set `Config(online=False)` to guarantee no network use, or `offline=True` to serve only
+what is already archived.
+
+## What it refuses to do
+
+Where the data cannot support an honest answer, resolution fails and says why rather than
+producing a plausible wrong verse:
+
+- The Vulgate's Sirach, Tobit and Judith come from source texts differing from the Greek
+  by whole clauses (Vulgate Sirach runs 1605 verses to the Greek's 1401), and no mapping
+  exists. Cite them in Vulgate numbering and quote them from the Douay-Rheims.
+- Greek Sirach manuscripts transpose 30:25–33:16a with 33:16b–36:13a, so those chapters
+  refuse conversion — and only those. Sirach 24 converts fine.
+- The Septuagint's own interleaved Esther numbering is unusable upstream, and no fetched
+  corpus carries the additions in Greek. The A–F letter chapters resolve against the
+  Douay-Rheims instead; see `esther_additions.json`.
+
+Every such refusal, and every correction applied to the upstream versification data, is
+recorded with its reasoning in
+`src/biblereference/versification/data/corrections.json`.
 
 ## Data home
 
