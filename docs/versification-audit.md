@@ -73,6 +73,33 @@ Over the 60 runs: **39 agreed** the text sits at the offset rather than the mapp
 matched neither candidate, 3 could not tell them apart, and **1 was called a false alarm**
 (`lxx`→`vul` Leviticus 15:19–22).
 
+### Where the model could not be used, and why
+
+The three `nvl` pairs have no same-language witness, so they were to be the model's own
+territory. Run against `nvl`→`org`, it reported contradictions on 6.9% of verses. Reading
+six of them showed all six were plainly the same verse:
+
+> `nvl` *Quo mortuo et universis fratribus eius* — `org` "And Yosef died, and all his achim"
+
+The `org` witness is the Orthodox Jewish Bible, which transliterates its Hebrew heavily:
+*achim*, *meyalledot*, *nogesim*, *avodah*, *Melech Mitzrayim*. A small quantised model
+reads that as a foreign language and rejects the pair. Swapping the witness for a plain
+English Bible flipped four of nine test verses from NO to YES — and the model still got two
+of nine wrong on verses that are unambiguously correct.
+
+**The control probe did not catch this, and the reason is a fault in this module's own
+logic that the episode exposed.** The probe was designed against a model too eager to
+agree. A model too eager to *disagree* answers NO to the mapping and NO to the control, and
+the original rule scored that as a contradiction — when in truth it is the model saying it
+cannot read either text. Corrected so that only a *discriminating* answer counts in either
+direction, the same 3,500 judgements yield **11 contradictions instead of 247**, a
+twenty-two-fold reduction. The rule is now pinned by `tests/test_judge.py`.
+
+The run was stopped rather than completed. `nvl` does not need it: `nvl`↔`vul` is
+Latin against Latin, the strongest comparison available anywhere in this audit, and it
+already scores **99.41%**. `nvl` against the other families follows from that through
+`vul`, which is itself checked against all three.
+
 ## What was found and fixed
 
 **The Vulgate's Jonah, and it was real.** `vul.json` carried the *English* Jonah mapping —
@@ -174,8 +201,10 @@ not that these belong somewhere else.
 - **All 45 English corpora verified as belonging to `eng`**, forty by text alignment
   directly and five by the independent structural check where paraphrase defeats the
   text test.
-- **7 of 10 family pairs audited deterministically.** The three `nvl` pairs need the model,
-  which is built and exercised but has not been run exhaustively over them.
+- **7 of 10 family pairs audited deterministically.** The three `nvl` pairs cannot be, and
+  the model turned out not to reach them either — but they do not need it. `nvl`↔`vul` is
+  Latin against Latin at 99.41%, the strongest comparison in the audit, and `vul` is itself
+  checked against the other three families.
 - `rsc` and `rso` cannot be audited textually at all — no corpora exist in either
   versification, so only their internal consistency is checkable, which the loader already
   enforces.

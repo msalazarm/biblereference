@@ -66,13 +66,14 @@ class Verdict:
     """What one verse's pair of probes established."""
 
     CONFIRMED: Final = "confirmed"
-    """YES to the mapping and NO to its neighbour: the model can tell them apart, and
-    agrees with the mapping."""
+    """YES to the mapping, NO to its neighbour: the model can tell them apart and agrees."""
     CONTRADICTED: Final = "contradicted"
-    """NO to the mapping. Worth a person's attention whatever the neighbour probe said."""
+    """NO to the mapping and YES to its neighbour. The model can tell them apart and
+    prefers the other one, which is the only shape of answer that is evidence against a
+    mapping."""
     UNINFORMATIVE: Final = "uninformative"
-    """YES to both, or NO to both. The model is not discriminating here, so its opinion on
-    this verse is not evidence either way."""
+    """YES to both, or NO to both. Either way the model has not distinguished the mapping
+    from a verse known to be wrong, so its opinion here is not evidence."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,9 +88,22 @@ class Judgement:
 
     @property
     def verdict(self) -> str:
-        if not self.mapping_answer:
-            return Verdict.CONTRADICTED
-        return Verdict.UNINFORMATIVE if self.control_answer else Verdict.CONFIRMED
+        """Only a discriminating answer counts, in either direction.
+
+        Treating a flat NO to both as a contradiction was this module's own first mistake,
+        and it inflated the contradiction count enormously. A model that rejects the
+        mapping *and* rejects a verse it was meant to reject has told us nothing about the
+        mapping -- it has told us it cannot read this pair of texts. That happens often:
+        against the Orthodox Jewish Bible, whose heavy transliteration (*achim*,
+        *meyalledot*, *nogesim*) reads as a foreign language, this model answered NO to
+        two thirds of a sample of verses that were unambiguously correct.
+
+        The control probe was designed to catch a model too eager to agree. It does not
+        catch one too eager to disagree unless the verdict is read this way.
+        """
+        if self.mapping_answer == self.control_answer:
+            return Verdict.UNINFORMATIVE
+        return Verdict.CONFIRMED if self.mapping_answer else Verdict.CONTRADICTED
 
 
 _SCHEMA: Final = """
