@@ -218,6 +218,7 @@ _SYSTEM_NAMES: Final[Mapping[str, str]] = {
     "eng": "English numbering",
     "lxx": "Septuagint",
     "vul": "Vulgate",
+    "nvl": "Nova Vulgata",
 }
 
 

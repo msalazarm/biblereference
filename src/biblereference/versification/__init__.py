@@ -44,14 +44,14 @@ __all__ = [
 #: The versification everything converts through.
 PIVOT: Final = "org"
 
-#: Systems loaded by default: the pivot, plus the three this library's corpora use.
+#: Systems loaded by default: the pivot, plus the ones this library's corpora use.
 #: ``rsc`` and ``rso`` (Russian Synodal, Catholic and Orthodox) are vendored and can be
 #: passed to :meth:`Versification.load`, but they carry unresolved conflicts of their own
 #: in the Psalms and are not needed for a Hebrew/Greek/Latin/English workflow.
-DEFAULT_SYSTEMS: Final = ("org", "eng", "lxx", "vul")
+DEFAULT_SYSTEMS: Final = ("org", "eng", "lxx", "vul", "nvl")
 
-#: Everything vendored, including the systems not loaded by default.
-AVAILABLE_SYSTEMS: Final = ("org", "eng", "lxx", "vul", "rsc", "rso")
+#: Everything available, including the systems not loaded by default.
+AVAILABLE_SYSTEMS: Final = ("org", "eng", "lxx", "vul", "nvl", "rsc", "rso")
 
 #: A bare verse coordinate, versification-free. Used as a mapping key so that lookups
 #: don't depend on which system a :class:`VerseRef` claims to belong to.

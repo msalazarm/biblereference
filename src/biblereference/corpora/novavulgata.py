@@ -3,10 +3,9 @@
 Two things about it matter more than they might seem to.
 
 **It is numbered by the Hebrew, not by the Vulgate.** Its Psalm 23 is headed
-``PSALMUS 23 (22)``, giving the old Greek number in parentheses. So this corpus declares
-``org``, and a comparison against the Clementine has to go through the pivot -- a
-verse-by-verse diff without it would line Psalm 22 up against Psalm 22 and report the
-whole Psalter as divergent.
+``PSALMUS 23 (22)``, giving the old Greek number in parentheses. So a comparison against
+the Clementine has to go through the pivot -- a verse-by-verse diff without it would line
+Psalm 22 up against Psalm 22 and report the whole Psalter as divergent.
 
 **It is a revision away from Jerome, not toward him.** Where the Clementine has *Dominus
 regit me*, the Nova Vulgata has *Dominus pascit me*. For the question "what did a
@@ -17,23 +16,27 @@ It is under copyright, Libreria Editrice Vaticana, so it is fetched for personal
 archived, never redistributed, and its notice is emitted -- the same footing as the
 NRSVCE.
 
-The pages are hand-built HTML rather than a data file, and inconsistent about everything
-a parser might rely on: a verse number usually opens a line but may follow the previous
+**It is stored whole, in its own numbering.** This is the Church's official Latin text,
+and it numbers as it numbers. An earlier version of this module filed it under the
+original-language frame and dropped the chapters that would not fit, which meant deciding
+that seventy-odd chapters of an official text were not worth keeping because another
+edition divides them differently. They are its chapters. The versification it actually
+uses is recorded in ``versification/data/nvl.json``, read off these pages, and every verse
+is stored exactly as printed.
+
+Almost everywhere its numbering agrees with the original-language frame, so a citation
+converts between them freely. Where it does not, conversion refuses and says so, while the
+text stays perfectly citable in the numbering it has.
+
+The pages are hand-built HTML rather than a data file, and inconsistent about everything a
+parser might rely on: a verse number usually opens a line but may follow the previous
 sentence mid-line, is usually followed by a space but may run straight into the word, and
 where there is a space it is as often U+00A0 as a plain one. Genesis opens with a list of
 chapter numbers for navigation, which read as a heading turns into a fifty-verse chapter
-one. And 1 Chronicles 11 prints verse 40 as "0".
-
-So nothing here is trusted on faith. Every chapter is checked against the reference
-numbering as it is parsed, and one that does not reconcile is left out with a note rather
-than indexed wrongly -- per chapter, not per book, since this edition has its own
-versification and excluding a whole book for one seam would throw away sixty good chapters
-to avoid one uncertain one. The edition also brackets the verse numbers it omits --
-``(21) 22 Conversantibus...`` at Matthew 17 -- which is recorded, because a verse the
-edition deliberately lacks is a different fact from one the parser dropped.
-
-The chapters in :data:`VERIFIED_DIFFERENCES` were checked against an independent
-transcription, which confirmed thirteen as real and caught one parser fault.
+one. 1 Chronicles 11 prints verse 40 as "0", so the scan looks ahead rather than halting
+at a gap. And the edition brackets the verse numbers it omits -- ``(21) 22
+Conversantibus...`` at Matthew 17 -- which is recorded, because a verse the edition
+deliberately lacks is a different fact from one the parser dropped.
 """
 
 from __future__ import annotations
@@ -45,11 +48,7 @@ from typing import Final
 
 from ..refs import VerseRef
 from ..sources import BuiltCorpus, RemoteFile, Source
-from ..versification import (
-    VerseOutOfRangeError,
-    Versification,
-    VersificationError,
-)
+from ..versification import Versification
 
 __all__ = ["SOURCE", "build", "parse_book"]
 
@@ -144,25 +143,13 @@ _BOOKS: Final[dict[str, tuple[str, str]]] = {
 #: The Psalter anchors chapters by name rather than by number: ``PSALMUS 23``.
 _PSALM_ANCHOR_RE: Final = re.compile(r"^\s*PSALMUS\s+(\d+)")
 
-#: Books the Nova Vulgata numbers by the Hebrew but arranges like the Vulgate, keeping
-#: the deuterocanonical additions inside their host: Susanna and Bel as Daniel 13 and 14,
-#: the Letter of Jeremiah as Baruch 6. Verified from the pages themselves -- its Daniel
-#: has fourteen chapters with chapter 3 running to verse 100, which is the Vulgate's
-#: shape, while its Esther has the Hebrew's ten. These are read in Vulgate numbering and
-#: converted, rather than being given a mapping of their own.
-_VULGATE_ARRANGEMENT: Final = frozenset({"DAN", "BAR"})
-
-#: Chapters where this edition genuinely numbers differently from the reference text,
-#: each checked against an independent transcription rather than assumed.
+#: Chapters whose numbering was checked against an independent transcription of this
+#: edition, and found to be genuinely its own rather than a parsing fault.
 #:
-#: The check was worth doing. It confirmed thirteen of these as real editorial differences
-#: -- the Nova Vulgata prints as one verse what the Masoretic frame splits in two, or the
-#: reverse -- and caught one case that was not: 1 Chronicles 11 stopped at verse 39 because
-#: the Vatican's page prints verse 40 as "0", which the parser now steps over.
-#:
-#: A chapter listed here is left out of the index knowingly. A chapter that fails to
-#: reconcile and is *not* listed here is left out too, but has not been independently
-#: checked, and may yet be a parser fault worth chasing.
+#: Kept as provenance. Nothing depends on it now -- the edition is stored in its own
+#: numbering throughout -- but it records that these divisions were confirmed from a
+#: second source rather than assumed, and it is what caught the one case that was a fault:
+#: 1 Chronicles 11 stopped at verse 39 because the Vatican's page prints verse 40 as "0".
 VERIFIED_DIFFERENCES: Final[frozenset[tuple[str, int]]] = frozenset(
     {
         ("PSA", 12),
@@ -314,7 +301,10 @@ def _marker(text: str, number: int) -> re.Match[str] | None:
     at_line = re.search(rf"(?:^|\n)[ \t]*{number}(?!\d)[ \t]*(?=\S)", text)
     if at_line is not None:
         return at_line
-    return re.search(rf"(?<![\d,.:;\-])(?<!\w){number}(?!\d)[ \t]*(?=\S)", text)
+    # Not inside parentheses: "(21)" is how this edition marks a verse it omits, and a
+    # mid-line pattern loose enough to catch "5 Numquid" will otherwise read the 21 out
+    # of the brackets and store the stray ")" as verse 21.
+    return re.search(rf"(?<![\d,.:;\-(])(?<!\w){number}(?!\d)[ \t]*(?=[^\s)])", text)
 
 
 def _split_verses(text: str) -> tuple[dict[int, str], list[int]]:
@@ -390,46 +380,47 @@ def _next_marker(rest: str, number: int) -> tuple[re.Match[str] | None, int]:
 
 
 def build(archive: Path) -> Iterator[BuiltCorpus]:
-    """Parse a fetched archive, checking every chapter as it goes.
+    """Parse a fetched archive into the corpus, whole.
 
-    Two corpora come out. Most of the edition is numbered by the Hebrew and goes into the
-    pivot. Its Sirach is not -- chapter 1 runs to verse 40 where the Greek has 30, which
-    is the Vulgate's expanded Sirach -- and the Vulgate's Sirach is one the versification
-    data refuses to align with the Greek, so it becomes a corpus of its own in Vulgate
-    numbering rather than being forced or dropped.
+    The text is stored exactly as the Vatican prints it, in its own numbering. Nothing is
+    excluded, renumbered or converted: this is the Church's official Latin text, and
+    bending it to another edition's verse divisions would mean either dropping the
+    chapters that do not fit or silently moving their seams.
 
-    Verification is per chapter, not per book. The edition has its own versification,
-    close to the Masoretic frame but not identical, and excluding a whole book for one
-    seam would throw away sixty good chapters to avoid one uncertain one.
+    Where its numbering agrees with the original-language frame -- which is almost
+    everywhere -- a citation converts between them freely. Where it does not, the
+    versification data says so and conversion refuses, while the text itself stays
+    perfectly citable in the numbering it actually has.
     """
     versification = Versification.load()
-    pivot: list[tuple[VerseRef, str]] = []
-    vulgate: list[tuple[VerseRef, str]] = []
+    verses: list[tuple[VerseRef, str]] = []
     notes: list[str] = []
-    skipped: dict[str, list[int]] = {}
+    done: set[str] = set()
 
     for slug, (_, code) in _BOOKS.items():
         path = archive / f"{slug}.html"
-        if not path.exists():
+        if not path.exists() or code in done:
             continue
+        done.add(code)
 
-        html = path.read_text(encoding="utf-8", errors="replace")
-        source_vrs, chapters, omissions = _read(versification, code, html)
+        chapters, omissions = parse_book(
+            path.read_text(encoding="utf-8", errors="replace"),
+            single_chapter=versification.chapter_count("nvl", code) == 1,
+        )
         if not chapters:
-            notes.append(f"{code}: not indexed -- no chapters parsed")
+            notes.append(f"{code}: nothing parsed")
             continue
 
-        into = vulgate if source_vrs == "vul" and code not in _VULGATE_ARRANGEMENT else pivot
+        expected = versification.chapter_count("nvl", code)
+        if expected and len(chapters) != expected:
+            notes.append(
+                f"{code}: parsed {len(chapters)} chapters where its own versification "
+                f"records {expected} -- the pages may have changed"
+            )
+
         for chapter, found in sorted(chapters.items()):
-            if not _chapter_agrees(versification, source_vrs, code, chapter, found):
-                skipped.setdefault(code, []).append(chapter)
-                continue
             for verse, text in sorted(found.items()):
-                ref = VerseRef(book=code, chapter=chapter, verse=verse, vrs=source_vrs)
-                if into is vulgate:
-                    vulgate.append((ref, text))
-                else:
-                    pivot.extend((target, text) for target in _to_pivot(versification, ref))
+                verses.append((VerseRef(book=code, chapter=chapter, verse=verse, vrs="nvl"), text))
 
         gaps = {c: v for c, v in omissions.items() if v}
         if gaps:
@@ -438,117 +429,21 @@ def build(archive: Path) -> Iterator[BuiltCorpus]:
             )
             notes.append(f"{code}: verses the edition itself omits -- {rendered}")
 
-    for code, chapters_out in sorted(skipped.items()):
-        checked = [c for c in chapters_out if (code, c) in VERIFIED_DIFFERENCES]
-        unchecked = [c for c in chapters_out if (code, c) not in VERIFIED_DIFFERENCES]
-        if checked:
-            notes.append(
-                f"{code}: {', '.join(str(c) for c in checked)} not indexed -- this "
-                f"edition numbers them differently, confirmed against an independent "
-                f"transcription"
-            )
-        if unchecked:
-            notes.append(
-                f"{code}: {', '.join(str(c) for c in unchecked)} not indexed -- numbered "
-                f"differently here than in the reference text, not independently checked"
-            )
-
-    notes.append(
-        "Daniel and Baruch are read in Vulgate numbering and converted: the Nova Vulgata "
-        "numbers by the Hebrew but keeps the Vulgate's arrangement of the additions, so "
-        "its Daniel 13 and 14 are Susanna and Bel, and its Baruch 6 is the Letter of "
-        "Jeremiah."
-    )
+    blocked = versification.unmappable_chapters("nvl")
+    if blocked:
+        books = sorted({book for book, _ in blocked})
+        notes.append(
+            f"{len(blocked)} chapter(s) of this edition are numbered differently from the "
+            f"original-language frame and so cannot be cross-referenced to it, in "
+            f"{', '.join(books)}. They are stored in full and citable in Nova Vulgata "
+            f"numbering."
+        )
 
     yield BuiltCorpus(
         id="novavulgata",
         label="Nova Vulgata",
         language="la",
-        versification="org",
-        verses=pivot,
+        versification="nvl",
+        verses=verses,
         notes=notes,
     )
-    yield BuiltCorpus(
-        id="novavulgata-vul",
-        label="Nova Vulgata, Vulgate numbering",
-        language="la",
-        versification="vul",
-        verses=vulgate,
-        notes=[
-            "Books the Nova Vulgata numbers as the Vulgate does rather than as the Hebrew "
-            "does -- its Sirach above all, whose first chapter runs to verse 40 where the "
-            "Greek has 30. Cite these in Vulgate numbering.",
-        ],
-    )
-
-
-def _read(
-    versification: Versification, code: str, html: str
-) -> tuple[str, dict[int, dict[int, str]], dict[int, list[int]]]:
-    """Parse a book, choosing whichever numbering it actually follows.
-
-    Most books follow the Hebrew. A few follow the Vulgate, and rather than keeping a
-    hand-written list of which, the parse is scored against both and the better fit wins.
-    """
-    scored: dict[str, tuple[int, dict[int, dict[int, str]], dict[int, list[int]]]] = {}
-    candidates = ["vul"] if code in _VULGATE_ARRANGEMENT else ["org", "vul"]
-
-    for vrs in candidates:
-        if versification.chapter_count(vrs, code) == 0:
-            continue
-        chapters, omissions = parse_book(
-            html, single_chapter=versification.chapter_count(vrs, code) == 1
-        )
-        agreed = sum(
-            1
-            for chapter, found in chapters.items()
-            if _chapter_agrees(versification, vrs, code, chapter, found)
-        )
-        scored[vrs] = (agreed, chapters, omissions)
-
-    if not scored:
-        return "org", {}, {}
-    if "org" not in scored:
-        vrs = next(iter(scored))
-        return vrs, scored[vrs][1], scored[vrs][2]
-
-    org_agreed, org_chapters, org_omissions = scored["org"]
-    if "vul" in scored:
-        vul_agreed, vul_chapters, vul_omissions = scored["vul"]
-        # A decisive margin, not a better one. Joshua and 1 Maccabees each happen to fit
-        # Vulgate numbering by a single chapter, which is noise; Sirach fits it by fifty,
-        # which is the book actually being numbered that way.
-        margin = max(3, len(org_chapters) // 4)
-        if vul_agreed > org_agreed + margin:
-            return "vul", vul_chapters, vul_omissions
-    return "org", org_chapters, org_omissions
-
-
-def _chapter_agrees(
-    versification: Versification,
-    vrs: str,
-    code: str,
-    chapter: int,
-    found: dict[int, str],
-) -> bool:
-    """Whether a parsed chapter lines up with the reference numbering.
-
-    The test is the highest verse number, not the count: the edition omits verses on
-    purpose, and a gap it declares is not a disagreement.
-    """
-    if not found:
-        return False
-    try:
-        return max(found) == versification.max_verse(vrs, code, chapter)
-    except VerseOutOfRangeError:
-        return False
-
-
-def _to_pivot(versification: Versification, ref: VerseRef) -> list[VerseRef]:
-    """Put a parsed verse into the pivot's numbering, or drop it if it will not go."""
-    if ref.vrs == "org":
-        return [ref]
-    try:
-        return versification.convert_all(ref, "org")
-    except VersificationError:
-        return []

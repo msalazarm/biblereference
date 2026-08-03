@@ -93,7 +93,7 @@ Public domain or freely licensed, fetched once and then archived:
 | English deuterocanon | [WEB Catholic Edition](https://ebible.org/find/details.php?id=eng-web-c) | translated from the Greek, so numbered like the Greek |
 | English of the Vulgate | [Douay-Rheims 1899](https://ebible.org/find/details.php?id=engDRA) | for citations written in Vulgate numbering |
 | Latin | [Clementine Vulgate](https://ebible.org/find/details.php?id=latVUC) | Jerome as the Church received him; public domain |
-| Latin | [Nova Vulgata](https://www.vatican.va/archive/bible/nova_vulgata/documents/nova-vulgata_index_lt.html) | the 1979 revision; © Libreria Editrice Vaticana |
+| Latin | [Nova Vulgata](https://www.vatican.va/archive/bible/nova_vulgata/documents/nova-vulgata_index_lt.html) | the official text since 1979, complete and in its own numbering; © Libreria Editrice Vaticana |
 | Versification | [Copenhagen Alliance](https://github.com/Copenhagen-Alliance/versification-specification) | org / eng / lxx / vul maps |
 
 NA28, the BHS apparatus, and Rahlfs-Hanhart are under copyright and cannot be included.
@@ -139,6 +139,9 @@ producing a plausible wrong verse:
 - The Septuagint's own interleaved Esther numbering is unusable upstream, and no fetched
   corpus carries the additions in Greek. The A–F letter chapters resolve against the
   Douay-Rheims instead; see `esther_additions.json`.
+- The Nova Vulgata numbers seventy-one chapters differently from the original-language
+  frame, so those cannot be cross-referenced to it. The text is stored complete and is
+  citable in its own numbering (`vrs=nvl`) — the edition is not bent to fit another.
 
 Every such refusal, and every correction applied to the upstream versification data, is
 recorded with its reasoning in

@@ -284,4 +284,45 @@ def test_every_verse_survives_a_round_trip_through_the_pivot(vrs: Versification)
 def test_loading_validates_the_corrections_still_apply(vrs: Versification) -> None:
     """Loading raises if a documented correction no longer matches upstream, which is how
     a refresh of the vendored data announces that a fix can be dropped."""
-    assert vrs.system_names == ("org", "eng", "lxx", "vul")
+    assert vrs.system_names == ("org", "eng", "lxx", "vul", "nvl")
+
+
+# --------------------------------------------------------------------------------------
+# The Nova Vulgata's own numbering
+# --------------------------------------------------------------------------------------
+
+
+def test_the_nova_vulgata_has_a_versification_of_its_own(vrs: Versification) -> None:
+    """It is the Church's official Latin text and numbers as it numbers. Filing it under
+    another edition's divisions would mean dropping the chapters that do not fit."""
+    assert vrs.has_book("nvl", "PSA")
+    assert vrs.chapter_count("nvl", "PSA") == 150
+    # Psalm 12 prints as one verse what the Masoretic frame splits into two.
+    assert vrs.max_verse("nvl", "PSA", 12) == 8
+    assert vrs.max_verse("org", "PSA", 12) == 9
+
+
+def test_it_numbers_by_the_hebrew_not_the_vulgate(vrs: Versification) -> None:
+    """Its Psalm 23 is the Hebrew's 23, headed "PSALMUS 23 (22)"."""
+    assert convert(vrs, "Ps 23:1", "eng", "nvl") == "PSA 23:1"
+    assert convert(vrs, "Ps 23:1", "eng", "vul") == "PSA 22:1"
+
+
+def test_it_keeps_the_vulgates_arrangement_of_the_additions(vrs: Versification) -> None:
+    """Susanna is its Daniel 13, and the Letter of Jeremiah its Baruch 6 -- each checked
+    to align exactly on its own verse counts."""
+    assert vrs.chapter_count("nvl", "DAN") == 14
+    assert convert(vrs, "Sus 1:1", "org", "nvl") == "DAN 13:1"
+    assert convert(vrs, "Bel 1:1", "org", "nvl") == "DAN 14:1"
+    assert convert(vrs, "LJE 1:1", "org", "nvl") == "BAR 6:1"
+    assert convert(vrs, "S3Y 1:1", "org", "nvl") == "DAN 3:24"
+
+
+def test_where_it_differs_conversion_refuses_rather_than_shifting(
+    vrs: Versification,
+) -> None:
+    with pytest.raises(VersificationGapError):
+        vrs.convert_range(parse_reference("Ps 12:1"), "nvl")
+    # Its Sirach follows the Vulgate's expanded numbering throughout.
+    with pytest.raises(VersificationGapError):
+        vrs.convert_range(parse_reference("Sir 1:1"), "nvl")
