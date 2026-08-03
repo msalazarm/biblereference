@@ -1,0 +1,6 @@
+{# Citation stays in the line; the text moves to a footnote at the end. #}
+{{- reference }}[^bref{{ marker }}]
+{%- set lines = [] -%}
+{%- if english -%}{%- set _ = lines.append("**" ~ reference ~ "** (" ~ english.label ~ ") " ~ english.text) -%}{%- endif -%}
+{%- for r in originals -%}{%- set _ = lines.append("*" ~ r.language_name ~ " (" ~ r.label ~ "):* " ~ r.text) -%}{%- endfor -%}
+{%- set _ = footnotes.append("[^bref" ~ marker ~ "]: " ~ lines | join(" — ")) -%}

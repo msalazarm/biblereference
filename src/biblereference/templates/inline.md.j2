@@ -1,0 +1,5 @@
+{# Short form: stays inside the sentence, but set off so it reads as quoted. #}
+{%- set body = english.text if english else renditions[0].text -%}
+{%- set version = ", " ~ english.short_label if english else "" -%}
+*{{ body }}* ({{ reference }}{{ version }})
+{%- for r in originals %} — *{{ r.language_name }}:* {{ r.text | isolate(r.rtl) }}{% endfor %}

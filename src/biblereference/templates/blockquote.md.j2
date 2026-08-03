@@ -1,0 +1,12 @@
+{# Default: reference and text together, so argument and evidence stay adjacent. #}
+{% set head = reference ~ (" (" ~ english.label ~ ")" if english else "") %}
+> **{{ head }}**
+{% if english %}
+> {{ english.text }}
+{% endif %}
+{% for r in originals %}
+>
+{% set label = r.language_name ~ " (" ~ r.label ~ ")" ~ (" — " ~ r.reference if r.renumbered else "") %}
+> **{{ label }}**
+> {{ r.text | isolate(r.rtl) }}
+{% endfor %}

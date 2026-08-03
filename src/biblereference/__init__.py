@@ -1,0 +1,79 @@
+"""Expand scripture citation tags in Markdown into verified verse text.
+
+    >>> from biblereference import Config, Renderer
+    >>> renderer = Renderer(Config(default_english="ASV"))
+    >>> out, report = renderer.render_text("As {{Luke 2:42}} says...")
+    >>> report.ok
+    True
+
+The Catholic canon is in scope throughout, and references are resolved through the
+original-language versification, so a passage cited in one tradition's numbering comes
+back correctly in another's. Where the data cannot support that honestly -- the Vulgate's
+Sirach, Esther's Greek additions -- resolution refuses rather than guessing.
+"""
+
+from __future__ import annotations
+
+from .canon import (
+    AmbiguousBookError,
+    Canon,
+    NamingScheme,
+    UnknownBookError,
+    book_canon,
+    book_title,
+    resolve_book,
+)
+from .corpora import Corpus, CorpusError, VerseText, VerseUnavailable
+from .refs import ReferenceParseError, VerseRange, VerseRef, parse_reference
+from .render import (
+    CitationError,
+    Config,
+    Renderer,
+    RenderReport,
+    Rendition,
+    ResolvedCitation,
+)
+from .tags import Citation, Emphasis, TagSyntaxError, find_citations
+from .versification import (
+    UnknownVersificationError,
+    VerseOutOfRangeError,
+    Versification,
+    VersificationError,
+    VersificationGapError,
+)
+
+__version__ = "0.1.0"
+
+__all__ = [
+    "AmbiguousBookError",
+    "Canon",
+    "Citation",
+    "CitationError",
+    "Config",
+    "Corpus",
+    "CorpusError",
+    "Emphasis",
+    "NamingScheme",
+    "ReferenceParseError",
+    "RenderReport",
+    "Renderer",
+    "Rendition",
+    "ResolvedCitation",
+    "TagSyntaxError",
+    "UnknownBookError",
+    "UnknownVersificationError",
+    "VerseOutOfRangeError",
+    "VerseRange",
+    "VerseRef",
+    "VerseText",
+    "VerseUnavailable",
+    "Versification",
+    "VersificationError",
+    "VersificationGapError",
+    "__version__",
+    "book_canon",
+    "book_title",
+    "find_citations",
+    "parse_reference",
+    "resolve_book",
+]
