@@ -1,0 +1,1302 @@
+[
+  {
+    "id": "brenton",
+    "ebible_id": "eng-Brenton",
+    "label": "Brenton Septuagint Translation",
+    "title": "Brenton Septuagint Translation",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "lxx",
+    "declared": {
+      "OT": {
+        "books": 37,
+        "chapters": 921,
+        "verses": 22971
+      },
+      "NT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "DC": {
+        "books": 16,
+        "chapters": 196,
+        "verses": 6034
+      }
+    }
+  },
+  {
+    "id": "asv",
+    "ebible_id": "eng-asv",
+    "label": "American Standard Version (1901)",
+    "title": "American Standard Version (1901)",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7957
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "glw",
+    "ebible_id": "eng-glw",
+    "label": "God's Living Word",
+    "title": "God's Living Word",
+    "copyright": "Copyright © 1996 Michael Paul Johnson",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "NT": {
+        "books": 4,
+        "chapters": 28,
+        "verses": 1012
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "kjv",
+    "ebible_id": "eng-kjv",
+    "label": "King James Version + Apocrypha",
+    "title": "King James Version + Apocrypha",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7957
+      },
+      "DC": {
+        "books": 14,
+        "chapters": 173,
+        "verses": 5720
+      }
+    }
+  },
+  {
+    "id": "kjv2006",
+    "ebible_id": "eng-kjv2006",
+    "label": "King James (Authorized) Version",
+    "title": "King James (Authorized) Version",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7957
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "lxx2012",
+    "ebible_id": "eng-lxx2012",
+    "label": "LXX2012: Septuagint in American English 2012",
+    "title": "LXX2012: Septuagint in American English 2012",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "lxx",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 930,
+        "verses": 22877
+      },
+      "NT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "DC": {
+        "books": 15,
+        "chapters": 175,
+        "verses": 5449
+      }
+    }
+  },
+  {
+    "id": "rv",
+    "ebible_id": "eng-rv",
+    "label": "Revised Version with Apocrypha (1895)",
+    "title": "Revised Version with Apocrypha (1895)",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7957
+      },
+      "DC": {
+        "books": 14,
+        "chapters": 173,
+        "verses": 5776
+      }
+    }
+  },
+  {
+    "id": "t4t",
+    "ebible_id": "eng-t4t",
+    "label": "Translation for Translators",
+    "title": "Translation for Translators",
+    "copyright": "Copyright © 2008-2017 Ellis W. Deibler, Jr.",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 22769
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7871
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "lxx2012uk",
+    "ebible_id": "eng-uk-lxx2012",
+    "label": "LXX2012: Septuagint in British/International English 2012",
+    "title": "LXX2012: Septuagint in British/International English 2012",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "lxx",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 930,
+        "verses": 22877
+      },
+      "NT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "DC": {
+        "books": 15,
+        "chapters": 175,
+        "verses": 5449
+      }
+    }
+  },
+  {
+    "id": "web",
+    "ebible_id": "eng-web",
+    "label": "World English Bible Classic",
+    "title": "World English Bible Classic",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7958
+      },
+      "DC": {
+        "books": 15,
+        "chapters": 213,
+        "verses": 6955
+      }
+    }
+  },
+  {
+    "id": "webbe",
+    "ebible_id": "eng-webbe",
+    "label": "World English Bible British Edition with Deuterocanon",
+    "title": "World English Bible British Edition with Deuterocanon",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7958
+      },
+      "DC": {
+        "books": 15,
+        "chapters": 213,
+        "verses": 6955
+      }
+    }
+  },
+  {
+    "id": "bbe",
+    "ebible_id": "engBBE",
+    "label": "Bible in Basic English",
+    "title": "Bible in Basic English",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7957
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "dby",
+    "ebible_id": "engDBY",
+    "label": "Darby Translation",
+    "title": "Darby Translation",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7954
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "pev",
+    "ebible_id": "engPEV",
+    "label": "Plain English Version",
+    "title": "Plain English Version",
+    "copyright": "Copyright © 2026 Wycliffe Bible Translators Australia",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 6,
+        "chapters": 100,
+        "verses": 2201
+      },
+      "NT": {
+        "books": 24,
+        "chapters": 199,
+        "verses": 5173
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "ulb",
+    "ebible_id": "engULB",
+    "label": "Unlocked Literal Bible",
+    "title": "Unlocked Literal Bible",
+    "copyright": "Copyright © 2017 Door43 World Missions Community",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23135
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7959
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "wycliffe",
+    "ebible_id": "engWycliffe",
+    "label": "Wycliffe Bible",
+    "title": "Wycliffe Bible",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 5,
+        "chapters": 187,
+        "verses": 5843
+      },
+      "NT": {
+        "books": 4,
+        "chapters": 89,
+        "verses": 3779
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "aoi",
+    "ebible_id": "engaoi",
+    "label": "Anindilyakwa English Bible",
+    "title": "Anindilyakwa English Bible",
+    "copyright": "Copyright © 2021 Bible Society Australia",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 2,
+        "chapters": 54,
+        "verses": 1485
+      },
+      "NT": {
+        "books": 4,
+        "chapters": 41,
+        "verses": 1472
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "asvbt",
+    "ebible_id": "engasvbt",
+    "label": "American Standard Version Byzantine Text",
+    "title": "American Standard Version Byzantine Text",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7954
+      },
+      "DC": {
+        "books": 18,
+        "chapters": 216,
+        "verses": 6744
+      }
+    }
+  },
+  {
+    "id": "barkly",
+    "ebible_id": "engbarkly",
+    "label": "Barkly Bible Portions",
+    "title": "Barkly Bible Portions",
+    "copyright": "Copyright © 2024 Bible Society of Australia",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 3,
+        "chapters": 64,
+        "verses": 1559
+      },
+      "NT": {
+        "books": 1,
+        "chapters": 16,
+        "verses": 586
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "bsb",
+    "ebible_id": "engbsb",
+    "label": "Berean Standard Bible",
+    "title": "Berean Standard Bible",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7941
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "e2t",
+    "ebible_id": "enge2t",
+    "label": "Easy to Translate English Jonah",
+    "title": "Easy to Translate English Jonah",
+    "copyright": "Copyright © 2025 Tyndale Bible Translators",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 1,
+        "chapters": 4,
+        "verses": 47
+      },
+      "NT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "emtv",
+    "ebible_id": "engemtv",
+    "label": "English Majority Text Version",
+    "title": "English Majority Text Version",
+    "copyright": "Copyright © 2014 Dr. Paul W. Esposito",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7954
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "f35",
+    "ebible_id": "engf35",
+    "label": "The New Testament with Commentary",
+    "title": "The New Testament with Commentary",
+    "copyright": "Copyright © 2016 Wilbur N. Pickering, ThM, PhD",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7953
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "fbv",
+    "ebible_id": "engfbv",
+    "label": "Free Bible Version",
+    "title": "Free Bible Version",
+    "copyright": "Copyright © 2018 Dr. Jonathan Gallagher",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7959
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "gnv",
+    "ebible_id": "enggnv",
+    "label": "Geneva Bible 1599",
+    "title": "Geneva Bible 1599",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23137
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7953
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "jps",
+    "ebible_id": "engjps",
+    "label": "JPS TaNaKH 1917",
+    "title": "JPS TaNaKH 1917",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "kjvcpb",
+    "ebible_id": "engkjvcpb",
+    "label": "KJV Cambridge Paragraph Bible",
+    "title": "KJV Cambridge Paragraph Bible",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7957
+      },
+      "DC": {
+        "books": 14,
+        "chapters": 172,
+        "verses": 5720
+      }
+    }
+  },
+  {
+    "id": "lee",
+    "ebible_id": "englee",
+    "label": "Isaac Leeser Tanakh",
+    "title": "Isaac Leeser Tanakh",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "lsv",
+    "ebible_id": "englsv",
+    "label": "Literal Standard Version",
+    "title": "Literal Standard Version",
+    "copyright": "Copyright © 2020 Covenant Press",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7959
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "lxxup",
+    "ebible_id": "englxxup",
+    "label": "Updated Brenton English Septuagint",
+    "title": "Updated Brenton English Septuagint",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "lxx",
+    "declared": {
+      "OT": {
+        "books": 36,
+        "chapters": 908,
+        "verses": 22603
+      },
+      "NT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "DC": {
+        "books": 16,
+        "chapters": 196,
+        "verses": 6034
+      }
+    }
+  },
+  {
+    "id": "msb",
+    "ebible_id": "engmsb",
+    "label": "Majority Standard Bible",
+    "title": "Majority Standard Bible",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7957
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "net",
+    "ebible_id": "engnet",
+    "label": "NET Bible",
+    "title": "NET Bible",
+    "copyright": "Copyright © 1996-2016 Biblical Studies Press, L. L. C.",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7957
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "nna",
+    "ebible_id": "engnna",
+    "label": "Nyangumarta English Bible",
+    "title": "Nyangumarta English Bible",
+    "copyright": "Copyright © 1980-2010 Wycliffe Bible Translators, Inc.",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 8,
+        "chapters": 49,
+        "verses": 756
+      },
+      "NT": {
+        "books": 18,
+        "chapters": 55,
+        "verses": 622
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "noy",
+    "ebible_id": "engnoy",
+    "label": "George Noyes Bible",
+    "title": "George Noyes Bible",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 22,
+        "chapters": 493,
+        "verses": 10275
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7956
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "oebcw",
+    "ebible_id": "engoebcw",
+    "label": "Open English Bible (Commonwealth Spelling)",
+    "title": "Open English Bible (Commonwealth Spelling)",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 17,
+        "chapters": 305,
+        "verses": 5954
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7959
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "oebus",
+    "ebible_id": "engoebus",
+    "label": "Open English Bible (U. S. spelling)",
+    "title": "Open English Bible (U. S. spelling)",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 17,
+        "chapters": 305,
+        "verses": 5954
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7959
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "ojb",
+    "ebible_id": "engojb",
+    "label": "The Orthodox Jewish Bible",
+    "title": "The Orthodox Jewish Bible",
+    "copyright": "Copyright © 2002-2011, 2021, 2024 Artists for Israel International",
+    "public_domain": false,
+    "versification": "org",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23206
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7959
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "oke",
+    "ebible_id": "engoke",
+    "label": "Targum Onkelos Etheridge",
+    "title": "Targum Onkelos Etheridge",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "org",
+    "declared": {
+      "OT": {
+        "books": 5,
+        "chapters": 187,
+        "verses": 5848
+      },
+      "NT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "ourb",
+    "ebible_id": "engourb",
+    "label": "One Unity Resource Bible",
+    "title": "One Unity Resource Bible",
+    "copyright": "Copyright © 2016,2019 Thomas Robinson",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 8,
+        "chapters": 434,
+        "verses": 10520
+      },
+      "NT": {
+        "books": 4,
+        "chapters": 89,
+        "verses": 3779
+      },
+      "DC": {
+        "books": 2,
+        "chapters": 17,
+        "verses": 931
+      }
+    }
+  },
+  {
+    "id": "tcent",
+    "ebible_id": "engtcent",
+    "label": "Text-Critical English New Testament",
+    "title": "Text-Critical English New Testament",
+    "copyright": "Copyright © 2022 Robert Adam Boyd",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7954
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "tnt",
+    "ebible_id": "engtnt",
+    "label": "Tyndale New Testament",
+    "title": "Tyndale New Testament",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7957
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "webp",
+    "ebible_id": "engwebp",
+    "label": "World English Bible",
+    "title": "World English Bible",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7958
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "webpb",
+    "ebible_id": "engwebpb",
+    "label": "World English Bible British Edition",
+    "title": "World English Bible British Edition",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7958
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "webster",
+    "ebible_id": "engwebster",
+    "label": "Noah Webster Bible",
+    "title": "Noah Webster Bible",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7957
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "webu",
+    "ebible_id": "engwebu",
+    "label": "World English Bible Updated",
+    "title": "World English Bible Updated",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7958
+      },
+      "DC": {
+        "books": 15,
+        "chapters": 213,
+        "verses": 6955
+      }
+    }
+  },
+  {
+    "id": "wmb",
+    "ebible_id": "engwmb",
+    "label": "World Messianic Bible",
+    "title": "World Messianic Bible",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7958
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "wmbb",
+    "ebible_id": "engwmbb",
+    "label": "World Messianic Bible British Edition",
+    "title": "World Messianic Bible British Edition",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7958
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  },
+  {
+    "id": "wyc2017",
+    "ebible_id": "engwyc2017",
+    "label": "Wycliffe's Bible with Modern Spelling",
+    "title": "Wycliffe's Bible with Modern Spelling",
+    "copyright": "Copyright © 2001,2010,2011,2012,2013,2015 Terry Noble",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7959
+      },
+      "DC": {
+        "books": 14,
+        "chapters": 157,
+        "verses": 4906
+      }
+    }
+  },
+  {
+    "id": "wyc2018",
+    "ebible_id": "engwyc2018",
+    "label": "Wycliffe's Bible with Modern Spelling (Enhanced)",
+    "title": "Wycliffe's Bible with Modern Spelling (Enhanced)",
+    "copyright": "Copyright © 2001,2010,2011,2012,2013,2015 Terry Noble",
+    "public_domain": false,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7959
+      },
+      "DC": {
+        "books": 14,
+        "chapters": 157,
+        "verses": 4906
+      }
+    }
+  },
+  {
+    "id": "ylt",
+    "ebible_id": "engylt",
+    "label": "Young's Literal Translation",
+    "title": "Young's Literal Translation",
+    "copyright": "public domain",
+    "public_domain": true,
+    "versification": "eng",
+    "declared": {
+      "OT": {
+        "books": 39,
+        "chapters": 929,
+        "verses": 23145
+      },
+      "NT": {
+        "books": 27,
+        "chapters": 260,
+        "verses": 7957
+      },
+      "DC": {
+        "books": 0,
+        "chapters": 0,
+        "verses": 0
+      }
+    }
+  }
+]

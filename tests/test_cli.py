@@ -5,8 +5,10 @@ from pathlib import Path
 import pytest
 
 from biblereference.cli import main
+from biblereference.corpora.ebible import ENGLISH
+from biblereference.fetch import iter_sources
 from biblereference.refs import VerseRef
-from biblereference.sources import all_sources, get_source
+from biblereference.sources import FETCH_ORDER, all_sources, get_source
 from biblereference.store import DataHome, SourceMeta, write_corpus
 
 
@@ -42,8 +44,9 @@ def test_every_source_declares_its_licence_and_files() -> None:
 
 def test_the_catholic_canon_is_covered_by_the_registered_sources() -> None:
     """Hebrew, Greek, Septuagint, two Latins, and two English texts -- one Greek-numbered
-    for the deuterocanon, one Vulgate-numbered."""
-    assert set(all_sources()) == {
+    for the deuterocanon, one Vulgate-numbered. These are the texts the renderer reaches
+    for by name; the bulk English corpus behind them is checked separately."""
+    assert {
         "oshb",
         "swete",
         "nestle1904",
@@ -51,7 +54,29 @@ def test_the_catholic_canon_is_covered_by_the_registered_sources() -> None:
         "dra",
         "latvuc",
         "novavulgata",
-    }
+    } <= set(all_sources())
+
+
+def test_the_bulk_english_corpus_is_registered() -> None:
+    """Fifty more English translations, held so that the search can tell one rendering
+    from another. They must not collide with the named sources."""
+    registered = set(all_sources())
+    english = {source.id for source in ENGLISH}
+
+    assert len(english) == 50
+    assert english <= registered
+    assert not english & {"webc", "dra", "latvuc", "oshb", "swete", "nestle1904"}
+    assert {"asv", "kjv", "bsb", "net", "ylt"} <= english
+
+
+def test_every_source_is_fetched_even_if_it_is_not_in_the_fetch_order() -> None:
+    """Registering a source without naming it in FETCH_ORDER used to mean it was never
+    fetched at all. Fifty-odd sources make that too easy a mistake to leave standing."""
+    iterated = [source.id for source in iter_sources()]
+
+    assert len(iterated) == len(set(iterated)), "a source was yielded twice"
+    assert set(iterated) == set(all_sources())
+    assert iterated[: len(FETCH_ORDER)] == list(FETCH_ORDER), "named texts still come first"
 
 
 def test_an_unknown_source_names_the_known_ones() -> None:

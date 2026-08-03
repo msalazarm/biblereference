@@ -30,6 +30,7 @@ from .appendix import (
 )
 from .canon import AmbiguousBookError, Canon, NamingScheme, UnknownBookError, book_canon
 from .corpora.base import Corpus, CorpusError, VerseText, VerseUnavailable
+from .corpora.web import CRAWL_DELAY
 from .emphasis import SpanNotFoundError, apply_spans
 from .quotecheck import DEFAULT_THRESHOLD, check_quotation
 from .refs import ReferenceParseError, VerseRange, VerseRef, parse_reference
@@ -60,6 +61,14 @@ _RTL: Final = frozenset({"hbo"})
 #: English versions that come from a fetched source rather than from ``pythonbible``,
 #: so that asking for one before building says so instead of reporting it as unknown.
 _FETCHED_ENGLISH: Final = frozenset({"webc", "dra"})
+
+
+def _online_versions() -> frozenset[str]:
+    """Versions that exist online, imported lazily to keep the web extra optional."""
+    from .corpora.web import KNOWN_VERSIONS
+
+    return frozenset(KNOWN_VERSIONS)
+
 
 #: Which corpora answer each ``original=`` value, in order of preference.
 #:
@@ -130,8 +139,9 @@ class Config:
     online: bool = True
     """Whether a version that exists only online may be fetched. Naming such a version
     is itself the request, so this is on; set it False to guarantee no network use."""
-    online_delay: float = 2.0
-    """Seconds between online requests. Lower it and you are the problem."""
+    online_delay: float = CRAWL_DELAY
+    """Seconds between online requests. Defaults to the delay BibleGateway's robots.txt
+    actually asks for. Lower it and you are the problem."""
     offline: bool = False
     """Serve online versions only from what is already archived, never fetching."""
     quote_threshold: float = DEFAULT_THRESHOLD
@@ -274,9 +284,18 @@ class Renderer:
         self._corpora[corpus.id] = corpus
 
     def _english(self, name: str) -> Corpus:
-        """Find, and lazily construct, an English corpus by version name."""
+        """Find, and lazily construct, an English corpus by version name.
+
+        A version assembled a chapter at a time is deliberately *not* served from the
+        store, even though it is sitting there. Such a corpus holds only the chapters that
+        have been asked for so far -- a run of the quotation search may have banked
+        Isaiah 53 of the NIV and nothing else -- and serving it as though it were complete
+        makes citing John 3:16 fall through to a different translation instead of fetching
+        the one that was asked for. The online provider reads those same stored chapters
+        first and fetches only what is missing, so it is strictly the better answer.
+        """
         key = name.strip().lower()
-        if key in self._corpora:
+        if key in self._corpora and not self._partial(key):
             return self._corpora[key]
 
         if key in _FETCHED_ENGLISH:
@@ -297,6 +316,20 @@ class Renderer:
         corpus = PythonBibleCorpus(name)
         self._corpora[corpus.id] = corpus
         return corpus
+
+    def _partial(self, key: str) -> bool:
+        """Whether this corpus was built a chapter at a time rather than in bulk.
+
+        ``chapter_state`` records which chapters an incrementally-built corpus has read in
+        full, and nothing else writes to it -- so its presence is exactly the question
+        being asked.
+        """
+        if key.upper() not in _online_versions():
+            return False
+        from .store import DataHome, stored_chapters
+
+        home = DataHome(self.config.data_home) if self.config.data_home else DataHome()
+        return bool(stored_chapters(home, key))
 
     def _online(self, version: str) -> Corpus:
         """Build an online provider for a translation that exists nowhere local."""
@@ -532,18 +565,38 @@ class Renderer:
             self.config.vulgate_english,
         ]
 
+        wanted = candidates[0]
         last_error: Exception | None = None
+        # Why the requested version was passed over, when it was. Falling back because a
+        # version has no Sirach is routine and silent; falling back because it could not be
+        # reached is a substitution the author did not ask for, and saying nothing would
+        # put another translation's words under a citation meant for theirs.
+        refused: Exception | None = None
+
         for name in dict.fromkeys(candidates):
             try:
                 corpus = self._english(name)
             except CorpusError as exc:
                 last_error = exc
+                if name == wanted:
+                    refused = exc
                 continue
             try:
-                return self._fetch(corpus, span)
+                rendition = self._fetch(corpus, span)
             except (VerseUnavailable, CorpusError, VersificationError) as exc:
                 last_error = exc
+                # Type alone cannot tell the two apart: a version with no Sirach and a
+                # version that could not be reached both surface as VerseUnavailable. What
+                # separates them is whether the text carries the book at all.
+                if name == wanted and self._carries(corpus, span):
+                    refused = exc
                 continue
+            if refused is not None:
+                warnings.append(
+                    f"{wanted.upper()} was asked for and could not be read, so "
+                    f"{span.pretty()} is quoted from {corpus.label} instead -- {refused}"
+                )
+            return rendition
 
         tried = ", ".join(dict.fromkeys(candidates))
         warnings.append(
@@ -551,6 +604,19 @@ class Renderer:
             + (f" -- {last_error}" if last_error else "")
         )
         return None
+
+    def _carries(self, corpus: Corpus, span: VerseRange) -> bool:
+        """Whether this corpus holds the book the citation lands in once converted.
+
+        The ASV has no Sirach and never will, so quoting Sirach from the fallback is the
+        system working. A version that does carry the book and still failed to answer is a
+        different event entirely.
+        """
+        try:
+            segments = self.versification.convert_range(span, corpus.versification)
+        except VersificationError:
+            return False
+        return all(corpus.has_book(segment.book) for segment in segments)
 
     def _fetch(self, corpus: Corpus, span: VerseRange) -> Rendition:
         """Convert a passage into a corpus's numbering and read it."""

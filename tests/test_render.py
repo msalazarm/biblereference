@@ -91,6 +91,29 @@ def test_asking_for_an_unbuilt_text_says_how_to_build_it(renderer: Renderer) -> 
     assert "not built" in report.errors[0]
 
 
+def test_substituting_for_an_unreachable_version_is_reported(tmp_path: Path) -> None:
+    """Falling back because a version has no Sirach is the system working, and silent.
+    Falling back because the version asked for could not be reached is a substitution
+    nobody requested, and printing another translation's words under the citation without
+    saying so is exactly the failure this library exists to prevent."""
+    renderer = Renderer(
+        Config(
+            notices=False,
+            offline=True,
+            data_home=tmp_path / "empty",
+            # Somewhere for the fallback to land, so this tests the substitution rather
+            # than a total failure to find any English at all.
+            deuterocanon_english="ASV",
+        )
+    )
+
+    out, report = renderer.render_text('[passage="John 3:16" en="NIV"]')
+
+    assert "American Standard Version" in out, "the fallback should have supplied the text"
+    assert report.warnings, "a version was silently swapped for another"
+    assert "NIV was asked for" in report.warnings[0]
+
+
 # --------------------------------------------------------------------------------------
 # Failure is visible
 # --------------------------------------------------------------------------------------

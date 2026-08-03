@@ -44,8 +44,15 @@ __all__ = ["KNOWN_VERSIONS", "BibleGatewayCorpus", "parse_chapter", "parse_passa
 
 _BASE: Final = "https://www.biblegateway.com/passage/"
 
+#: Seconds between requests. This is not a guess or a courtesy figure: BibleGateway's
+#: robots.txt publishes ``Crawl-delay: 15``, and asking faster than a host has said it
+#: wants is the difference between using a service and abusing it. Fifteen seconds is
+#: slow, which is the point -- the whole design fetches a chapter once, ever, and serves
+#: every later citation in it from the database.
+CRAWL_DELAY: Final = 15.0
+
 #: Versions this has been checked against. Others may work; these are the Catholic
-#: editions the provider exists for.
+#: editions the provider was built for.
 KNOWN_VERSIONS: Final[dict[str, str]] = {
     "NRSVCE": "New Revised Standard Version Catholic Edition",
     "NRSVACE": "New Revised Standard Version Anglicised Catholic Edition",
@@ -55,6 +62,25 @@ KNOWN_VERSIONS: Final[dict[str, str]] = {
     "GNTCE": "Good News Translation Catholic Edition",
     "NCB": "St. Joseph New Catholic Bible",
     "DRA": "Douay-Rheims 1899 American Edition",
+    # Not Catholic editions, and here for a different reason: between them these are most
+    # of what has been sold and preached in English since 1901, so a quotation heard in a
+    # sermon is very likely to be one of them. Every one is under live copyright and none
+    # can be lawfully bulk-downloaded, so they are reachable only the way everything here
+    # is reachable -- a chapter at a time, once ever, at the site's published crawl delay.
+    # See :mod:`biblereference.search` for the resolution pass that asks for them only
+    # when a passage is identified and its translation is not.
+    "NIV": "New International Version",
+    "ESV": "English Standard Version",
+    "NKJV": "New King James Version",
+    "NASB": "New American Standard Bible 2020",
+    "NASB1995": "New American Standard Bible 1995",
+    "CSB": "Christian Standard Bible",
+    "NLT": "New Living Translation",
+    "MSG": "The Message",
+    "TLB": "The Living Bible",
+    "GNT": "Good News Translation",
+    "RSV": "Revised Standard Version",
+    "NIRV": "New International Reader's Version",
 }
 
 #: Where the site's book name differs from this library's title for it.
@@ -173,7 +199,7 @@ class BibleGatewayCorpus:
         version: str,
         home: DataHome,
         *,
-        delay: float = 2.0,
+        delay: float = CRAWL_DELAY,
         offline: bool = False,
         timeout: float = 30.0,
         max_chapters: int = 5,

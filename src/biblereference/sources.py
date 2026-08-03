@@ -76,6 +76,7 @@ def _sources() -> dict[str, Source]:
             ebible.DRA,
             ebible.LATVUC,
             novavulgata.SOURCE,
+            *ebible.ENGLISH,
         )
     }
 
@@ -99,7 +100,11 @@ def get_source(source_id: str) -> Source:
         ) from None
 
 
-#: Order the CLI fetches in, smallest first, so a failure surfaces quickly.
+#: Order the CLI fetches in, smallest first, so a failure surfaces quickly. The texts the
+#: renderer reaches for by name come first; the bulk English corpus, which exists for the
+#: search index, follows in whatever order the table gives. Sources not named here are
+#: still fetched -- see :func:`biblereference.fetch.iter_sources` -- so that registering
+#: one cannot silently omit it.
 FETCH_ORDER: Final = (
     "webc",
     "dra",

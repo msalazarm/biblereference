@@ -1,0 +1,135 @@
+# Auditing the versification mappings
+
+A wrong mapping does not fail. It returns the neighbouring verse, with no error and no
+warning, and everything built on it is wrong in a way nothing downstream can detect. This
+is what was done to find out whether any were wrong, what it found, and — as much as it
+matters — what it cannot tell you.
+
+## The instrument
+
+**The test is differential, never a threshold.** Two translations of one verse can share
+almost no words: the Douay-Rheims and the Orthodox Jewish Bible render Psalm 23:1 at 0.15
+similarity and are plainly the same verse. Any threshold that accepted that would accept
+anything. What survives translation is *relative* position — the right verse still
+resembles its counterpart more than the neighbours do — so every check scores the mapped
+position against offsets −2…+2 and passes when the mapping's own position wins.
+
+**Both sides of every comparison are in one language.** Asking whether a Hebrew verse and a
+Greek one are "the same" conflates the numbering question with the translation question.
+Comparing Brenton's Septuagint against the Douay-Rheims — both English, made from the two
+traditions being aligned — asks only the one that matters.
+
+| pair | witnesses | language |
+|---|---|---|
+| `org`–`eng` | `ojb` / `web` | English |
+| `org`–`lxx` | `ojb` / `brenton` | English |
+| `org`–`vul` | `ojb` / `dra` | English |
+| `eng`–`lxx` | `web` / `brenton` | English |
+| `eng`–`vul` | `web` / `dra` | English |
+| `lxx`–`vul` | `brenton` / `dra` | English |
+| `vul`–`nvl` | `latvuc` / `novavulgata` | **Latin** |
+
+Seven of the ten family pairs. The three missing all involve the Nova Vulgata, held here
+only in Latin, which no other family has.
+
+**Every verse is checked, not only the mapped ones.** A mapping file records exceptions, so
+a verse it does not mention is *asserting* that none is needed — an assertion as capable of
+being wrong as an explicit mapping, and only a full sweep catches a mapping that should
+exist and does not. About 200,000 comparisons, 173 seconds.
+
+## Reading the output
+
+The first run flagged 4,164 verses. Almost none are faults. They cluster in Numbers,
+Exodus, Leviticus, 1 Chronicles, Job and Proverbs — the censuses, the tabernacle
+instructions, the genealogies — where adjacent verses are nearly identical and a neighbour
+wins by chance.
+
+What a real fault looks like is different: **a run of consecutive verses all preferring the
+same offset.** Filtering on runs of three or more reduced 4,164 flagged verses to **60
+runs**. That filter is the whole discrimination, and it is available as `--min-run`.
+
+| pair | decisive comparisons | agree |
+|---|---|---|
+| `org`→`eng` | 30,904 | 99.28% |
+| `org`→`lxx` | 22,450 | 96.37% |
+| `org`→`vul` | 30,559 | 97.55% |
+| `eng`→`lxx` | 27,575 | 97.58% |
+| `eng`→`vul` | 32,944 | 98.06% |
+| `lxx`→`vul` | 24,591 | 96.43% |
+| `vul`→`nvl` | 32,991 | 99.41% |
+
+## The second instrument
+
+A local `gemma-4-E4B-it-qat` on llama.cpp, constrained by the GBNF grammar
+`root ::= "YES" | "NO"`, asked whether two verses are the same passage. It reads across
+languages, which is what the deterministic test cannot do.
+
+**Every verse is asked twice.** Once about the mapping, once about a verse deliberately
+next door. A model inclined to agree says YES to everything and hands back a clean bill of
+health for a corpus full of errors — which is worse than not asking, because it looks like
+evidence. Only YES to the mapping and NO to the neighbour counts as confirmation.
+
+Over the 60 runs: **39 agreed** the text sits at the offset rather than the mapping, 17
+matched neither candidate, 3 could not tell them apart, and **1 was called a false alarm**
+(`lxx`→`vul` Leviticus 15:19–22).
+
+## What was found and fixed
+
+**The Vulgate's Jonah, and it was real.** `vul.json` carried the *English* Jonah mapping —
+`JON 1:17 → JON 2:1` and `JON 2:1-10 → JON 2:2-11`. The proof is in the file's own data:
+it gives Vulgate Jonah 1 sixteen verses, so the source verse `JON 1:17` does not exist.
+Only the English tradition puts the great fish at 1:17; the Vulgate follows the Hebrew,
+where it opens chapter 2. Four witnesses agree — the Clementine and Nova Vulgata both read
+*Et praeparavit Dominus piscem grandem* at 2:1, the Douay-Rheims has no 1:17 at all, and
+Brenton's Septuagint puts the fish at 2:1. Only the World English Bible has 1:17.
+
+**Every Vulgate citation of Jonah 2 resolved one verse late.** Asking for Jonah 2:1 in
+Vulgate numbering returned Jonah's prayer instead of the fish that prompted it. Corrected,
+with reasoning, in `corrections.json`; pinned by `tests/test_alignment.py`; Jonah now
+scores 100% agreement across all seven pairs.
+
+That fault also yielded a cheap invariant now enforced as a test: **no mapping may name a
+verse its own system does not have.** A file that does is describing a different Bible.
+
+## What was found and is *not* a fault
+
+This is the part that matters for reading the other 39, and it is why they are not
+presented as 39 bugs.
+
+**Bel and the Dragon (40 and 41 verses, two pairs).** The largest run in the whole audit,
+and both instruments agree the text is offset. It is not a mapping error. The Clementine's
+Daniel 14:1 reads *Erat autem Daniel conviva regis*, while the Nova Vulgata and the Greek
+both begin *Et rex Astyages appositus est ad patres suos*. The Clementine simply **omits
+the Astyages verse** and still numbers its chapter 1–42. The 1979 revision restored it. The
+editions genuinely differ; the mapping aligns the numbers, which is its job.
+
+**Deuteronomy 29 (28 verses) and the Letter of Jeremiah (26 + 21).** Here the confound is
+the witness. Brenton's Letter of Jeremiah has 73 verses where every system declares 72, and
+its Deuteronomy 29:1 matches the Douay's 29:1 rather than sitting one behind it. Brenton
+fits `lxx` at 97% overall — correctly filed — but these books are in its 3% tail.
+
+**The limitation this exposes, stated plainly:** both instruments measure whether the
+*text* lines up. Neither can distinguish "the mapping is wrong" from "the two editions
+print different content" or "this witness is idiosyncratic here". Separating those needs a
+person, and a single family pair is never enough evidence — the Bel case was only settled
+by reading four editions in three languages.
+
+## Status
+
+- **1 mapping fault found, confirmed from four independent witnesses, and fixed.**
+- **39 runs where both instruments agree the content is offset.** Of the four largest
+  examined by hand, all four are edition or witness differences rather than mapping faults.
+  The remaining ~35 have not been read yet and are candidates, not defects.
+- **7 of 10 family pairs audited deterministically.** The three `nvl` pairs need the model,
+  which has been built but not yet run exhaustively over them.
+- `rsc` and `rso` cannot be audited textually at all — no corpora exist in either
+  versification, so only their internal consistency is checkable, which the loader already
+  enforces.
+
+## Running it
+
+```bash
+biblereference audit                  # every pair, every verse
+biblereference audit --book JON       # one book
+biblereference audit --min-run 5      # only the clearest runs
+```

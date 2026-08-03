@@ -152,7 +152,13 @@ def build_source(
 
 
 def iter_sources(only: str | None = None) -> Iterator[Source]:
-    """Sources to act on: one named, or all of them in fetch order."""
+    """Sources to act on: one named, or all of them in fetch order.
+
+    ``FETCH_ORDER`` names the texts the renderer reaches for, smallest first, so that a
+    failure surfaces quickly. Everything else follows in id order. Registering a source
+    without listing it there used to mean it was never fetched at all; now it is simply
+    fetched last.
+    """
     from .sources import FETCH_ORDER, all_sources
 
     if only:
@@ -162,3 +168,5 @@ def iter_sources(only: str | None = None) -> Iterator[Source]:
     for source_id in FETCH_ORDER:
         if source_id in sources:
             yield sources[source_id]
+    for source_id in sorted(sources.keys() - set(FETCH_ORDER)):
+        yield sources[source_id]

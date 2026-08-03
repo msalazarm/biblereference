@@ -17,20 +17,107 @@ not an appendix.
 
 ```bash
 pip install -e .
-biblereference fetch     # download the texts into your archive (~45 MB)
-biblereference build     # index them; from here on, everything works offline
+biblereference sync      # fetch, build and index everything: ~160 MB down, ~600 MB built
 biblereference render treatise.md -o treatise.out.md
 ```
 
+`sync` is the only command a new install needs, and it is the one to run again later: every
+step skips what it already has, so an interrupted run resumes where it stopped. Its parts
+are still available separately — `fetch` archives the raw files, `build` indexes them into
+the database, `index` builds the search index over that.
+
+Any of the fifty local English translations can be the one you quote —
+`--english BSB`, or `Config(default_english="BSB")`. The **Berean Standard Bible** is the
+strongest public-domain choice: modern English, dedicated to the public domain in 2023, so
+no quota applies however much you quote, and it tracks the NIV closely enough to stand in
+for it. `--english ASV` remains the default.
+
 `biblereference verify treatise.md` checks every citation and writes nothing — the one to
 put in a pre-commit hook. `biblereference doctor` says what is cached, what is built, and
-which chapters cannot be converted between numbering systems. `biblereference render
---appendix` adds the passage register.
+which chapters cannot be converted between numbering systems; `doctor --verify` re-hashes
+every archived file against the manifest. `biblereference render --appendix` adds the
+passage register.
 
 `biblereference compare latvuc novavulgata` reports how far the two Latin Bibles have
 drifted apart, book by book — aligned through the pivot, since they are not numbered
 alike, and compared on words so that commas and the j/i spelling shift are not counted as
 substance.
+
+## Finding the citation
+
+The inverse of everything above: give it words, get back the verse.
+
+```console
+$ biblereference search "I can do all things through Christ who gives me strength"
+Philippians 4:13 (100%) -- bsb, msb (indistinguishable here)
+
+$ biblereference scan sermon.txt
+{"passage": "JHN 3:16", "similarity": 1.0, "identified": true, "span": [118, 258], …}
+```
+
+`search` takes a string; `scan` reads a whole document and emits one JSON record per
+quotation, with the character span it occupies, so a transcript can be fed straight into an
+analysis pipeline. Both work on half-remembered wording — the matching is on folded word
+tokens with Porter stemming behind it, so *loving* still finds *loved*.
+
+Three things it is careful about, because the point of it is counting what gets quoted:
+
+- **It says when it cannot name the translation.** NIV, ESV, NASB and NKJV are most of
+  American preaching and none may be lawfully bulk-downloaded. A quotation from one of them
+  matches its passage well and matches no held translation closely, and that is reported as
+  what it is rather than credited to whichever public-domain text sits nearest.
+- **It reports ties as ties.** Many of the fifty-odd English translations render a given
+  verse identically; where they do, naming one is invention.
+- **It would rather miss than guess.** A match has to be both close and *contiguous* — six
+  unbroken words at minimum. Ordinary religious language passes the first test regularly
+  and the second almost never, which is what keeps a distribution built from this honest.
+
+## Naming the translation
+
+The thirteen best-selling English Bibles since 1901 are what people actually quote, and
+eleven of them are under live copyright — no publisher-sanctioned channel permits a
+complete local copy of any. So they are reached the way everything else here is reached:
+a chapter at a time, once ever.
+
+`resolve` asks only about passages the search has already found and cannot attribute to one
+of those thirteen:
+
+```bash
+biblereference scan sermon.txt > found.jsonl          # fast, offline, no network
+biblereference resolve found.jsonl --resolve-budget 50 > attributed.jsonl
+```
+
+Splitting it in two is the point: the scan runs over thousands of transcripts offline, and
+only the passages that need an answer cost a request. `search --resolve` and
+`scan --resolve` do it inline for one-offs.
+
+A worked example. A sermon quoting *we all like sheep have gone astray* is found as
+Isaiah 53:6 and attributed to the Berean Standard Bible tied with eight World English
+variants — true, and not an answer, since none of those is on the list. Resolution checks
+the KJV and ASV from disk for nothing, then asks once:
+
+```
+resolve: Isaiah 53:6 -> NIV
+1 attributed, 0 still unattributed; 1 chapter request(s) spent of 3
+```
+
+The whole of Isaiah 53 is now stored, so the next sermon quoting any of it resolves in
+0.2 seconds with the network off. That is why it fetches chapters rather than verses: one
+request costs the site the same either way.
+
+Three guards, because this is the part that could run away:
+
+- `--resolve-budget N` is a ceiling, not a hint. Thirteen versions at BibleGateway's
+  published 15-second crawl delay is over three minutes a passage, and a long sermon holds
+  dozens. At the ceiling the run stops and says so.
+- Versions are tried in likelihood order and **stop at the first decisive match**, so the
+  usual cost is one or two requests rather than thirteen.
+- `--offline` resolves only from what is already stored.
+
+The Message is the known gap. It is a paraphrase far enough from the underlying text that
+no public-domain translation aligns with it, so a Message quotation is usually never found
+in the first place — and resolution can only name the translation for a passage already
+found.
 
 ## Usage
 
@@ -89,7 +176,8 @@ Public domain or freely licensed, fetched once and then archived:
 | Hebrew | Westminster Leningrad Codex, via [OSHB](https://github.com/openscriptures/morphhb) | text public domain; morphology CC BY 4.0 |
 | Septuagint | [Swete 1930](https://github.com/eliranwong/LXX-Swete-1930) | the whole deuterocanon; Theodotion for Daniel, Susanna and Bel |
 | Greek NT | [Nestle 1904](https://github.com/biblicalhumanities/Nestle1904) | public domain |
-| English | ASV, KJV and two dozen more via [pythonbible](https://github.com/avendesora/pythonbible) | public domain |
+| English | 50 translations from [eBible.org](https://ebible.org) — Berean Standard, ASV, KJV, NET, Young's, Geneva 1599, Brenton's Septuagint… | every one flagged redistributable there: 32 public domain, 18 by the holder's permission |
+| English | ASV, KJV and more via [pythonbible](https://github.com/avendesora/pythonbible) | public domain; the fallback where a translation is not built |
 | English deuterocanon | [WEB Catholic Edition](https://ebible.org/find/details.php?id=eng-web-c) | translated from the Greek, so numbered like the Greek |
 | English of the Vulgate | [Douay-Rheims 1899](https://ebible.org/find/details.php?id=engDRA) | for citations written in Vulgate numbering |
 | Latin | [Clementine Vulgate](https://ebible.org/find/details.php?id=latVUC) | Jerome as the Church received him; public domain |
@@ -104,9 +192,13 @@ worth knowing before citing.
 
 ## Copyrighted translations
 
-Set `default_english` (or a tag's `en=`) to `NRSVCE`, `NABRE`, `RSV2CE`, `RSVCE`, `GNTCE`
-or `NCB` and they are fetched a chapter at a time from BibleGateway. Naming one is the
-opt-in; nothing reaches the network otherwise.
+Set `default_english` (or a tag's `en=`) to `NRSVCE`, `NABRE`, `RSV2CE`, `RSVCE`, `GNTCE`,
+`NCB`, `NASB` or `NASB1995` and they are fetched a chapter at a time from BibleGateway.
+Naming one is the opt-in; nothing reaches the network otherwise.
+
+These are the translations that cannot be held offline, so this is the only way to cite
+them — and chapters cached this way join the search index like any other, meaning coverage
+grows as you use them. They are never swept in bulk.
 
 **Whole chapters, once.** Citing a single verse pulls the chapter around it — one request
 costs the site the same either way, and the rest of that chapter is very likely what you
@@ -115,8 +207,10 @@ verses in the same database as every other corpus. So a chapter is requested **o
 and later citations from anywhere in it are free. A citation spanning several chapters is
 batched into a single request (up to `max_chapters`, default 5).
 
-Requests are serial with a 2-second gap. Keep it that way: BibleGateway's terms do not
-contemplate systematic downloading, and staying small is how this stays within them.
+Requests are serial with a 15-second gap, which is what BibleGateway's `robots.txt`
+publishes as its `Crawl-delay`. Keep it that way: their terms do not contemplate systematic
+downloading, and staying small is how this stays within them. Fetching a whole chapter at a
+time is what makes the wait affordable — you pay it once per chapter, ever.
 
 The text remains under its publisher's copyright, and the renderer emits their notice
 automatically. Drafting privately is one thing; a published treatise quoting at length
@@ -153,12 +247,19 @@ Everything fetched is archived under `$data_home` (default: platform data dir), 
 and all, alongside a manifest recording URL, checksum, and license:
 
 ```
-$data_home/sources/     raw downloads, kept forever, dated
-$data_home/db/          built SQLite index, regenerable offline from sources/
+$data_home/sources/     raw downloads, kept forever, dated      ~150 MB
+$data_home/db/          built SQLite index and search index     ~600 MB
 ```
 
 Back up that one directory and you own your corpus, independent of whether any upstream
-repository still exists.
+repository still exists. Only `sources/` needs backing up: `db/` is derived, and
+`biblereference build` reconstructs it from the archive without touching the network.
+Copying `sources/` to another machine and rebuilding there gives an identical database —
+verified, not assumed, and `doctor --verify` re-hashes every archived file against the
+manifest so a truncated copy is caught before it becomes a wrong verse.
+
+Point `$BIBLEREFERENCE_HOME` at a synced or backed-up directory to carry the corpus
+between machines.
 
 ## License
 

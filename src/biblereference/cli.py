@@ -1,13 +1,16 @@
-"""Command line: fetch, build, render, verify, doctor.
+"""Command line: sync, fetch, build, index, render, verify, search, scan, compare, doctor.
 
-``fetch`` and ``build`` are separate on purpose. Fetching archives the raw files; building
-indexes them. Keeping them apart is what lets a rebuild after a code change cost nothing,
-and what lets the whole thing work with the network off once the archive exists.
+``sync`` is the one command a fresh install needs; the rest are its parts, kept separate
+because they are useful separately. ``fetch`` archives the raw files and ``build`` indexes
+them, which is what lets a rebuild after a code change cost nothing, and what lets the
+whole thing work with the network off once the archive exists.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -15,7 +18,9 @@ from pathlib import Path
 from .canon import NamingScheme, resolve_book
 from .compare import BookComparison, compare_corpora
 from .fetch import build_source, fetch_source, iter_sources
+from .refs import ReferenceParseError, parse_reference
 from .render import Config, Renderer
+from .search import DEFAULT_BUDGET, Match, Resolver, Searcher, Witness, build_index
 from .store import DataHome, SqliteCorpus, read_meta, stored_chapters
 from .versification import Versification
 
@@ -78,6 +83,307 @@ def cmd_build(args: argparse.Namespace) -> int:
             _say(f"  {note}")
     _say(f"\n{total:,} verses indexed into {home.database}")
     return 0
+
+
+def cmd_index(args: argparse.Namespace) -> int:
+    """Build the search index from the verse store."""
+    home = _home(args)
+    if not home.database.exists():
+        _say("nothing built yet -- run `biblereference build` first")
+        return 1
+    result = build_index(home, report=_say if args.verbose else _silent)
+    _say(
+        f"\nindexed {result.verses:,} verses as {result.texts:,} distinct texts "
+        f"across {len(result.corpora)} corpora"
+    )
+    return 0
+
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    """Fetch, build and index in one go.
+
+    The one command a fresh install needs. Every step is idempotent: files already in the
+    archive are not downloaded again, so an interrupted run resumes where it stopped.
+    """
+    home = _home(args)
+
+    fetched = failed = 0
+    for source in iter_sources(args.source):
+        try:
+            fetch_source(source, home, report=_say, force=args.force)
+            fetched += 1
+        except Exception as exc:
+            failed += 1
+            _say(f"  failed: {source.id}: {exc}")
+    if failed:
+        _say(f"\n{failed} source(s) could not be fetched; run again to retry them")
+
+    total = 0
+    notes: list[str] = []
+    for source in iter_sources(args.source):
+        try:
+            result = build_source(source, home, report=_say)
+        except FileNotFoundError as exc:
+            _say(f"skipped: {exc}")
+            continue
+        total += result.verses
+        notes.extend(result.notes)
+
+    if notes:
+        _say("\nnotes:")
+        for note in notes:
+            _say(f"  {note}")
+
+    indexed = build_index(home, report=_say if args.verbose else _silent)
+    _say(
+        f"\n{fetched} source(s) archived in {home.sources}\n"
+        f"{total:,} verses built into {home.database}\n"
+        f"{indexed.verses:,} verses indexed for search as {indexed.texts:,} distinct texts"
+    )
+    return 1 if failed else 0
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    """Find the passage a string was quoting."""
+    home = _home(args)
+    text = " ".join(args.text) if args.text else sys.stdin.read()
+    try:
+        with Searcher(home, corpora=args.corpus or None) as searcher:
+            matches = searcher.search(text, limit=args.limit)
+            if args.resolve and matches:
+                matches = _resolve_inline(home, searcher, matches, args, quoted=text)
+    except LookupError as exc:
+        _say(str(exc))
+        return 1
+
+    if not matches:
+        _say("no passage matched closely enough to report")
+        return 1
+
+    if args.json:
+        for match in matches:
+            print(json.dumps(match.to_dict(), ensure_ascii=False))
+        return 0
+
+    for match in matches:
+        print(match.describe())
+        if args.verbose:
+            for witness in match.translations():
+                print(f"    {witness.corpus:12} {witness.similarity:.0%}  {witness.text}")
+    return 0
+
+
+def cmd_scan(args: argparse.Namespace) -> int:
+    """Find every quotation in a document, one JSONL record each."""
+    home = _home(args)
+    text = Path(args.input).read_text(encoding="utf-8") if args.input else sys.stdin.read()
+    try:
+        with Searcher(home, corpora=args.corpus or None) as searcher:
+            matches = searcher.scan(text)
+            if args.resolve:
+                matches = _resolve_inline(home, searcher, matches, args)
+    except LookupError as exc:
+        _say(str(exc))
+        return 1
+
+    for match in matches:
+        print(json.dumps(match.to_dict(), ensure_ascii=False))
+    named = sum(1 for m in matches if m.identified)
+    _say(
+        f"{len(matches)} quotation(s); {named} attributed to a translation, "
+        f"{len(matches) - named} with the passage identified but the translation unknown"
+    )
+    return 0
+
+
+def _resolve_inline(
+    home: DataHome,
+    searcher: Searcher,
+    matches: Sequence[Match],
+    args: argparse.Namespace,
+    *,
+    quoted: str | None = None,
+) -> list[Match]:
+    """Resolve unattributed matches in place, for one-off runs.
+
+    :param quoted: The words to score against, where the caller knows them better than the
+        match does. A scan records the span it matched; a search was handed the text.
+    """
+    resolver = Resolver(
+        home,
+        searcher,
+        budget=args.resolve_budget,
+        offline=getattr(args, "offline", False),
+        report=_say,
+    )
+    out = [
+        resolver.resolve(match, quoted or match.quoted).match if (quoted or match.quoted) else match
+        for match in matches
+    ]
+    if resolver.spent:
+        _say(f"{resolver.spent} chapter request(s) spent")
+    if resolver.touched:
+        build_index(home, corpora=resolver.touched, report=_silent)
+    return out
+
+
+def cmd_resolve(args: argparse.Namespace) -> int:
+    """Name the translation for passages a scan identified but could not attribute.
+
+    Reads the JSONL a scan produced and writes it back with the translations filled in.
+    Splitting it from the scan is what makes the sermon pipeline practical: the scan is
+    fast and offline over thousands of transcripts, and this is the slow, budgeted,
+    network-bound pass over only the passages that actually need one.
+    """
+    home = _home(args)
+    lines = _read_lines(args.input)
+    records = [json.loads(line) for line in lines if line.strip()]
+
+    try:
+        searcher = Searcher(home)
+    except LookupError as exc:
+        _say(str(exc))
+        return 1
+
+    resolved = unresolved = 0
+    with searcher:
+        resolver = Resolver(
+            home,
+            searcher,
+            budget=args.resolve_budget,
+            offline=args.offline,
+            report=_say,
+        )
+        for record in records:
+            quoted = str(record.get("quoted") or "")
+            if not quoted:
+                print(json.dumps(record, ensure_ascii=False))
+                continue
+            match = _match_from(record, searcher)
+            if match is None:
+                print(json.dumps(record, ensure_ascii=False))
+                continue
+            outcome = resolver.resolve(match, quoted)
+            record.update(outcome.match.to_dict())
+            record["checked"] = list(outcome.checked)
+            resolved += outcome.resolved
+            unresolved += not outcome.resolved
+            print(json.dumps(record, ensure_ascii=False))
+
+        spent, touched = resolver.spent, resolver.touched
+
+    _say(
+        f"\n{resolved} attributed, {unresolved} still unattributed; "
+        f"{spent} chapter request(s) spent of {args.resolve_budget}"
+    )
+    if spent >= args.resolve_budget:
+        _say("budget spent -- run again to continue where this stopped")
+    if touched:
+        build_index(home, corpora=touched, report=_say if args.verbose else _silent)
+        _say(f"reindexed for search: {', '.join(touched)}")
+    return 0
+
+
+def _read_lines(path: str | None) -> list[str]:
+    return (
+        Path(path).read_text(encoding="utf-8").splitlines()
+        if path
+        else sys.stdin.read().splitlines()
+    )
+
+
+def _label_of(corpus: str, searcher: Searcher) -> str:
+    held = searcher.corpora.get(corpus)
+    return held.label if held else corpus
+
+
+def _match_from(record: dict[str, object], searcher: Searcher) -> Match | None:
+    """Rebuild the match a scan recorded, so it can be resolved without rescanning."""
+    try:
+        passage = parse_reference(str(record["passage"]), vrs=str(record.get("vrs") or "eng"))
+    except (KeyError, ReferenceParseError):
+        return None
+    listed = record.get("translations")
+    entries: list[dict[str, object]] = listed if isinstance(listed, list) else []
+    witnesses = tuple(
+        Witness(
+            str(entry["corpus"]),
+            _label_of(str(entry["corpus"]), searcher),
+            "",
+            float(entry["similarity"]),  # type: ignore[arg-type]
+        )
+        for entry in entries
+    )
+    span = record.get("span")
+    return Match(
+        passage,
+        witnesses,
+        span=(int(span[0]), int(span[1])) if isinstance(span, list) and len(span) == 2 else None,
+        quoted=str(record.get("quoted") or ""),
+    )
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    """Check the versification mappings against the text they claim to align.
+
+    Reports runs of consecutive verses that all prefer the same wrong offset. A single
+    flagged verse is usually repetition -- the censuses in Numbers, the tabernacle
+    instructions in Exodus -- where a neighbour happens to score higher. A run of them all
+    shifted the same way is what a real fault looks like.
+    """
+    from .audit import audit_all, book_of
+
+    home = _home(args)
+    books = [resolve_book(args.book)] if args.book else None
+    results = audit_all(home, books=books)
+
+    total_runs = 0
+    for result in results:
+        _say(result.summary())
+        runs = _runs_of(result.disagreements, args.min_run)
+        total_runs += len(runs)
+        if args.verbose and result.disagreements:
+            _say(f"      by book: {dict(list(book_of(result.disagreements).items())[:8])}")
+        for book, chapter, offset, first, last in runs:
+            print(
+                f"{result.source}->{result.target}\t{book} {chapter}:{first}-{last}"
+                f"\toffset {offset:+d}\t{last - first + 1} verses"
+            )
+
+    _say(
+        f"\n{total_runs} run(s) of {args.min_run}+ consecutive verses prefer a different "
+        f"position. Each needs reading: a run can mean the mapping is wrong, or that the "
+        f"two editions genuinely differ in what they print."
+    )
+    return 0
+
+
+def _runs_of(disagreements: Sequence[object], minimum: int) -> list[tuple[str, int, int, int, int]]:
+    """Group flagged verses into consecutive runs sharing one offset.
+
+    The whole discrimination lives here. Isolated flags are noise from repetitive
+    passages; a run is the shape a versification fault actually has.
+    """
+    grouped: dict[tuple[str, int, int], list[int]] = {}
+    for item in disagreements:
+        alignment = item.alignment  # type: ignore[attr-defined]
+        key = (alignment.source.book, int(alignment.source.chapter), alignment.best_offset)
+        grouped.setdefault(key, []).append(alignment.source.verse)
+
+    runs: list[tuple[str, int, int, int, int]] = []
+    for (book, chapter, offset), verses in grouped.items():
+        ordered = sorted(verses)
+        current = [ordered[0]]
+        for verse in ordered[1:]:
+            if verse == current[-1] + 1:
+                current.append(verse)
+                continue
+            if len(current) >= minimum:
+                runs.append((book, chapter, offset, current[0], current[-1]))
+            current = [verse]
+        if len(current) >= minimum:
+            runs.append((book, chapter, offset, current[0], current[-1]))
+    return sorted(runs, key=lambda r: -(r[4] - r[3]))
 
 
 def cmd_render(args: argparse.Namespace) -> int:
@@ -159,10 +465,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     entries = home.entries()
     _say(f"\narchive: {len(entries)} file(s) recorded")
-    for source in iter_sources(None):
-        archive = home.latest_archive(source.id)
-        state = str(archive) if archive else "not fetched"
-        _say(f"  {source.id:12} {state}")
+    missing = [source.id for source in iter_sources(None) if not home.latest_archive(source.id)]
+    if missing:
+        _say(f"  not fetched: {', '.join(missing)}")
+    else:
+        _say("  every registered source is fetched")
+
+    if args.verify:
+        _say("\nverifying the archive against its manifest...")
+        checked, wrong, absent = _verify_archive(home)
+        _say(f"  {checked} file(s) checked")
+        for path in absent:
+            _say(f"  missing:  {path}")
+        for path in wrong:
+            _say(f"  CHANGED:  {path}")
+        if not wrong and not absent:
+            _say("  every archived file matches the checksum recorded when it was fetched")
 
     meta = read_meta(home)
     if not meta:
@@ -201,6 +519,60 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------------------
 
 
+def _add_resolve_options(command: argparse.ArgumentParser) -> None:
+    """The flags governing what resolution is allowed to cost.
+
+    A ceiling rather than a suggestion: thirteen versions at BibleGateway's published
+    fifteen-second crawl delay is over three minutes per passage, and a long sermon can
+    hold forty unattributed ones. The run stops at the ceiling and says so.
+    """
+    command.add_argument(
+        "--resolve",
+        action="store_true",
+        help="ask BibleGateway to name the translation where the passage is known but the "
+        "translation is not",
+    )
+    command.add_argument(
+        "--resolve-budget",
+        type=int,
+        default=DEFAULT_BUDGET,
+        metavar="N",
+        help=f"most chapter requests one run may spend (default {DEFAULT_BUDGET})",
+    )
+    command.add_argument(
+        "--offline",
+        action="store_true",
+        help="resolve only from chapters already stored; never reach the network",
+    )
+
+
+def _verify_archive(home: DataHome) -> tuple[int, list[str], list[str]]:
+    """Re-hash every archived file and compare with the manifest.
+
+    This is what turns "copy ``sources/`` to another machine and rebuild" from a hope into
+    a checked claim: the manifest records the sha256 of every file as it was downloaded,
+    so a truncated copy or a silently corrupted disk shows up here rather than as a
+    mysteriously wrong verse months later.
+    """
+    checked = 0
+    wrong: list[str] = []
+    absent: list[str] = []
+    for entry in home.entries():
+        path = home.sources / entry.path
+        if not path.exists():
+            absent.append(entry.path)
+            continue
+        checked += 1
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if digest != entry.sha256:
+            wrong.append(entry.path)
+    return checked, wrong, absent
+
+
+def _silent(_: str) -> None:
+    return None
+
+
 def _say(message: str) -> None:
     print(message, file=sys.stderr)
 
@@ -230,6 +602,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--verbose", action="store_true")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    sync = subparsers.add_parser(
+        "sync", help="fetch, build and index everything -- the one command a new install needs"
+    )
+    sync.add_argument("--source", help="just this one")
+    sync.add_argument("--force", action="store_true", help="fetch again even if already archived")
+    sync.set_defaults(func=cmd_sync)
+
     fetch = subparsers.add_parser("fetch", help="download source texts into the archive")
     fetch.add_argument("--source", help="just this one, e.g. swete")
     fetch.add_argument("--force", action="store_true", help="fetch again even if already archived")
@@ -238,6 +617,35 @@ def build_parser() -> argparse.ArgumentParser:
     build = subparsers.add_parser("build", help="index the archive into the database")
     build.add_argument("--source", help="just this one")
     build.set_defaults(func=cmd_build)
+
+    index = subparsers.add_parser("index", help="build the search index from the database")
+    index.set_defaults(func=cmd_index)
+
+    search = subparsers.add_parser("search", help="find the passage a string of text was quoting")
+    search.add_argument("text", nargs="*", help="the text; omit to read standard input")
+    search.add_argument("--limit", type=int, default=5, help="how many passages to report")
+    search.add_argument("--corpus", action="append", help="search only this corpus; repeatable")
+    search.add_argument("--json", action="store_true", help="one JSON record per passage")
+    _add_resolve_options(search)
+    search.set_defaults(func=cmd_search)
+
+    scan = subparsers.add_parser("scan", help="find every quotation in a document, as JSONL")
+    scan.add_argument("input", nargs="?", help="file to read; omit for standard input")
+    scan.add_argument("--corpus", action="append", help="search only this corpus; repeatable")
+    _add_resolve_options(scan)
+    scan.set_defaults(func=cmd_scan)
+
+    resolve = subparsers.add_parser(
+        "resolve",
+        help="name the translation for passages a scan could not attribute",
+        description="Reads the JSONL a scan produced and writes it back with translations "
+        "filled in, asking BibleGateway for one passage at a time and only where the "
+        "passage is known but the translation is not. Chapters are kept, so nothing is "
+        "ever requested twice.",
+    )
+    resolve.add_argument("input", nargs="?", help="JSONL from `scan`; omit for standard input")
+    _add_resolve_options(resolve)
+    resolve.set_defaults(func=cmd_resolve)
 
     for name, function, help_text in (
         ("render", cmd_render, "expand citations into a new file"),
@@ -279,7 +687,32 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--book", help="just this book; with -v, print the verses")
     compare.set_defaults(func=cmd_compare)
 
+    audit = subparsers.add_parser(
+        "audit",
+        help="check the versification mappings against the text they claim to align",
+        description="Compares same-language witnesses across versification families and "
+        "reports passages where the text is better explained by a position the mapping "
+        "does not claim. Found the Vulgate Jonah fault, where every citation of Jonah 2 "
+        "resolved one verse late.",
+    )
+    audit.add_argument("--book", help="just this book, e.g. JON")
+    audit.add_argument(
+        "--min-run",
+        type=int,
+        default=3,
+        metavar="N",
+        help="consecutive verses that must share an offset before it is reported "
+        "(default 3; lower it to see the noise, raise it to see only the clearest faults)",
+    )
+    audit.set_defaults(func=cmd_audit)
+
     doctor = subparsers.add_parser("doctor", help="report what is cached and built")
+    doctor.add_argument(
+        "--verify",
+        action="store_true",
+        help="re-hash every archived file against the manifest, so a copied archive can "
+        "be trusted before it is rebuilt from",
+    )
     doctor.set_defaults(func=cmd_doctor)
 
     return parser

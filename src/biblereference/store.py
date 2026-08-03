@@ -89,6 +89,57 @@ CREATE TABLE IF NOT EXISTS chapter_state (
 ) WITHOUT ROWID;
 """
 
+#: The search index, kept apart from :data:`_SCHEMA` because it is derived data: it can be
+#: dropped and rebuilt from ``verse`` at any time without a download.
+#:
+#: Rows are *distinct texts*, not verses. Across fifty-odd English translations the same
+#: sentence recurs constantly -- the World English Bible variants render most verses
+#: identically, as do the ASV and its Byzantine revision -- so indexing per verse would
+#: store the same words many times over. The same table then answers "which translations
+#: render this verse identically", which is what stops the matcher naming a winner among
+#: texts that are not actually distinguishable.
+#:
+#: ``porter`` matters: without stemming, a query saying *loving* does not reach a verse
+#: saying *loved*, and people quoting from memory shift tense constantly.
+SEARCH_SCHEMA: Final = """
+CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(
+    text,
+    tokenize = 'porter unicode61'
+);
+
+CREATE TABLE IF NOT EXISTS search_text (
+    id   INTEGER PRIMARY KEY,
+    hash BLOB    NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS search_ref (
+    corpus   TEXT    NOT NULL,
+    book     TEXT    NOT NULL,
+    chapter  INTEGER NOT NULL,
+    verse    INTEGER NOT NULL,
+    subverse TEXT    NOT NULL DEFAULT '',
+    text_id  INTEGER NOT NULL,
+    PRIMARY KEY (corpus, book, chapter, verse, subverse)
+) WITHOUT ROWID;
+
+CREATE INDEX IF NOT EXISTS search_ref_by_text ON search_ref (text_id);
+
+CREATE TABLE IF NOT EXISTS search_state (
+    corpus     TEXT PRIMARY KEY,
+    indexed_at TEXT    NOT NULL,
+    verses     INTEGER NOT NULL
+);
+
+-- How many distinct texts each word appears in, so a query can be built out of the words
+-- that actually narrow it down. FTS5 keeps its own vocabulary, but it holds *stemmed*
+-- terms, and a query word cannot be stemmed from Python to look itself up. This is
+-- counted over the same folded, unstemmed tokens the query is made of, so the two agree.
+CREATE TABLE IF NOT EXISTS search_df (
+    token TEXT    PRIMARY KEY,
+    docs  INTEGER NOT NULL
+) WITHOUT ROWID;
+"""
+
 
 def default_data_home() -> Path:
     """Where the corpus lives unless told otherwise.
@@ -232,6 +283,7 @@ def open_store(home: DataHome) -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(home.database)
     try:
         connection.executescript(_SCHEMA)
+        connection.executescript(SEARCH_SCHEMA)
         yield connection
         connection.commit()
     finally:
