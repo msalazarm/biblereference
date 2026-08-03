@@ -347,6 +347,95 @@ def audit_all(
         texts.close()
 
 
+@dataclass(frozen=True, slots=True)
+class Membership:
+    """Whether one corpus really is numbered the way its family says."""
+
+    corpus: str
+    family: str
+    compared: int
+    aligned: int
+    """Verses where the corpus and the reference agree at the same coordinate."""
+    shifted: dict[int, int]
+    """How many verses aligned better at each non-zero offset."""
+
+    @property
+    def rate(self) -> float:
+        return self.aligned / self.compared if self.compared else 0.0
+
+    @property
+    def belongs(self) -> bool:
+        return self.rate >= 0.95
+
+    def describe(self) -> str:
+        worst = max(self.shifted.items(), key=lambda kv: kv[1], default=(0, 0))
+        tail = f", worst drift {worst[1]} verses at {worst[0]:+d}" if worst[1] else ""
+        return (
+            f"{self.corpus:12} {self.rate:6.2%} of {self.compared:,} verses align"
+            f"{tail}{'' if self.belongs else '   <-- does not belong here'}"
+        )
+
+
+def family_membership(
+    home: DataHome,
+    reference: str,
+    corpora: Sequence[str],
+    *,
+    family: str = "eng",
+    books: Sequence[str] | None = None,
+    texts: _Texts | None = None,
+) -> list[Membership]:
+    """Check that corpora filed under one family really are numbered alike.
+
+    Compares each against one reference rather than against each other. Alignment is
+    transitive enough for this: if every corpus agrees with the ASV verse for verse, they
+    agree with one another, and the pairwise graph would cost twenty times as much to
+    establish the same thing. What it buys over the build-time check in
+    :func:`biblereference.corpora.ebible.best_fit_versification` is depth -- that compares
+    where chapters *end*, so a translation shifted in the middle of a chapter and shifted
+    back by its close would pass. This compares every verse.
+    """
+    own = texts is None
+    store = texts or _Texts(home)
+    out: list[Membership] = []
+    try:
+        for corpus in corpora:
+            if corpus == reference:
+                continue
+            compared = aligned = 0
+            shifted: dict[int, int] = {}
+            for book in books or CANONICAL_ORDER:
+                for chapter in range(1, 200):
+                    left = store.chapter(reference, book, chapter)
+                    if not left:
+                        break
+                    right = store.chapter(corpus, book, chapter)
+                    if not right:
+                        continue
+                    for verse, text in left.items():
+                        if verse not in right:
+                            continue
+                        tokens = _tokens(text, "en")
+                        scores = {
+                            offset: _ratio(tokens, _tokens(right[verse + offset], "en"))
+                            for offset in OFFSETS
+                            if verse + offset in right
+                        }
+                        if not scores or max(scores.values()) < FLOOR:
+                            continue
+                        compared += 1
+                        best = max(scores, key=lambda k: scores[k])
+                        if best == 0 or scores[best] - scores.get(0, 0.0) < MARGIN:
+                            aligned += 1
+                        else:
+                            shifted[best] = shifted.get(best, 0) + 1
+            out.append(Membership(corpus, family, compared, aligned, shifted))
+    finally:
+        if own:
+            store.close()
+    return sorted(out, key=lambda m: m.rate)
+
+
 def book_of(disagreements: Sequence[Disagreement]) -> dict[str, int]:
     """How the flagged verses fall across books, which is how a systematic fault shows."""
     counts: dict[str, int] = {}

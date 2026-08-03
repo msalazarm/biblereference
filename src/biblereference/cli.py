@@ -148,7 +148,12 @@ def cmd_search(args: argparse.Namespace) -> int:
     home = _home(args)
     text = " ".join(args.text) if args.text else sys.stdin.read()
     try:
-        with Searcher(home, corpora=args.corpus or None) as searcher:
+        with Searcher(
+            home,
+            corpora=args.corpus or None,
+            families=getattr(args, "family", None) or None,
+            languages=getattr(args, "language", None) or None,
+        ) as searcher:
             matches = searcher.search(text, limit=args.limit)
             if args.resolve and matches:
                 matches = _resolve_inline(home, searcher, matches, args, quoted=text)
@@ -178,7 +183,12 @@ def cmd_scan(args: argparse.Namespace) -> int:
     home = _home(args)
     text = Path(args.input).read_text(encoding="utf-8") if args.input else sys.stdin.read()
     try:
-        with Searcher(home, corpora=args.corpus or None) as searcher:
+        with Searcher(
+            home,
+            corpora=args.corpus or None,
+            families=getattr(args, "family", None) or None,
+            languages=getattr(args, "language", None) or None,
+        ) as searcher:
             matches = searcher.scan(text)
             if args.resolve:
                 matches = _resolve_inline(home, searcher, matches, args)
@@ -625,6 +635,14 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("text", nargs="*", help="the text; omit to read standard input")
     search.add_argument("--limit", type=int, default=5, help="how many passages to report")
     search.add_argument("--corpus", action="append", help="search only this corpus; repeatable")
+    search.add_argument(
+        "--family",
+        action="append",
+        help="search only this versification, e.g. eng or vul; repeatable",
+    )
+    search.add_argument(
+        "--language", action="append", help="search only this language, e.g. la; repeatable"
+    )
     search.add_argument("--json", action="store_true", help="one JSON record per passage")
     _add_resolve_options(search)
     search.set_defaults(func=cmd_search)
@@ -632,6 +650,10 @@ def build_parser() -> argparse.ArgumentParser:
     scan = subparsers.add_parser("scan", help="find every quotation in a document, as JSONL")
     scan.add_argument("input", nargs="?", help="file to read; omit for standard input")
     scan.add_argument("--corpus", action="append", help="search only this corpus; repeatable")
+    scan.add_argument(
+        "--family", action="append", help="search only this versification; repeatable"
+    )
+    scan.add_argument("--language", action="append", help="search only this language; repeatable")
     _add_resolve_options(scan)
     scan.set_defaults(func=cmd_scan)
 

@@ -449,9 +449,25 @@ class _Corpus:
 class Searcher:
     """Reads the search index. Open once and reuse; it holds a read-only connection."""
 
-    def __init__(self, home: DataHome, *, corpora: Sequence[str] | None = None) -> None:
+    def __init__(
+        self,
+        home: DataHome,
+        *,
+        corpora: Sequence[str] | None = None,
+        families: Sequence[str] | None = None,
+        languages: Sequence[str] | None = None,
+    ) -> None:
+        """
+        :param corpora: Search only these, by id.
+        :param families: Search only corpora in these versifications. Confining a search
+            to one family is what lets the numbering be tested apart from the wording:
+            every candidate then shares a coordinate system, so a verse that matches at the
+            wrong number is a fault rather than a translation difference.
+        :param languages: Search only corpora in these languages. Latin against Latin
+            measures the numbering almost alone, with no translator standing between.
+        """
         self._connection = sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)
-        self._corpora = self._load_corpora(corpora)
+        self._corpora = self._load_corpora(corpora, families, languages)
         self._texts = int(
             self._connection.execute("SELECT COUNT(*) FROM search_text").fetchone()[0]
         )
@@ -461,7 +477,12 @@ class Searcher:
                 "`biblereference index` to build it"
             )
 
-    def _load_corpora(self, only: Sequence[str] | None) -> dict[str, _Corpus]:
+    def _load_corpora(
+        self,
+        only: Sequence[str] | None,
+        families: Sequence[str] | None,
+        languages: Sequence[str] | None,
+    ) -> dict[str, _Corpus]:
         rows = self._connection.execute(
             "SELECT corpus, label, language, versification FROM source_meta"
         )
@@ -469,9 +490,16 @@ class Searcher:
             str(corpus): _Corpus(str(label), str(language), str(versification))
             for corpus, label, language, versification in rows
         }
-        if only is None:
-            return loaded
-        return {corpus: meta for corpus, meta in loaded.items() if corpus in set(only)}
+        if only is not None:
+            wanted = set(only)
+            loaded = {c: m for c, m in loaded.items() if c in wanted}
+        if families is not None:
+            chosen = set(families)
+            loaded = {c: m for c, m in loaded.items() if m.versification in chosen}
+        if languages is not None:
+            spoken = set(languages)
+            loaded = {c: m for c, m in loaded.items() if m.language in spoken}
+        return loaded
 
     @property
     def corpora(self) -> Mapping[str, _Corpus]:

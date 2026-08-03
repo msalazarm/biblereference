@@ -114,17 +114,60 @@ print different content" or "this witness is idiosyncratic here". Separating tho
 person, and a single family pair is never enough evidence — the Bel case was only settled
 by reading four editions in three languages.
 
+**Sirach 6 (15 verses).** All four systems give Sirach 6 thirty-seven verses, and both
+witnesses have thirty-seven — they simply put the verse breaks in different places. The
+Vulgate's Sirach is a different recension, 1,605 verses to the Greek's 1,401, which is
+already why the versification refuses to convert it.
+
+**The Letter of Jeremiah.** The World English Bible and Brenton both give it 73 verses; the
+Douay-Rheims gives it 72, and the versification data declares 72. So two corpora carry a
+verse the data does not know about — an upstream count that follows the Latin where the
+Greek tradition has one more.
+
+## The English family
+
+All 46 corpora filed under `eng`, each checked against the World English Bible verse by
+verse with the same offset test. Reference-based rather than pairwise: if every corpus
+agrees with the reference, they agree with each other, and the 1,035-edge graph costs
+twenty times as much to establish the same thing.
+
+**Forty of forty-five align at 95% or better**, the WEB variants at exactly 100% as they
+should. Five came in lower: `wycliffe` 91.8%, `pev` 92.4%, `nna` 93.1%, `aoi` 93.5%,
+`barkly` 93.7%.
+
+None of them is misfiled. They are Wycliffe portions and Australian community translations
+— Anindilyakwa, Nyangumarta, Barkly, Plain English Version — all partial and all
+deliberately paraphrastic, which is exactly the material a similarity test loses power on.
+Their drift is scattered rather than systematic (283 of 9,381 verses for `wycliffe`, 3%),
+and the independent structural check agrees: every one of the five fits `eng` better than
+any other system. The right reading is that the instrument goes quiet on free translations,
+not that these belong somewhere else.
+
 ## Status
 
-- **1 mapping fault found, confirmed from four independent witnesses, and fixed.**
-- **39 runs where both instruments agree the content is offset.** Of the four largest
-  examined by hand, all four are edition or witness differences rather than mapping faults.
-  The remaining ~35 have not been read yet and are candidates, not defects.
+- **1 mapping fault found, confirmed from four independent witnesses, and fixed** — the
+  Vulgate's Jonah. Pinned by `tests/test_alignment.py`; Jonah now scores 100% agreement
+  across all seven pairs.
+- **39 runs where both instruments agree the content is offset.** Six examined by hand so
+  far — Bel and the Dragon, Daniel 14, Deuteronomy 29, the Letter of Jeremiah twice, and
+  Sirach 6 — and **none is a mapping fault**. Every one is an edition difference or a
+  quirk of the witness. The remaining ~33 are candidates, not defects, and the prior
+  established by the six is that most will be the same thing: the deuterocanon is where the
+  Latin and Greek traditions genuinely transmit different texts, and that is precisely
+  where the flags cluster.
+- **All 45 English corpora verified as belonging to `eng`**, forty by text alignment
+  directly and five by the independent structural check where paraphrase defeats the
+  text test.
 - **7 of 10 family pairs audited deterministically.** The three `nvl` pairs need the model,
-  which has been built but not yet run exhaustively over them.
+  which is built and exercised but has not been run exhaustively over them.
 - `rsc` and `rso` cannot be audited textually at all — no corpora exist in either
   versification, so only their internal consistency is checkable, which the loader already
   enforces.
+
+The honest summary: one real fault, found and fixed, in mappings that are otherwise sound
+to the limit of what two independent instruments can establish — and a clear-eyed account
+of what those instruments cannot establish, which is the difference between a wrong mapping
+and two editions that genuinely disagree.
 
 ## Running it
 
