@@ -109,6 +109,15 @@
     }
   },
 
+  "add_books": {
+    "vul": {
+      "EST": {
+        "maxVerses": [22, 23, 15, 17, 14, 14, 10, 17, 32, 13, 12, 6, 18, 19, 19, 24],
+        "reason": "The Vulgate has no Esther at all upstream: vul.json carries only ESG, given the Septuagint's ten chapters and verse counts byte-identical to org's. That is not the book the Vulgate prints. The Clementine Esther runs to sixteen chapters, keeping the Hebrew text in 1:1-10:3 and appending the six Greek additions as 10:4-16:24, and it is the book the Douay-Rheims translates. Verse counts are those of the Douay-Rheims text itself, so a citation written in Vulgate numbering can at least be checked and looked up. Conversion to the original-language numbering is declared unmappable below rather than guessed: see esther_additions.json for the correspondence that *is* established, between Vulgate numbering and the A-F letter chapters."
+      }
+    }
+  },
+
   "deprioritize_books": {
     "vul": {
       "books": ["DAG"],
@@ -136,7 +145,12 @@
       "books": ["ESG"],
       "systems": ["org", "eng", "lxx", "vul", "rsc", "rso"],
       "reason": "Esther's Greek additions cannot be resolved from the upstream data. org.json gives ESG the verse counts ['39','23','22','47','28','14','10','39','32','13'] -- byte-identical to eng.json's -- while its mappings target subverse refs (ESG 1:1a ... 1:1s, 4:17a ... 4:17z) that do not fit that grid. Chapter 4 is the clearest case: eng verses 4:18-47 collapse onto 24 distinct org subverses, giving org 41 units where maxVerses claims 47. The additions are also many-to-one in places (eng ESG 4:20 and 4:21 both map to org ESG 4:17c), so the mapping is not invertible. Superseded by esther_clementine.json, which is built against the Swete and Douay-Rheims texts and hand-checked; until that table is in place, citing ESG raises rather than guessing.",
-      "superseded_by": "esther_clementine.json"
+      "superseded_by": "esther_additions.json"
+    },
+    {
+      "books": ["EST"],
+      "systems": ["vul"],
+      "reason": "The Vulgate's Esther cannot be lined up with the original-language numbering verse by verse. Chapters 1:1-10:3 correspond straightforwardly, but 10:4-16:24 are the six Greek additions, which the Septuagint interleaves through the book rather than appending -- Addition B sits inside chapter 3, Addition C inside chapter 4, Addition D inside chapter 5 -- and the upstream data for that interleaving is the self-contradictory ESG material rejected above. The correspondence that can be established, and is, is between Vulgate numbering and the A-F letter chapters; see esther_additions.json. Cite Esther's additions in Vulgate or letter numbering and quote them from the Douay-Rheims."
     }
   ]
 }

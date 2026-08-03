@@ -87,6 +87,10 @@ class Config:
 
     default_english: str = "ASV"
     deuterocanon_english: str = "WEBC"
+    vulgate_english: str = "DRA"
+    """English for passages that exist only in Vulgate numbering -- Esther's additions
+    above all, which the Vulgate appends as chapters 11 to 16 and no Greek-numbered text
+    carries in that arrangement."""
     original: str = "auto"
     inline_original: str = "none"
     """Default for the short ``{{...}}`` form, which is meant to sit inside a sentence.
@@ -437,6 +441,7 @@ class Renderer:
         candidates = [
             citation.english or self.config.default_english,
             self.config.deuterocanon_english,
+            self.config.vulgate_english,
         ]
 
         last_error: Exception | None = None

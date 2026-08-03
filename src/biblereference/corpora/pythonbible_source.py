@@ -170,7 +170,8 @@ class PythonBibleCorpus:
 
         try:
             verse_id = pb.get_verse_id(book, ref.chapter, ref.verse)
-        except pb.InvalidVerseError as exc:
+        except (pb.InvalidVerseError, pb.InvalidChapterError, pb.InvalidBookError) as exc:
+            # The Vulgate's Esther runs to sixteen chapters; the Protestant canon's to ten.
             raise VerseUnavailable(ref, self.label, str(exc)) from exc
 
         try:

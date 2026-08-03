@@ -1,0 +1,71 @@
+{
+  "_comment": [
+    "Esther's six Greek additions, in the two numberings that can be reconciled.",
+    "",
+    "The additions are cited two ways. Editions following the Vulgate append them to the",
+    "end of the book as chapters 10:4-16:24; the NRSV, NABRE and most modern Catholic",
+    "editions letter them A to F and print each where the Greek puts it. Both name the",
+    "same text, so a citation in either should resolve.",
+    "",
+    "A third numbering exists -- the Septuagint's, which interleaves the additions as",
+    "sub-verses (ESG 1:1a-1:1s, 3:13a-3:13g, 4:17a-4:17z...) -- and is deliberately not",
+    "reconciled here. The upstream data for it is self-contradictory (see",
+    "corrections.json), and no corpus this library fetches carries it: the Swete",
+    "digitisation has only Esther's Hebrew portion, 166 verses with no additions at all,",
+    "and the World English Bible folds Additions A, B, D and E into bracketed text inside",
+    "single verses rather than numbering them. Claiming a correspondence there would be",
+    "claiming one that nothing could be checked against.",
+    "",
+    "Every row below was checked against the Douay-Rheims text itself, not inferred. The",
+    "verse counts of five additions fall out exactly; the sixth is the interesting one and",
+    "is explained in its own note."
+  ],
+
+  "source": "Douay-Rheims 1899 American Edition, as distributed by eBible.org (engDRA).",
+
+  "additions": {
+    "A": {
+      "letters": [1, 17],
+      "vulgate": { "from": [11, 2], "to": [12, 6] },
+      "title": "Mordecai's dream, and the plot of the two eunuchs",
+      "check": "Vulgate 11:2-12 is eleven verses and 12:1-6 is six: seventeen, matching A:1-17. Vulgate 11:2 opens 'In the second year of the reign of Artaxerxes the great, in the first day of the month Nisan, Mardochai...', which is the opening of Addition A."
+    },
+    "B": {
+      "letters": [1, 7],
+      "vulgate": { "from": [13, 1], "to": [13, 7] },
+      "title": "The edict of Artaxerxes against the Jews",
+      "check": "Seven verses on both sides."
+    },
+    "C": {
+      "letters": [1, 30],
+      "vulgate": { "from": [13, 8], "to": [14, 19] },
+      "title": "The prayers of Mordecai and of Esther",
+      "check": "Vulgate 13:8-18 is eleven verses and 14:1-19 is nineteen: thirty, matching C:1-30."
+    },
+    "D": {
+      "letters": [1, 16],
+      "vulgate": { "from": [15, 4], "to": [15, 19] },
+      "title": "Esther comes before the king",
+      "check": "The one addition whose arithmetic does not fall out at a chapter boundary. Vulgate chapter 15 has nineteen verses to the letter form's sixteen, because 15:1-3 is a Vulgate doublet -- 'And he commanded her (no doubt but he was Mardochai) to go to the king, and petition for her people' recapitulates the instruction already given in 4:8, and has no counterpart in the Greek. Addition D proper begins at 15:4, 'And on the third day she laid away the garments she wore, and put on her glorious apparel', which is the Greek's opening of D. 15:4-19 is sixteen verses, matching D:1-16."
+    },
+    "E": {
+      "letters": [1, 24],
+      "vulgate": { "from": [16, 1], "to": [16, 24] },
+      "title": "The second edict of Artaxerxes, in favour of the Jews",
+      "check": "Twenty-four verses on both sides."
+    },
+    "F": {
+      "letters": [1, 11],
+      "vulgate": { "from": [10, 4], "to": [11, 1] },
+      "title": "Mordecai's dream interpreted, and the colophon",
+      "check": "Vulgate 10:4-13 is ten verses and 11:1 is one: eleven, matching F:1-11. Vulgate 10:4 opens 'Then Mardochai said: God hath done these things', the start of Addition F, and 11:1 is the colophon 'In the fourth year of the reign of Ptolemy and Cleopatra...', which ends it."
+    }
+  },
+
+  "unmatched": [
+    {
+      "vulgate": { "from": [15, 1], "to": [15, 3] },
+      "reason": "A Vulgate doublet of the instruction at 4:8, with no counterpart in the Greek and so no letter-chapter reference. Citable in Vulgate numbering; it simply has no A-F equivalent."
+    }
+  ]
+}

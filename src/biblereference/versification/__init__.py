@@ -197,6 +197,24 @@ class Versification:
         """Number of chapters ``book`` has in ``vrs``. Zero if the book is absent."""
         return len(self._system(vrs).max_verses.get(book, ()))
 
+    def resolve_letter_chapter(self, ref: VerseRef) -> VerseRef:
+        """Turn ``Est C:12`` into the Vulgate numbering the additions are held in.
+
+        Letter chapters are Esther's alone. See :mod:`biblereference.versification.esther`.
+
+        :raises VersificationGapError: the reference is not an Esther addition.
+        """
+        from .esther import SUMMARY, letter_to_vulgate
+
+        if ref.book != "EST":
+            raise VersificationGapError(
+                f"{ref.pretty()} uses a letter chapter, which only Esther has. {SUMMARY}"
+            )
+        try:
+            return letter_to_vulgate(ref)
+        except (KeyError, ValueError) as exc:
+            raise VersificationGapError(str(exc)) from exc
+
     def first_verse(self, vrs: str, book: str, chapter: int) -> int:
         """Lowest verse number in a chapter -- 0 where a psalm superscription is numbered.
 
@@ -234,8 +252,12 @@ class Versification:
         This is what catches ``Sirach 51:31`` when Sirach 51 ends at verse 30 -- the
         error a citation tool exists to prevent.
 
+        Only existence is checked. Whether the reference can be *converted* to another
+        numbering is a separate question, and a separate refusal: the Vulgate's Esther
+        11:2 is a perfectly real verse that no data can line up against the Greek.
+
         :raises VerseOutOfRangeError: the reference points past the end of its chapter.
-        :raises VersificationGapError: the book's data is known to be unreliable.
+        :raises VersificationGapError: a letter chapter that names no addition.
         """
         if isinstance(ref, VerseRange):
             self.validate(ref.start)
@@ -243,14 +265,13 @@ class Versification:
                 self.validate(ref.end)
             return
 
-        system = self._system(ref.vrs)
-        if ref.book in system.unreliable_books:
-            raise VersificationGapError(_gap_message(ref.book, ref.vrs))
-
         if ref.is_letter_chapter:
-            raise VersificationGapError(_gap_message(ref.book, ref.vrs))
+            # Esther's additions, cited A-F. Resolving them into Vulgate numbering is
+            # what checks them: the letter and the verse have to name a verse that exists.
+            self.validate(self.resolve_letter_chapter(ref))
+            return
 
-        assert isinstance(ref.chapter, int)  # letter chapters handled above
+        assert isinstance(ref.chapter, int)
         limit = self.max_verse(ref.vrs, ref.book, ref.chapter)
         if ref.verse > limit:
             raise VerseOutOfRangeError(
@@ -278,14 +299,15 @@ class Versification:
         relabelled: most verses agree across systems, and the mapping files list only the
         ones that don't.
         """
+        if ref.is_letter_chapter:
+            ref = self.resolve_letter_chapter(ref)
+
         if ref.vrs == target:
             return [ref]
 
         for name in (ref.vrs, target):
             if ref.book in self._system(name).unreliable_books:
                 raise VersificationGapError(_gap_message(ref.book, name))
-        if ref.is_letter_chapter:
-            raise VersificationGapError(_gap_message(ref.book, ref.vrs))
 
         assert isinstance(ref.chapter, int)
         for name in (ref.vrs, target):
@@ -315,6 +337,13 @@ class Versification:
         book, then Daniel 3:24-33 -- so this returns a list rather than pretending the
         result is still one span.
         """
+        if span.start.is_letter_chapter:
+            # A letter chapter names a Vulgate verse whatever numbering the rest of the
+            # document is written in, so resolve it before anything looks at ``vrs``.
+            span = VerseRange(
+                self.resolve_letter_chapter(span.start),
+                self.resolve_letter_chapter(span.end),
+            )
         if span.vrs == target:
             return [span]
         converted = [out for ref in self.expand(span) for out in self.convert_all(ref, target)]
@@ -323,6 +352,14 @@ class Versification:
     def expand(self, span: VerseRange) -> list[VerseRef]:
         """List every verse in a range, walking across chapter boundaries if needed."""
         self.validate(span)
+        if span.start.is_letter_chapter:
+            # An addition is contiguous in Vulgate numbering, so resolving the two ends
+            # and walking between them covers it -- including where it crosses a chapter,
+            # as Addition A does at 11:12 to 12:1.
+            span = VerseRange(
+                self.resolve_letter_chapter(span.start),
+                self.resolve_letter_chapter(span.end),
+            )
         start, end = span.start, span.end
         assert isinstance(start.chapter, int) and isinstance(end.chapter, int)
 
@@ -585,6 +622,14 @@ def _build_system(name: str, corrections: dict[str, object]) -> _System:
     max_raw = raw["maxVerses"]
     assert isinstance(max_raw, dict)
     max_verses = {book: tuple(int(v) for v in counts) for book, counts in max_raw.items()}
+
+    for book, spec in _sub(corrections, "add_books").get(name, {}).items():  # type: ignore[union-attr]
+        if book in max_verses:
+            raise VersificationDataError(
+                f"correction for {name!r} adds book {book!r}, which upstream now defines "
+                f"-- the correction can probably be removed"
+            )
+        max_verses[book] = tuple(int(v) for v in spec["maxVerses"])
 
     mapped_raw = raw.get("mappedVerses", {})
     assert isinstance(mapped_raw, dict)

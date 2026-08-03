@@ -225,13 +225,13 @@ def test_books_that_agree_are_not_swept_up_by_the_guard(vrs: Versification) -> N
     assert ("LUK", 2) not in vrs.unmappable_chapters("vul")
 
 
-def test_esther_greek_additions_raise_rather_than_guess(vrs: Versification) -> None:
-    """The upstream data for Esther's additions is self-contradictory; until the
-    dedicated table exists, citing it must fail loudly rather than resolve wrongly."""
+def test_the_septuagints_own_esther_numbering_raises_rather_than_guessing(
+    vrs: Versification,
+) -> None:
+    """ESG is the Septuagint's interleaved Esther, whose upstream data is
+    self-contradictory. The A-F letter chapters are handled instead; see test_esther.py."""
     with pytest.raises(VersificationGapError, match=r"corrections\.json"):
         vrs.convert(VerseRef("ESG", 1, 1, vrs="eng"), "org")
-    with pytest.raises(VersificationGapError):
-        vrs.validate(parse_reference("Est C:12"))
 
 
 # --------------------------------------------------------------------------------------
