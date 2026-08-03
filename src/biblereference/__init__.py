@@ -24,6 +24,8 @@ from .canon import (
     resolve_book,
 )
 from .corpora import Corpus, CorpusError, VerseText, VerseUnavailable
+from .emphasis import SpanNotFoundError, apply_spans, fold
+from .quotecheck import QuoteCheck, check_quotation
 from .refs import ReferenceParseError, VerseRange, VerseRef, parse_reference
 from .render import (
     CitationError,
@@ -54,11 +56,13 @@ __all__ = [
     "CorpusError",
     "Emphasis",
     "NamingScheme",
+    "QuoteCheck",
     "ReferenceParseError",
     "RenderReport",
     "Renderer",
     "Rendition",
     "ResolvedCitation",
+    "SpanNotFoundError",
     "TagSyntaxError",
     "UnknownBookError",
     "UnknownVersificationError",
@@ -71,9 +75,12 @@ __all__ = [
     "VersificationError",
     "VersificationGapError",
     "__version__",
+    "apply_spans",
     "book_canon",
     "book_title",
+    "check_quotation",
     "find_citations",
+    "fold",
     "parse_reference",
     "resolve_book",
 ]

@@ -12,7 +12,7 @@ something needs attention -- never a quietly wrong verse.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Final
 
@@ -20,6 +20,8 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFo
 
 from .canon import AmbiguousBookError, Canon, NamingScheme, UnknownBookError, book_canon
 from .corpora.base import Corpus, CorpusError, VerseText, VerseUnavailable
+from .emphasis import SpanNotFoundError, apply_spans
+from .quotecheck import DEFAULT_THRESHOLD, check_quotation
 from .refs import ReferenceParseError, VerseRange, parse_reference
 from .tags import Citation, TagSyntaxError, find_citations
 from .versification import Versification, VersificationError
@@ -45,15 +47,15 @@ _LANGUAGE_NAMES: Final[Mapping[str, str]] = {
 #: isolate so that neighbouring Markdown punctuation does not reorder on screen.
 _RTL: Final = frozenset({"hbo"})
 
+#: English versions that come from a fetched source rather than from ``pythonbible``,
+#: so that asking for one before building says so instead of reporting it as unknown.
+_FETCHED_ENGLISH: Final = frozenset({"webc", "dra"})
+
 #: Which corpora answer each ``original=`` value, in order of preference.
 #:
 #: ``lxx`` lists Swete's Daniel second because Swete numbers Greek Daniel like the
 #: Vulgate, so it is a separate corpus; asking for the Septuagint of a Daniel passage
 #: should still find it.
-#: English versions that come from a fetched source rather than from ``pythonbible``,
-#: so that asking for one before building says so instead of reporting it as unknown.
-_FETCHED_ENGLISH: Final = frozenset({"webc", "dra"})
-
 DEFAULT_ROLES: Final[Mapping[str, tuple[str, ...]]] = {
     "hebrew": ("wlc",),
     "lxx": ("swete", "swete-daniel"),
@@ -98,6 +100,14 @@ class Config:
     data_home: Path | None = None
     template_dir: Path | None = None
     attribution: bool = True
+    quote_threshold: float = DEFAULT_THRESHOLD
+    """How closely a supplied ``context=`` must match the resolved verse before it is
+    reported. Loose by default, because your quotation is allowed to be a different
+    translation -- it is a check against citing the wrong verse, not against
+    disagreeing with the ASV."""
+    supplied_label: str = "as quoted"
+    """What to call a passage printed from ``context=`` rather than from a text this
+    library holds."""
     roles: Mapping[str, tuple[str, ...]] = field(default_factory=lambda: dict(DEFAULT_ROLES))
     """Which corpora serve each ``original=`` value, in order of preference. The first
     that carries the passage wins."""
@@ -302,11 +312,14 @@ class Renderer:
 
         english = self._english_rendition(citation, span, warnings)
         if english is not None:
+            english = self._with_supplied_quotation(citation, english, span, warnings)
             renditions.append(english)
         renditions.extend(self._original_renditions(citation, span, warnings))
 
         if not renditions:
             raise CitationError("; ".join(warnings) or f"no text found for {span.pretty()}")
+
+        renditions = [self._emphasise(citation, r) for r in renditions]
 
         if self.config.strict and warnings:
             raise CitationError("; ".join(warnings))
@@ -317,6 +330,49 @@ class Renderer:
             renditions=tuple(renditions),
             warnings=tuple(warnings),
         )
+
+    def _with_supplied_quotation(
+        self,
+        citation: Citation,
+        english: Rendition,
+        span: VerseRange,
+        warnings: list[str],
+    ) -> Rendition:
+        """Print the author's own quotation, having checked it is that passage.
+
+        ``context=`` exists so a treatise can quote the translation its author prefers.
+        The text printed is therefore theirs; what the library adds is the assurance that
+        it belongs to the verse cited.
+        """
+        if not citation.context:
+            return english
+
+        result = check_quotation(
+            citation.context, english.text, threshold=self.config.quote_threshold
+        )
+        if not result.plausible:
+            warnings.append(result.message(span.pretty()))
+
+        return replace(
+            english,
+            text=citation.context.strip(),
+            label=self.config.supplied_label,
+            corpus_id="supplied",
+        )
+
+    def _emphasise(self, citation: Citation, rendition: Rendition) -> Rendition:
+        """Apply the tag's emphasis spans for this rendition's language.
+
+        :raises CitationError: an anchor is missing. Emphasis that silently failed to
+            apply would be a claim about the source the output does not support.
+        """
+        spans = citation.emphasis.get(rendition.language)
+        if not spans:
+            return rendition
+        try:
+            return replace(rendition, text=apply_spans(rendition.text, spans))
+        except SpanNotFoundError as exc:
+            raise CitationError(str(exc)) from exc
 
     def _original_renditions(
         self, citation: Citation, span: VerseRange, warnings: list[str]
