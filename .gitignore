@@ -12,7 +12,8 @@ dist/
 htmlcov/
 
 # Local corpus data lives outside the repo by default, but guard against
-# an accidental --data-home pointed here.
-data/
+# an accidental --data-home pointed here. Anchored, so the versification
+# maps under src/biblereference/versification/data/ still ship.
+/data/
 *.sqlite
 *.sqlite-journal
