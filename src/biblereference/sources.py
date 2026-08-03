@@ -56,11 +56,15 @@ class Source:
     attribution: str | None = None
     """Credit line the renderer must print. Set wherever the licence requires it."""
     note: str = ""
+    crawl_delay: float = 0.0
+    """Seconds to wait between this source's files. Set where the host's robots.txt asks
+    for it -- vatican.va publishes ``Crawl-delay: 2`` -- so that fetching a source of many
+    files stays within what the host has said it wants."""
 
 
 def _sources() -> dict[str, Source]:
     # Imported here so that fetching one source does not import every parser.
-    from .corpora import ebible, nestle1904, oshb, swete
+    from .corpora import ebible, nestle1904, novavulgata, oshb, swete
 
     return {
         source.id: source
@@ -71,6 +75,7 @@ def _sources() -> dict[str, Source]:
             ebible.WEBC,
             ebible.DRA,
             ebible.LATVUC,
+            novavulgata.SOURCE,
         )
     }
 
@@ -95,4 +100,12 @@ def get_source(source_id: str) -> Source:
 
 
 #: Order the CLI fetches in, smallest first, so a failure surfaces quickly.
-FETCH_ORDER: Final = ("webc", "dra", "latvuc", "nestle1904", "oshb", "swete")
+FETCH_ORDER: Final = (
+    "webc",
+    "dra",
+    "latvuc",
+    "nestle1904",
+    "oshb",
+    "swete",
+    "novavulgata",
+)

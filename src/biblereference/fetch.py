@@ -9,6 +9,7 @@ only the parsed result.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -87,6 +88,8 @@ def fetch_source(
         follow_redirects=True, timeout=timeout, headers={"User-Agent": _USER_AGENT}
     ) as client:
         for index, remote in enumerate(source.files, start=1):
+            if index > 1 and source.crawl_delay:
+                time.sleep(source.crawl_delay)
             report(f"{source.id}: [{index}/{len(source.files)}] {remote.name}")
             response = client.get(remote.url)
             response.raise_for_status()

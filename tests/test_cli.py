@@ -41,9 +41,17 @@ def test_every_source_declares_its_licence_and_files() -> None:
 
 
 def test_the_catholic_canon_is_covered_by_the_registered_sources() -> None:
-    """Hebrew, Greek, Septuagint, the Latin, and two English texts -- one Greek-numbered
+    """Hebrew, Greek, Septuagint, two Latins, and two English texts -- one Greek-numbered
     for the deuterocanon, one Vulgate-numbered."""
-    assert set(all_sources()) == {"oshb", "swete", "nestle1904", "webc", "dra", "latvuc"}
+    assert set(all_sources()) == {
+        "oshb",
+        "swete",
+        "nestle1904",
+        "webc",
+        "dra",
+        "latvuc",
+        "novavulgata",
+    }
 
 
 def test_an_unknown_source_names_the_known_ones() -> None:
@@ -153,3 +161,9 @@ def test_an_unreadable_input_is_an_error_not_a_traceback(
 ) -> None:
     assert main(["--data-home", str(home), "render", "/no/such/file.md"]) == 1
     assert "error:" in capsys.readouterr().err
+
+
+def test_a_source_asking_for_a_crawl_delay_declares_one() -> None:
+    """vatican.va publishes Crawl-delay: 2, and the Nova Vulgata is 73 pages of it."""
+    assert get_source("novavulgata").crawl_delay == 2.0
+    assert get_source("latvuc").crawl_delay == 0.0
