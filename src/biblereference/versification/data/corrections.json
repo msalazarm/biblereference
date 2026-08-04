@@ -13,6 +13,7 @@
   ],
   "_psalm_9_note": "The 'PSA 9:22 -> PSA 10:0' drop below is repeated for lxx, vul, rsc and rso -- every system that follows the Greek psalm numbering. Reason, once: the Septuagint merges Hebrew Psalms 9 and 10 into a single Psalm 9, so Greek 9:22-39 is Hebrew 10:1-18, which the neighbouring range entry already states exactly (39-22+1 = 18 = 18-1+1). The extra entry additionally sends Greek 9:22 to Hebrew 10:0, the superscription slot, which would make one Greek verse both the title and the first verse of the Hebrew psalm. Hebrew Psalm 10 has no superscription at all -- it is one of the few untitled psalms in Book I, which is part of why it is read as a continuation of Psalm 9 -- so verse 0 does not exist there to map onto.",
   "_synodal_psalm_note": "The rsc and rso files carry the Greek psalm numbering, as lxx and vul do, but state it in fragments rather than in whole ranges -- and several of those fragments contradict each other or map an unequal number of verses. lxx and vul each render the affected psalms as a single clean range ('PSA 86:0-7 -> PSA 87:0-7', 'PSA 89:0-17 -> PSA 90:0-17', 'PSA 141:0-8 -> PSA 142:0-8'), and every correction below reassembles exactly that alignment out of the pieces, keeping whichever fragments are already exact. Nothing here is an invention: the target is independently attested twice over, by two systems that load and are in daily use. Note that mappings onto verse 0 are *not* faults -- org has no verse 0 in the Psalms, but lxx and vul target it 139 and 149 times respectively, because it is how the Copenhagen data models the superscription slot. Only contradictions and unequal ranges block a load.",
+  "_dag_note": "org has no DAG book at all -- Greek Daniel lives there as DAN plus the three standalone books S3Y, SUS and BEL. lxx.json spells the whole correspondence out; eng.json recorded only Susanna and Bel, so every English citation of Greek Daniel 1-12 fell through to 'org DAG x:y', a book the pivot does not have. The gap invariant in tests/test_alignment.py does not catch it because it skips books the target system lacks rather than refusing them, so this was silent. The ranges below mirror lxx's, which are verified, and differ only where the English tradition does: it keeps the Aramaic chapter break by printing 'Darius the Mede received the kingdom' as 5:31, where the Greek opens chapter 6 with it. Hence eng DAG 5 has 31 verses to the Greek's 30, eng DAG 6 has 28 to the Greek's 29, and everything in chapter 6 runs one behind. Measured on web against brenton: chapters 1-4 and 7-12 align verse for verse at offset 0, chapter 5 puts exactly one verse at the next chapter's opening, and all 28 verses of chapter 6 sit at +1.",
   "drop_mapped": {
     "eng": [
       {
@@ -187,6 +188,70 @@
   },
   "add_mapped": {
     "eng": {
+      "BAR 1:1-21": {
+        "to": "BAR 1:1-21",
+        "reason": "States the identity that upstream leaves implicit, so the chapter is vouched for. eng.json gives Baruch 1 twenty-one verses where org gives twenty-two, and since no mapping mentioned the chapter the per-chapter guard read that as two traditions dividing the text differently and refused to convert. They do not: the World English Bible, the Douay-Rheims, the Vulgata Clementina and the Nova Vulgata all print twenty-two verses and align verse for verse ('Nevertheless we didn't listen to the voice of the Lord our God' is 1:21 in the English and 'Et non audivimus vocem Domini Dei nostri' is 1:21 in the Latin). The declared twenty-one is an upstream verse count that is simply wrong -- ten of ten English witnesses carrying Baruch say twenty-two -- and this file has no mechanism for correcting maxVerses. So the twenty-one verses eng does declare are mapped straight through, which is true as far as it goes and restores conversion; the missing twenty-second remains unreachable from eng until upstream is fixed."
+      },
+      "DAG 1:1-21": {
+        "to": "DAN 1:1-21",
+        "reason": "See _dag_note. Identical to lxx's entry; the Greek and English number Daniel 1 alike."
+      },
+      "DAG 2:1-49": {
+        "to": "DAN 2:1-49",
+        "reason": "See _dag_note."
+      },
+      "DAG 3:1-23": {
+        "to": "DAN 3:1-23",
+        "reason": "See _dag_note. Chapter 3 up to the point where the Song of the Three is inserted."
+      },
+      "DAG 3:91-97": {
+        "to": "DAN 3:24-30",
+        "reason": "See _dag_note. After the Song, Greek Daniel 3:91-97 resumes the Aramaic text at 3:24. Seven verses both sides."
+      },
+      "DAG 4:1-3": {
+        "to": "DAN 3:31-33",
+        "reason": "See _dag_note. Nebuchadnezzar's proclamation closes chapter 3 in the Aramaic and opens chapter 4 in the Greek."
+      },
+      "DAG 4:4-37": {
+        "to": "DAN 4:1-34",
+        "reason": "See _dag_note. The remainder of the chapter, thirty-four verses both sides."
+      },
+      "DAG 5:1-30": {
+        "to": "DAN 5:1-30",
+        "reason": "See _dag_note. Belshazzar's feast, identical up to his death at verse 30."
+      },
+      "DAG 5:31": {
+        "to": "DAN 6:1",
+        "reason": "'And Darius the Mede received the kingdom, being about sixty-two years old.' The English tradition prints it as the last verse of chapter 5 and org opens chapter 6 with it, which is why eng DAG 5 has 31 verses where lxx has 30. Without this the verse resolved into a nonexistent org DAG."
+      },
+      "DAG 6:1-28": {
+        "to": "DAN 6:2-29",
+        "reason": "The consequence of the verse above: all twenty-eight verses of the English chapter 6 run one behind org, which has twenty-nine. Confirmed on web against brenton -- 'It pleased Darius to set over the kingdom one hundred twenty local governors' is the Greek's 6:2, not its 6:1. Every verse of the lions' den was resolving one early, including 6:22, 'My God has sent his angel and shut the lions' mouths'."
+      },
+      "DAG 7:1-28": {
+        "to": "DAN 7:1-28",
+        "reason": "See _dag_note. From chapter 7 the two number alike again."
+      },
+      "DAG 8:1-27": {
+        "to": "DAN 8:1-27",
+        "reason": "See _dag_note."
+      },
+      "DAG 9:1-27": {
+        "to": "DAN 9:1-27",
+        "reason": "See _dag_note."
+      },
+      "DAG 10:1-21": {
+        "to": "DAN 10:1-21",
+        "reason": "See _dag_note."
+      },
+      "DAG 11:1-45": {
+        "to": "DAN 11:1-45",
+        "reason": "See _dag_note."
+      },
+      "DAG 12:1-13": {
+        "to": "DAN 12:1-13",
+        "reason": "See _dag_note."
+      },
       "DAG 3:24-90": {
         "to": "S3Y 1:1-67",
         "reason": "English Bibles that print the Greek Daniel carry the Song of the Three inside chapter 3, exactly as the Vulgate and the Septuagint do, but upstream records the correspondence only for those two. Without it, a citation of the Song cannot reach an English text that has it. Both sides are 67 verses (90-24+1, and org gives S3Y 67), matching the entries this file's siblings state for lxx and vul. This replaces the broken S3Y-to-DAG chain dropped above, in the direction that is actually well-defined."
@@ -213,6 +278,22 @@
       }
     },
     "vul": {
+      "NEH 7:44": {
+        "to": "NEH 7:43",
+        "reason": "The Clementine splits the Levites entry and nothing recorded it, so four verses of the list resolved one late. latvuc 7:43 is 'filii Josue et Cedmihel filiorum' and 7:44 is 'Oduiae, septuaginta quatuor. Cantores:' -- together the Nova Vulgata's single 7:43, 'Levitae: filii Iesua, hi sunt filii Cadmihel, Bennui et Odoviae, septuaginta quattuor'. Confirmed twice over: Latin against Latin, and web against the Douay-Rheims, which puts 'The singers: the children of Asaph: one hundred forty-eight' at English 7:44 and Vulgate 7:45."
+      },
+      "NEH 7:45-47": {
+        "to": "NEH 7:44-46",
+        "reason": "The three verses carried by the split above -- singers, gatekeepers, temple servants. They resynchronise at 7:48, which the Clementine runs together where the Nova Vulgata has 7:47 and 7:48 separately ('filii Ceros, filii Siaa, filii Phadon, filii Lebana, filii Hagaba' against those five names split across two verses). Nothing is claimed here about 7:67-73: the Nova Vulgata's own tail disagrees with org there -- its 7:72 is 'Et quod dedit reliquus populus' where the Leningrad Codex has the priests dwelling in their cities -- so the Latin witnesses cannot settle that region and the vendored mapping is left as it stands."
+      },
+      "SIR 6:20": {
+        "to": "SIR 6:19",
+        "reason": "The Latin splits the Greek's Sirach 6:19 in two and nothing recorded it, so fifteen verses of the chapter resolved one early. latvuc 6:19 is 'Quasi is qui arat et seminat accede ad eam, et sustine bonos fructus illius' and 6:20 is 'In opere enim ipsius exiguum laborabis, et cito edes de generationibus illius' -- together they are org's single 6:19, 'Come to her as one who plows and sows and wait for her good fruit; for your toil shall be little'. The Douay-Rheims splits it identically, so this is the Vulgate tradition rather than one edition's quirk. Which side was wrong was settled by triangulation: eng and lxx agree with org verse for verse across the whole chapter, so only vul deviates."
+      },
+      "SIR 6:21-35": {
+        "to": "SIR 6:20-34",
+        "reason": "The consequence of the split above: fifteen verses, one behind for their whole length. 'Give ear, my son, and take wise counsel' is the Vulgate's 6:24 and org's 6:23; 'Put thy feet into her fetters' is 6:25 against 6:24. They realign at 6:36 because the Vulgate has no counterpart to org 6:35, 'Be willing to listen to every godly discourse' -- which is why both number the chapter at 37 despite the split."
+      },
       "PSA 12:0": {
         "to": "PSA 13:1",
         "reason": "Restores the title-to-title link dropped with 'PSA 12:0-1'. The Vulgate prints Psalm 12's superscription unnumbered (verse 0); Hebrew Psalm 13 counts it as verse 1."
@@ -319,9 +400,10 @@
     },
     "eng": {
       "books": [
-        "LJE"
+        "LJE",
+        "DAG"
       ],
-      "reason": "The English versification defines the Letter of Jeremiah twice: as Baruch chapter 6, which is how English Bibles actually print it, and as a standalone LJE. Both map onto the same org verses, so converting org->eng has two candidate answers for the whole letter, and without a preference the tie-break falls to whichever book code sorts first -- which is LJE, the form no English Bible uses. The corpora settle it: the World English Bible and the Douay-Rheims both print Baruch 6 and neither has a standalone book, so a citation resolved into eng should say Baruch 6."
+      "reason": "The English versification defines the Letter of Jeremiah twice: as Baruch chapter 6, which is how English Bibles actually print it, and as a standalone LJE. Both map onto the same org verses, so converting org->eng has two candidate answers for the whole letter, and without a preference the tie-break falls to whichever book code sorts first -- which is LJE, the form no English Bible uses. The corpora settle it: the World English Bible and the Douay-Rheims both print Baruch 6 and neither has a standalone book, so a citation resolved into eng should say Baruch 6. DAG is here for the same reason and was added with the Greek Daniel mappings: English versification defines Daniel twice as well, as DAN and as Greek Daniel DAG, and once DAG maps onto org's DAN the reverse lookup has two answers for the whole book. DAG sorts first, so without this an ordinary citation of Daniel 4 came back in Greek Daniel's numbering and no English protocanon corpus could render it. DAN is what an English Bible prints unless it is specifically a Greek Daniel, so DAG is chosen only when nothing else maps."
     }
   },
   "ignore_self_mapped": {

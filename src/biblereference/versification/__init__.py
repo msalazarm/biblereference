@@ -490,28 +490,46 @@ def _unmappable_chapters(system: _System, pivot: _System) -> frozenset[tuple[str
     fall through to the identity and land on a real verse containing different words --
     a citation that looks right and is not.
 
-    Where a book does have mappings, they are trusted, including for chapters they do not
-    mention: a shift is usually recorded on the chapter that gains the verses rather than
-    the one that loses them, so silence there is meaningful rather than missing.
+    Vouching is per *chapter*, not per book, and the distinction is not academic. The rule
+    used to be that any mapping anywhere in a book vouched for the whole of it, on the
+    reasoning that a shift is usually recorded on the chapter that gains the verses rather
+    than the one that loses them, so silence nearby is meaningful. That holds for upstream's
+    complete files and fails badly for a partially corrected book: adding a verified mapping
+    for the Vulgate's Sirach 6 switched off the refusal for all fifty-one chapters, so
+    Sirach 24 began converting by identity into a chapter Jerome translated from a different
+    text. One fixed chapter should not vouch for fifty unexamined ones.
+
+    A chapter therefore counts as vouched for when a mapping mentions it -- as source or as
+    target, since a shift may be recorded from either side -- and neighbouring chapters are
+    still trusted through the range that carries them.
 
     In practice this catches the Vulgate's Sirach, Tobit and Judith, which Jerome
     translated from source texts differing from the Greek by whole clauses, and the
     handful of chapters where Greek Sirach manuscripts transpose material.
+
+    Note what it cannot catch: a chapter whose verse *count* matches the pivot but whose
+    text is divided differently inside it. The Vulgate's Sirach 6 is exactly that -- 37
+    verses both sides, with a split at 6:19 and an omission at 6:35 cancelling out -- so it
+    converted silently and wrongly until the alignment audit found it. Equal counts are not
+    evidence of equal division.
     """
-    # A book counts as mapped whether it appears as a source or as a target: English
+    # A chapter counts as mapped whether it appears as a source or as a target: English
     # carries the Letter of Jeremiah as Baruch 6, so every entry about it is keyed on BAR
     # while the book that needs vouching for is LJE.
-    mapped_books = {coord[0] for coord in system.to_org}
-    mapped_books |= {coord[0] for coord in system.to_org.values()}
+    mapped: set[tuple[str, int]] = set()
+    for source, target in system.to_org.items():
+        mapped.add((source[0], source[1]))
+        mapped.add((target[0], target[1]))
 
     bad: set[tuple[str, int]] = set()
     for book, chapters in system.max_verses.items():
         pivot_chapters = pivot.max_verses.get(book)
-        if pivot_chapters is None or book in mapped_books:
-            # Either the pivot does not carry the book at all -- nothing to line up
-            # against -- or upstream has written mappings for it, which are trusted.
+        if pivot_chapters is None:
+            # The pivot does not carry the book at all -- nothing to line up against.
             continue
         for chapter, count in enumerate(chapters, start=1):
+            if (book, chapter) in mapped:
+                continue
             if chapter > len(pivot_chapters) or count != pivot_chapters[chapter - 1]:
                 bad.add((book, chapter))
 

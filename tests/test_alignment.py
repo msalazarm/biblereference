@@ -256,3 +256,95 @@ def test_no_mapping_names_a_verse_its_own_system_lacks() -> None:
                 ghosts.append(f"{system}: {key} but {book} {chapter} has {top} verses")
 
     assert ghosts == []
+
+
+# --------------------------------------------------------------------------------------
+# Found by deriving the mapping from the text rather than checking the one on file
+# --------------------------------------------------------------------------------------
+
+
+def test_english_greek_daniel_reaches_the_pivot_at_all(vrs: Versification) -> None:
+    """org has no DAG book: Greek Daniel lives there as DAN plus S3Y, SUS and BEL. lxx.json
+    spells the correspondence out and eng.json recorded only Susanna and Bel, so every
+    English citation of Greek Daniel 1-12 fell through to 'org DAG x:y' -- a book the pivot
+    does not have.
+
+    It was silent because the ghost-reference guard skips books the target lacks rather than
+    refusing them, so nothing anywhere in the project could see it.
+    """
+    assert convert(vrs, "DAG 1:1", "eng", "org") == "DAN 1:1"
+    assert convert(vrs, "DAG 12:13", "eng", "org") == "DAN 12:13"
+
+
+def test_english_greek_daniel_keeps_the_aramaic_chapter_break(vrs: Versification) -> None:
+    """The English tradition prints 'Darius the Mede received the kingdom' as 5:31 and the
+    Greek opens chapter 6 with it, so English Greek Daniel 5 has 31 verses to the Greek's 30
+    and the whole of chapter 6 runs one behind.
+
+    Measured on web against brenton: chapters 1-4 and 7-12 align at offset 0, and all 28
+    verses of chapter 6 sit at +1.
+    """
+    assert convert(vrs, "DAG 5:30", "eng", "org") == "DAN 5:30"
+    assert convert(vrs, "DAG 5:31", "eng", "org") == "DAN 6:1"
+    assert convert(vrs, "DAG 6:1", "eng", "org") == "DAN 6:2"
+    # 'My God has sent his angel and shut the lions' mouths' -- not an obscure verse to lose.
+    assert convert(vrs, "DAG 6:22", "eng", "org") == "DAN 6:23"
+    assert convert(vrs, "DAG 6:28", "eng", "org") == "DAN 6:29"
+
+
+def test_ordinary_daniel_is_not_dragged_into_greek_daniels_numbering(
+    vrs: Versification,
+) -> None:
+    """The other half of that fix. Mapping DAG onto org's DAN gives the reverse lookup two
+    answers for the whole book, and DAG sorts first -- so an ordinary citation of Daniel came
+    back in Greek Daniel's numbering, which no English protocanon corpus can render."""
+    assert convert(vrs, "DAN 4:1", "org", "eng") == "DAN 4:4"
+    assert convert(vrs, "DAN 6:23", "org", "eng") == "DAN 6:22"
+
+
+def test_the_vulgate_splits_a_verse_in_sirach_6(vrs: Versification) -> None:
+    """latvuc 6:19 'Quasi is qui arat et seminat accede ad eam' and 6:20 'In opere enim
+    ipsius exiguum laborabis' are together org's single 6:19. Fifteen verses ran one late
+    behind the split, and the chapter passed every count-based check because the Vulgate
+    also lacks org 6:35 -- 37 verses either side, divided differently.
+
+    Which side was wrong was settled by triangulation: eng and lxx agree with org verse for
+    verse across the whole chapter.
+    """
+    assert convert(vrs, "SIR 6:19", "vul", "org") == "SIR 6:19"
+    assert convert(vrs, "SIR 6:20", "vul", "org") == "SIR 6:19"
+    assert convert(vrs, "SIR 6:24", "vul", "org") == "SIR 6:23"
+    assert convert(vrs, "SIR 6:36", "vul", "org") == "SIR 6:36"
+
+
+def test_the_clementine_splits_the_levites_in_nehemiah_7(vrs: Versification) -> None:
+    """latvuc 7:43 'filii Josue et Cedmihel filiorum' and 7:44 'Oduiae, septuaginta quatuor'
+    are the Nova Vulgata's single 7:43."""
+    assert convert(vrs, "NEH 7:44", "vul", "org") == "NEH 7:43"
+    assert convert(vrs, "NEH 7:45", "vul", "org") == "NEH 7:44"
+    assert convert(vrs, "NEH 7:47", "vul", "org") == "NEH 7:46"
+
+
+def test_one_corrected_chapter_does_not_vouch_for_a_whole_book() -> None:
+    """The guard is per chapter, and it has to be.
+
+    It used to be per book: any mapping anywhere vouched for all of it. Adding the verified
+    Sirach 6 mapping above therefore switched the refusal off for all fifty-one chapters,
+    and Sirach 24 -- which Jerome translated from a different text and which nothing maps --
+    began converting by identity into a chapter containing different words.
+    """
+    from biblereference.refs import parse_reference
+
+    vrs = Versification.load()
+    with pytest.raises(VersificationError):
+        vrs.convert_range(parse_reference("Sir 24:1"), "vul")
+    assert vrs.convert_range(parse_reference("Sir 6:23"), "vul")[0].start.verse == 24
+
+
+def test_baruch_1_converts_despite_a_wrong_upstream_verse_count(vrs: Versification) -> None:
+    """eng.json gives Baruch 1 twenty-one verses where org gives twenty-two, so the
+    per-chapter guard read it as a real division difference and refused. It is not: the
+    World English Bible, Douay-Rheims, Vulgata Clementina and Nova Vulgata all print
+    twenty-two and align verse for verse. The count is simply wrong upstream."""
+    assert convert(vrs, "BAR 1:1", "eng", "org") == "BAR 1:1"
+    assert convert(vrs, "BAR 1:21", "eng", "org") == "BAR 1:21"
