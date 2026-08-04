@@ -471,10 +471,18 @@ def home_default() -> Path:
 # derivation instead of producing a confident wrong answer.
 
 
-#: Verses either side of the diagonal the alignment will consider. Wide enough for a
-#: whole-chapter displacement in the Psalms, narrow enough that the search stays quadratic
-#: in the band rather than in the book.
-BAND: Final = 60
+#: Verses either side of the diagonal the alignment will consider.
+#:
+#: Set by the worst real case rather than by taste, and 60 is not enough. Superscriptions
+#: are the reason: the Septuagint numbers a psalm's title as its first verse and the English
+#: tradition does not store it at all, so Brenton carries about a hundred verses the World
+#: English Bible has no row for. The displacement is cumulative down the whole Psalter, and
+#: at a band of 60 the alignment ran out of room around Psalm 89 and shifted every remaining
+#: psalm by one -- 1,030 disagreements that were the instrument's, not the data's.
+#:
+#: The cost is linear in this number. Psalms is 2,461 verses, so a band of 200 is a million
+#: cells and about a second.
+BAND: Final = 200
 
 
 def faithful_chapters(
@@ -574,6 +582,7 @@ def align_book(
     right: Sequence[tuple[VerseRef, str]],
     *,
     language: str,
+    right_language: str | None = None,
     band: int = BAND,
     gap: float = GAP,
 ) -> tuple[tuple[VerseRef | None, VerseRef | None], ...]:
@@ -588,8 +597,10 @@ def align_book(
     if not n or not m:
         return tuple((a, None) for a, _ in left) + tuple((None, b) for b, _ in right)
 
+    # Folded in each side's own language: the transformations are language-specific, and
+    # Latin's i/j and u/v normalisation applied to English is simply wrong.
     left_sets = [_shingles(text, language) for _, text in left]
-    right_sets = [_shingles(text, language) for _, text in right]
+    right_sets = [_shingles(text, right_language or language) for _, text in right]
 
     width = 2 * band + 1
     low = float("-inf")

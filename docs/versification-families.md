@@ -122,3 +122,112 @@ Four more hold too few complete chapters to place at all: `e2t`, `glw`, `niv`,
 - **Equal verse counts do not prove equal verse content.** Two editions can agree on every
   chapter length and still divide a chapter's text differently. Confirming that is a
   separate, textual step.
+
+## Are the families textually real?
+
+Structure is a necessary condition, not a sufficient one: two editions can agree on every
+chapter length and still divide a chapter's text differently, which is a worse fault because
+nothing structural can see it. So every pair of members of every multi-member family was
+compared verse by verse, scoring the mapped position against offsets −2…+2.
+
+**Thirty-one of the thirty-nine pairs are verse-for-verse identical in placement.** The other
+eight flag between 13 and 241 verses out of tens of thousands — and every one of them spreads
+its flags roughly evenly across all four offsets:
+
+| pair | flagged | offsets |
+|---|---|---|
+| `lsv` vs `ulb` | 241 of 31,051 | −1:78 −2:56 +1:61 +2:46 |
+| `lsv` vs `oebcw` | 195 of 13,870 | −1:69 −2:42 +1:57 +2:27 |
+| `ojb` vs `oke` | 63 of 5,841 | −1:25 −2:15 +1:15 +2:8 |
+| `brenton` vs `lxxup` | 15 of 28,000 | −1:5 +1:8 +2:2 |
+
+That symmetry is the whole finding. A real displacement piles onto **one** offset — the
+Jonah and Bel faults did, for their entire length. Flags scattered in both directions are two
+different *translations* of the same verse, where a neighbour occasionally scores higher in
+a repetitive passage. Every multi-member family is textually confirmed.
+
+## No corpus follows `lxx` or `vul`
+
+Measured across every corpus against every shipped system, comparing the full verse range
+(first verse as well as last, since a Vulgate psalm may be numbered 10–19 rather than 1–10):
+
+| system | corpora exact to it |
+|---|---|
+| `org` | `wlc` (929 ch), `n1904` (245, New Testament only) |
+| `eng` | `lsv` (1189), `ulb` (1170), `jps` (929), `lee` (928), and three more |
+| `nvl` | `novavulgata` (1300) |
+| `lxx` | **none** — only `n1904`, New Testament only and therefore vacuous |
+| `vul` | **none** — the Clementine is off on 7 chapters, the Douay on 15 |
+| `rsc`, `rso` | no corpora exist at all |
+
+This is the finding that explains the history. Every audit of `lxx` and `vul` was measuring
+the gap between the system and the nearest edition rather than the mapping, and no amount of
+care in the comparison could have fixed that.
+
+It also breaks the obvious repair. Picking, per system, the one corpus that *is* that system
+does not work: `org` has an exact witness only in Hebrew and Greek, `eng` only in English,
+`nvl` only in Latin — so no two faithful witnesses share a language, and a same-language test
+could not run on any pair.
+
+**Restricting rather than discarding is what works.** A witness wrong on ten chapters is
+right on the other 1,179, and a comparison confined to chapters where *both* sides are
+faithful is sound even though neither corpus is faithful throughout. See
+`audit.faithful_chapters`. The usable domains are large:
+
+| pair | witnesses | chapters both are faithful on |
+|---|---|---|
+| `eng`/`vul` | `web`/`dra` | 1,294 |
+| `org`/`vul` | `ojb`/`dra` | 1,172 |
+| `org`/`eng` | `ojb`/`web` | 1,170 |
+| `eng`/`lxx` | `web`/`brenton` | 959 |
+| `lxx`/`vul` | `brenton`/`dra` | 920 |
+
+## Deriving the mappings, and what they disagree about
+
+With the witnesses chosen per *pair* — same language first, faithful-chapter restriction on
+top — each family pair's mapping was derived from the text alone by monotonic alignment and
+then diffed against the vendored data. Isolated disagreements are noise; a **run** of
+consecutive verses all displaced the same way is what a versification fault looks like.
+
+| pair | witnesses | agree | rate | runs of 3+ |
+|---|---|---|---|---|
+| `org`→`eng` | `ojb`/`web` | 30,509 | **99.993%** | **0** |
+| `vul`→`nvl` | `latvuc`/`novavulgata` | 31,982 | 99.760% | 12 |
+| `org`→`vul` | `ojb`/`dra` | 30,079 | 99.058% | 3 |
+| `eng`→`vul` | `web`/`dra` | 32,217 | 98.910% | 11 |
+| `eng`→`lxx` | `web`/`brenton` | 23,127 | 98.859% | 25 |
+| `org`→`lxx` | `ojb`/`brenton` | 18,840 | 98.747% | 21 |
+| `lxx`→`vul` | `brenton`/`dra` | 20,650 | 98.667% | 27 |
+
+**`org`→`eng` is clean.** Not one run of three consecutive displaced verses across 30,509
+comparisons. Its two isolated differences are both superscription artifacts of the
+instrument, which cannot emit a verse 0 (`PSA 42:1 → PSA 42:0` is a title slot).
+
+### Two instrument limits, stated so they are not read as findings
+
+- **Cross-book mappings.** The Vulgate's Daniel absorbs Susanna, Bel and the Song of the
+  Three, which `org` holds as separate books, and a per-book alignment cannot express that.
+  250 of the `org`→`vul` differences are this and the data is right in every one:
+  `vul DAN 3:24 → S3Y 1:1`, `DAN 13:1 → SUS 1:1`, `DAN 14:1 → BEL 1:2`.
+- **Transpositions.** Monotonic alignment cannot represent a swap, so the genuine Greek
+  transposition at `EXO 21:16`/`21:17` is reported as two disagreements in both directions.
+
+### The candidates, ranked by how many independent pairs see them
+
+Books where the Greek is *known* to reorder — 3 Kingdoms (`1KI` 7, 20, 21), Jeremiah
+(`JER` 27), Greek Exodus — produce runs that are textual rather than mapping faults. What
+survives that filter, and appears in more than one independent pair:
+
+| passage | seen in | displacement |
+|---|---|---|
+| `JDT 6` | `eng`→`vul`, `lxx`→`vul`, `vul`→`nvl` | +4, then +2 |
+| `EXO 39:19-38` | all seven pairs, including Latin-against-Latin | −1, −2 |
+| `LEV 8:20-30` | `org`→`lxx`, `eng`→`lxx`, `lxx`→`vul` | ±1 |
+| `NEH 7` | `eng`→`vul`, `vul`→`nvl` | +1 |
+| `NUM 26` | `eng`→`lxx`, `lxx`→`vul` | ±4 |
+| `SIR 6:20-34`, `SIR 14:16-23` | `eng`→`vul` | +1 |
+
+`LEV 8:20-29`, `SIR 6:23-29` and `EXO 39:29-31` were also flagged by the earlier
+model-and-similarity sweep, which used different witnesses and a different instrument. Two
+independent methods agreeing on the same passages is the strongest signal available here,
+and these are the queue for adjudication.
