@@ -14,6 +14,7 @@ import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Final
 
 from .canon import NamingScheme, resolve_book
 from .compare import BookComparison, compare_corpora
@@ -331,6 +332,68 @@ def _match_from(record: dict[str, object], searcher: Searcher) -> Match | None:
         span=(int(span[0]), int(span[1])) if isinstance(span, list) and len(span) == 2 else None,
         quoted=str(record.get("quoted") or ""),
     )
+
+
+#: Which corpora may speak for each system, best first, with the language each is written
+#: in. A textual check is only made where both sides have a faithful witness in *one*
+#: language: choosing for faithfulness alone once put English against Latin and rejected
+#: every book at similarity 0.02.
+COVERAGE_WITNESSES: Final[dict[str, tuple[tuple[str, str], ...]]] = {
+    "org": (("ojb", "en"), ("wlc", "hbo"), ("n1904", "grc")),
+    "eng": (("web", "en"), ("kjv", "en")),
+    "lxx": (("brenton", "en"), ("swete", "grc")),
+    "vul": (("dra", "en"), ("latvuc", "la")),
+    "nvl": (("novavulgata", "la"),),
+}
+
+
+def cmd_coverage(args: argparse.Namespace) -> int:
+    """Convert every verse of every system and account for what became of each one.
+
+    Not a sample. The claim under test is that the mappings are right, and a sample cannot
+    support that -- so this walks all of them and reports what it could *not* check as
+    loudly as what it could.
+    """
+    from .audit import runs_of, verify_every_verse
+
+    home = _home(args)
+    vrs = Versification.load()
+    coverage, ghosts, contradicted = verify_every_verse(home, vrs, COVERAGE_WITNESSES)
+
+    for row in coverage:
+        print(row.describe())
+
+    total = sum(row.total for row in coverage)
+    checked = sum(row.checked for row in coverage)
+    confirmed = sum(row.confirmed for row in coverage)
+    _say("")
+    _say(f"{total:,} verses converted; {len(ghosts)} returned a verse the pivot does not have.")
+    if checked:
+        _say(
+            f"{checked:,} could be checked against text ({checked / total:.1%}), of which "
+            f"{confirmed / checked:.3%} confirmed."
+        )
+
+    if ghosts:
+        _say("")
+        _say("ghosts -- these are faults whatever the text says:")
+        for ghost in ghosts[: args.limit]:
+            print(f"  {ghost}")
+
+    runs = runs_of(contradicted, args.min_run)
+    _say("")
+    _say(
+        f"{len(contradicted):,} verses where a neighbour explains the text better, of which "
+        f"{len(runs)} fall in runs of {args.min_run}+."
+    )
+    _say(
+        "Only the runs are evidence: an isolated flag in a genealogy is one witness "
+        "transliterating names where the other does not, with every neighbouring verse "
+        "sharing the same shape."
+    )
+    for system, book, chapter, first, last in runs:
+        print(f"  {system:4} {book} {chapter}:{first}-{last}\t{last - first + 1} verses")
+    return 1 if ghosts else 0
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
@@ -799,6 +862,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     families.add_argument("--json", action="store_true", help="emit the whole derivation as JSON")
     families.set_defaults(func=cmd_families)
+
+    coverage = subparsers.add_parser(
+        "coverage",
+        help="convert every verse of every versification and account for the result",
+        description="Walks all 155,000 conversions rather than sampling them, and reports "
+        "how many could be checked against text and how many could not -- 'not "
+        "contradicted' is not the same as 'verified'. Exits non-zero if any conversion "
+        "returns a verse the pivot does not have.",
+    )
+    coverage.add_argument(
+        "--min-run",
+        type=int,
+        default=4,
+        metavar="N",
+        help="consecutive contradicted verses before a run is reported (default 4; an "
+        "isolated flag in a repetitive passage is noise, not a fault)",
+    )
+    coverage.add_argument(
+        "--limit", type=int, default=40, metavar="N", help="ghosts to print (default 40)"
+    )
+    coverage.set_defaults(func=cmd_coverage)
 
     doctor = subparsers.add_parser("doctor", help="report what is cached and built")
     doctor.add_argument(

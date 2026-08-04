@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -40,17 +40,20 @@ from .canon import CANONICAL_ORDER, book_title
 from .emphasis import fold
 from .refs import VerseRef
 from .store import DataHome
-from .versification import Versification, VersificationError
+from .versification import PIVOT, Versification, VersificationError
 
 __all__ = [
     "OFFSETS",
     "WITNESSES",
     "Alignment",
+    "Coverage",
     "Disagreement",
     "PairResult",
     "Witness",
     "audit_all",
     "audit_pair",
+    "runs_of",
+    "verify_every_verse",
     "witness_pairs",
 ]
 
@@ -678,3 +681,208 @@ def align_book(
             break
     out.reverse()
     return tuple(out)
+
+
+# --------------------------------------------------------------------------------------
+# Every verse, accounted for
+# --------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Coverage:
+    """What became of every verse of one system.
+
+    Each verse lands in exactly one bucket, and the buckets are chosen so that nothing can
+    be quietly counted as fine. ``unwitnessed`` is the important one: "not contradicted" is
+    not the same as "verified", and a number for what no corpus can check is worth more than
+    silence about it.
+    """
+
+    system: str
+    total: int = 0
+    refused: int = 0
+    """The data says these cannot be lined up. A stated refusal is an answer."""
+    ghost: int = 0
+    """Returned a verse the pivot does not have. Must be zero; anything else is a fault
+    that no amount of textual agreement excuses."""
+    confirmed: int = 0
+    """A faithful witness on each side, in one language, and the mapped position explains
+    the text better than its neighbours do."""
+    contradicted: int = 0
+    """A neighbour explains it better. Only meaningful in runs -- see :func:`runs_of`."""
+    weak: int = 0
+    """Too little shared vocabulary to be evidence either way."""
+    unwitnessed: int = 0
+    """Structurally sound and textually unchecked, because no faithful witness reaches it."""
+
+    @property
+    def checked(self) -> int:
+        return self.confirmed + self.contradicted
+
+    def describe(self) -> str:
+        share = f"{self.checked / self.total:.1%}" if self.total else "-"
+        rate = f"{self.confirmed / self.checked:.3%}" if self.checked else "-"
+        return (
+            f"{self.system:5} {self.total:>7,} verses  {self.ghost:>3} ghosts  "
+            f"{self.refused:>6,} refused  {self.checked:>7,} checked ({share})  "
+            f"{rate} confirmed  {self.unwitnessed:>7,} unwitnessed"
+        )
+
+
+def verify_every_verse(
+    home: DataHome,
+    vrs: Versification,
+    witnesses: Mapping[str, Sequence[tuple[str, str]]],
+    *,
+    systems: Sequence[str] | None = None,
+) -> tuple[list[Coverage], list[str], list[tuple[str, VerseRef, VerseRef]]]:
+    """Convert every verse of every system and account for the result.
+
+    Not a sample. The claim under test is that the mappings are right, and a sample cannot
+    support it -- so this walks all of them and reports what it could not check as loudly as
+    what it could.
+
+    :param witnesses: system -> [(corpus, language)], best first. A comparison is only made
+        where a faithful witness exists on both sides *in the same language*; anything else
+        is unwitnessed rather than assumed.
+    :returns: per-system coverage, ghost descriptions, and contradicted verses.
+    """
+    faithful = {
+        (corpus, system): faithful_chapters(home, corpus, system, vrs)
+        for system, pairs in witnesses.items()
+        for corpus, _ in pairs
+    }
+
+    def witness_for(
+        system: str, book: str, chapter: int, language: str | None = None
+    ) -> tuple[str, str] | None:
+        for corpus, lang in witnesses.get(system, ()):
+            if language and lang != language:
+                continue
+            if (book, chapter) in faithful[(corpus, system)]:
+                return corpus, lang
+        return None
+
+    texts = _Texts(home)
+    out: list[Coverage] = []
+    ghosts: list[str] = []
+    contradicted: list[tuple[str, VerseRef, VerseRef]] = []
+
+    try:
+        for system in systems or vrs.system_names:
+            if system == PIVOT:
+                continue
+            counts: dict[str, int] = dict.fromkeys(
+                ("total", "refused", "ghost", "confirmed", "contradicted", "weak", "unwitnessed"),
+                0,
+            )
+            for ref, target in _each_conversion(vrs, system, counts, ghosts):
+                source = witness_for(system, ref.book, int(ref.chapter))
+                if source is None:
+                    counts["unwitnessed"] += 1
+                    continue
+                corpus, language = source
+                other = witness_for(PIVOT, target.book, int(target.chapter), language)
+                if other is None:
+                    counts["unwitnessed"] += 1
+                    continue
+                here = texts.verse(corpus, ref)
+                there = texts.verse(other[0], target)
+                if not here or not there:
+                    counts["unwitnessed"] += 1
+                    continue
+                tokens = _tokens(here, language)
+                score = _ratio(tokens, _tokens(there, language))
+                if score < FLOOR:
+                    counts["weak"] += 1
+                    continue
+                rival = 0.0
+                for offset in OFFSETS:
+                    if offset == 0 or target.verse + offset < 0:
+                        continue
+                    nearby = texts.verse(
+                        other[0],
+                        VerseRef(target.book, target.chapter, target.verse + offset, vrs=PIVOT),
+                    )
+                    if nearby:
+                        rival = max(rival, _ratio(tokens, _tokens(nearby, language)))
+                if score + MARGIN >= rival:
+                    counts["confirmed"] += 1
+                else:
+                    counts["contradicted"] += 1
+                    contradicted.append((system, ref, target))
+            out.append(Coverage(system, **counts))
+    finally:
+        texts.close()
+    return out, ghosts, contradicted
+
+
+def _each_conversion(
+    vrs: Versification, system: str, counts: dict[str, int], ghosts: list[str]
+) -> Iterator[tuple[VerseRef, VerseRef]]:
+    """Every verse of ``system`` that converts into the pivot without inventing a verse.
+
+    Counts the refusals and ghosts as it goes and yields only what survives, so the caller
+    is left with the textual question alone.
+    """
+    for ref in _verses_of(vrs, system, None):
+        counts["total"] += 1
+        try:
+            targets = vrs.convert_all(ref, PIVOT)
+        except VersificationError:
+            counts["refused"] += 1
+            continue
+        if not targets:
+            counts["refused"] += 1
+            continue
+        target = targets[0]
+        if not vrs.has_book(PIVOT, target.book):
+            counts["ghost"] += 1
+            ghosts.append(f"{system}: {ref} -> {target} ({PIVOT} has no {target.book})")
+            continue
+        try:
+            top = vrs.max_verse(PIVOT, target.book, int(target.chapter))
+        except VersificationError:
+            counts["ghost"] += 1
+            ghosts.append(f"{system}: {ref} -> {target} (no such chapter in {PIVOT})")
+            continue
+        if target.verse > top:
+            counts["ghost"] += 1
+            ghosts.append(f"{system}: {ref} -> {target} ({PIVOT} max {top})")
+            continue
+        yield ref, target
+
+
+def runs_of(
+    contradicted: Sequence[tuple[str, VerseRef, VerseRef]], minimum: int = 4
+) -> list[tuple[str, str, int, int, int]]:
+    """Group contradicted verses into consecutive runs, which is what a fault looks like.
+
+    Isolated flags are noise and in this corpus they are noise of a specific, understandable
+    kind: the tribal-chief list of Numbers 1 reads "Of Symeon, Salamiel the son of Surisadai"
+    in Brenton and "Of Shim'on, Shelumiel ben Tzurishaddai" in the Orthodox Jewish Bible, and
+    every neighbouring verse has the identical shape. A structurally identical neighbour can
+    outscore the true match by accident, and does, all through the genealogies and censuses.
+
+    A run of verses all displaced the same way cannot happen by accident.
+    """
+    grouped: dict[tuple[str, str, int], list[int]] = {}
+    for system, ref, _target in contradicted:
+        grouped.setdefault((system, ref.book, int(ref.chapter)), []).append(ref.verse)
+
+    out: list[tuple[str, str, int, int, int]] = []
+    for (system, book, chapter), verses in grouped.items():
+        # Sorted because the caller may hand these over in any order, and de-duplicated
+        # because a verse flagged twice must not be read as a gap and break the run.
+        ordered = sorted(set(verses))
+        current = [ordered[0]]
+        for verse in ordered[1:]:
+            if verse == current[-1] + 1:
+                current.append(verse)
+                continue
+            if len(current) >= minimum:
+                out.append((system, book, chapter, current[0], current[-1]))
+            current = [verse]
+        if len(current) >= minimum:
+            out.append((system, book, chapter, current[0], current[-1]))
+    return sorted(out, key=lambda r: -(r[4] - r[3]))

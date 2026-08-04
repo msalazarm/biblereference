@@ -299,3 +299,61 @@ biblereference audit                  # every pair, every verse
 biblereference audit --book JON       # one book
 biblereference audit --min-run 5      # only the clearest runs
 ```
+
+## The exhaustive walk
+
+`biblereference audit` compares corpora against each other. `biblereference coverage` asks
+a different and blunter question: take **every verse of every versification**, convert it,
+and account for what came back. Not a sample — 155,578 conversions, about seventy seconds.
+
+Every verse lands in exactly one bucket, and the buckets are chosen so nothing can be
+quietly counted as fine:
+
+| bucket | meaning |
+|---|---|
+| refused | the data says these cannot be lined up. A stated refusal is an answer |
+| **ghost** | returned a verse the pivot does not have. **Must be zero** |
+| confirmed | a faithful witness on each side, in one language, and the mapped position explains the text better than its neighbours do |
+| contradicted | a neighbour explains it better — only meaningful in runs |
+| weak | too little shared vocabulary to be evidence either way |
+| unwitnessed | structurally sound, textually unchecked, because no faithful witness reaches it |
+
+Current state:
+
+```
+eng   40,493 verses   0 ghosts     847 refused   30,903 checked (76.3%)  99.586% confirmed
+lxx   40,284 verses   0 ghosts     631 refused   19,637 checked (48.7%)  97.596% confirmed
+vul   39,160 verses   0 ghosts   3,111 refused   30,181 checked (77.1%)  98.260% confirmed
+nvl   35,641 verses   0 ghosts   2,022 refused        0 checked  (0.0%)        - confirmed
+```
+
+**Zero ghosts across all 155,578 conversions.** It was 70 before this pass: the Greek
+additions to Daniel are a separate `DAG` in `org` and folded into `DAN` everywhere else,
+and the mappings pointed at verses that did not exist. Comparing `MAX(verse)` over the
+corpora could never have found it, because the corpora carry those verses even where the
+versification does not declare them.
+
+**Half of it cannot be checked against text, and that is the number worth reading.**
+"Not contradicted" is not "verified". `nvl` is the extreme case at 0%: its only witness is
+the Nova Vulgata itself, in Latin, and `org` has no Latin witness — so there is no
+same-language pivot partner anywhere and not one of its 35,641 verses can be checked this
+way. It is verified against `vul` instead, Latin against Latin at 99.8%, by the pair
+derivation. That is a weaker claim and is recorded as one.
+
+Of the 1,125 contradicted verses, **eight fall in runs of four or more** and every one is a
+known textual fact rather than a mapping error: the Septuagint and the Douay reorder and
+condense the tabernacle account (`EXO 36`, `EXO 39`), and the censuses, tribal lists and
+purity laws (`NUM 1`, `NUM 26`, `LEV 15`) are where identically-shaped neighbouring verses
+outscore the true match by accident. `NUM 1:6` is "Of Symeon, Salamiel the son of
+Surisadai" in Brenton and "Of Shim'on, Shelumiel ben Tzurishaddai" in the Orthodox Jewish
+Bible — the same verse, mapped by identity, correctly.
+
+Isolated flags are noise; runs are faults. Only runs are evidence.
+
+```bash
+biblereference coverage               # the whole walk; non-zero exit if any ghost
+biblereference coverage --min-run 6   # only the longest runs
+```
+
+`tests/test_coverage.py` pins all of this, including the eight runs by name, so a ninth
+appearing is a test failure.
