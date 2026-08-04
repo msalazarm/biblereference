@@ -19,8 +19,14 @@ from __future__ import annotations
 
 import pytest
 
+from biblereference.canon import CANONICAL_ORDER
 from biblereference.refs import VerseRef
-from biblereference.versification import Versification
+from biblereference.versification import (
+    AVAILABLE_SYSTEMS,
+    PIVOT,
+    Versification,
+    VersificationError,
+)
 
 
 @pytest.fixture(scope="module")
@@ -121,6 +127,57 @@ def test_the_english_counts_the_letter_of_jeremiah_heading_as_a_verse(
     assert convert(vrs, "BAR 6:2", "eng", "org") == "LJE 1:1"
     assert convert(vrs, "BAR 6:73", "eng", "org") == "LJE 1:72"
     assert convert(vrs, "BAR 6:1", "vul", "org") == "LJE 1:1"
+
+
+# --------------------------------------------------------------------------------------
+# Structural proofs: no corpora, no similarity, no judgement
+# --------------------------------------------------------------------------------------
+
+
+def test_no_conversion_can_return_a_verse_that_does_not_exist() -> None:
+    """The strongest guarantee here, and the only one that is a proof rather than a
+    measurement: convert every verse of every system into the pivot and check that what
+    comes back is a verse the pivot actually has.
+
+    A verse with no mapping keeps its coordinates and is relabelled, which is right for
+    almost everything. But where a system carries text the pivot does not -- the six extra
+    verses of Greek Joshua 24, the pluses in Greek Proverbs, the Esdras material, the
+    sixty-eighth verse of the Song of the Three -- that fall-through used to invent a
+    reference: it looked like an answer and pointed at nothing. Eighteen such conversions
+    existed. They are refusals now, which is what this library does everywhere else it
+    cannot resolve something.
+
+    This covers `rsc` and `rso` too, which no textual audit can reach because no corpus
+    exists in either.
+    """
+    vrs = Versification.load(AVAILABLE_SYSTEMS)
+    invented: list[str] = []
+
+    for system in AVAILABLE_SYSTEMS:
+        if system == PIVOT:
+            continue
+        for book in CANONICAL_ORDER:
+            for chapter in range(1, vrs.chapter_count(system, book) + 1):
+                low = vrs.first_verse(system, book, chapter)
+                high = vrs.max_verse(system, book, chapter)
+                for verse in range(low, high + 1):
+                    ref = VerseRef(book, chapter, verse, vrs=system)
+                    try:
+                        targets = vrs.convert_all(ref, PIVOT)
+                    except VersificationError:
+                        continue  # a refusal is an answer
+                    for target in targets:
+                        if vrs.chapter_count(PIVOT, target.book) == 0 or target.verse == 0:
+                            continue
+                        try:
+                            top = vrs.max_verse(PIVOT, target.book, int(target.chapter))
+                        except VersificationError:
+                            invented.append(f"{system}: {ref} -> {target}")
+                            continue
+                        if target.verse > top:
+                            invented.append(f"{system}: {ref} -> {target} (max {top})")
+
+    assert invented == []
 
 
 def test_no_mapping_targets_a_verse_the_pivot_lacks() -> None:

@@ -206,6 +206,10 @@
       "BAR 6:1": {
         "to": "LJE 1:1",
         "reason": "The letter's heading, which org does not number separately. Without an entry it falls through to identity and lands on org BAR 6:1 -- a chapter org does not have, since its Baruch stops at five. Sent to the letter's first verse instead, which is where the heading belongs and what the previous whole-book range effectively did."
+      },
+      "LJE 1:2-73": {
+        "to": "LJE 1:1-72",
+        "reason": "Seventy-two onto seventy-two. Without it the last verse resolved to LJE 1:73, which org does not have. eng records this book twice, as Baruch 6 and as a standalone LJE, and only the Baruch 6 form had been corrected; this brings the two into agreement."
       }
     },
     "vul": {
@@ -259,6 +263,12 @@
         "to": "PSA 90:2-6",
         "reason": "See _synodal_psalm_note. Restores the middle of the psalm dropped above, five verses onto five, between 'PSA 89:0-1 -> PSA 90:0-1' and 'PSA 89:7-17 -> PSA 90:7-17'. Together the three cover 0-17 with nothing claimed twice."
       }
+    },
+    "nvl": {
+      "DAN 3:91-100": {
+        "to": "DAN 3:24-33",
+        "reason": "Missing, so the last ten verses of the Nova Vulgata's Daniel 3 resolved to DAN 3:91-100 in the pivot -- a chapter that stops at 33. The Nova Vulgata carries the Song of the Three inline exactly as the Clementine does, giving Daniel 3 a hundred verses, and the vul file already states both halves: 'DAN 3:24-90 -> S3Y 1:1-67' for the Song, which nvl also has, and 'DAN 3:91-100 -> DAN 3:24-33' for the narrative that resumes after it, which nvl was missing. Ten verses onto ten, transposed from the file that gets it right."
+      }
     }
   },
   "fix_mapped": {
@@ -306,6 +316,12 @@
         "DAG"
       ],
       "reason": "The Vulgate versification defines Daniel twice: DAN, the Vulgate's own 14-chapter Daniel, and DAG, Greek Daniel. Both map onto the same org verses, so converting org->vul has two candidate answers for all of Daniel, Susanna, Bel and the Song of the Three. Without a preference the tie-break falls to whichever book code sorts first, which is DAG -- meaning a citation rendered against a Douay-Rheims text would come back in Greek Daniel's numbering. DAN is what a Vulgate or Douay-Rheims corpus actually prints, so DAG is only chosen when nothing else maps."
+    },
+    "eng": {
+      "books": [
+        "LJE"
+      ],
+      "reason": "The English versification defines the Letter of Jeremiah twice: as Baruch chapter 6, which is how English Bibles actually print it, and as a standalone LJE. Both map onto the same org verses, so converting org->eng has two candidate answers for the whole letter, and without a preference the tie-break falls to whichever book code sorts first -- which is LJE, the form no English Bible uses. The corpora settle it: the World English Bible and the Douay-Rheims both print Baruch 6 and neither has a standalone book, so a citation resolved into eng should say Baruch 6."
     }
   },
   "ignore_self_mapped": {

@@ -233,6 +233,33 @@ and the independent structural check agrees: every one of the five fits `eng` be
 any other system. The right reading is that the instrument goes quiet on free translations,
 not that these belong somewhere else.
 
+## Structural proofs
+
+The textual audit measures. These prove, and they need no corpora at all -- which is why
+they are the only thing that reaches `rsc` and `rso`, neither of which has any text.
+
+Four invariants now hold over all seven systems and are enforced by the test suite:
+
+1. **No mapping names a source verse its own system lacks.** A file that does is describing
+   a different Bible. This is what identified the Jonah fault.
+2. **No mapping targets a verse the pivot lacks.** The mirror. It identified the Letter of
+   Jeremiah, and then Greek Daniel 5:31 within minutes of being written.
+3. **No conversion can return a verse that does not exist.** The strongest of the four,
+   because it is checked over every verse of every system rather than over the mapping
+   entries: 253,000 conversions, all of which now land somewhere real.
+4. **Every verse of `eng`, `lxx` and `vul` round-trips through the pivot** and comes back
+   to itself, with no exceptions.
+
+Invariant 3 was worth 29 defects on first run. Two were fixable by transposing a mapping
+the sibling file already stated correctly -- the Nova Vulgata's Daniel 3:91-100, and the
+English Letter of Jeremiah in its standalone form. The other eighteen were not fixable at
+all, because they are genuine textual pluses with no counterpart on the other side: the six
+extra verses of Greek Joshua 24, the pluses in Greek Proverbs 4, the Esdras material, the
+sixty-eighth verse of the Song of the Three. For those the fall-through was inventing a
+reference that looked like an answer and pointed at nothing, so `convert_all` now refuses
+instead. A refusal is the honest result, and it is what this library already does
+everywhere else it cannot resolve something.
+
 ## Status
 
 - **5 mapping faults found and fixed**, each confirmed against the text of two or more

@@ -325,9 +325,45 @@ class Versification:
         pivot = self._system(ref.vrs).to_org.get(coord, coord)
         finals = self._system(target).from_org.get(pivot, (pivot,))
 
-        return [
+        out = [
             VerseRef(book=b, chapter=c, verse=v, subverse=s, vrs=target) for b, c, v, s in finals
         ]
+        self._must_exist(ref, out, target)
+        return out
+
+    def _must_exist(self, ref: VerseRef, out: list[VerseRef], target: str) -> None:
+        """Refuse rather than return a reference the target system does not have.
+
+        A verse with no mapping keeps its coordinates and is relabelled, which is right
+        for the overwhelming majority: the files list only the verses that move. But where
+        a system has a verse the pivot does not -- the six extra verses Greek Joshua 24
+        carries, the pluses in Greek Proverbs, the Esdras material -- that fall-through
+        invents a reference. It looked like an answer and pointed at nothing.
+
+        Eighteen such conversions existed when this was written. Each one is a genuine
+        textual plus with no counterpart on the other side, so there is no mapping that
+        would be correct; the honest result is the refusal this library already gives for
+        everything else it cannot resolve.
+        """
+        for verse in out:
+            if verse.vrs == ref.vrs or verse.is_letter_chapter:
+                continue
+            system = self._systems.get(verse.vrs)
+            if system is None or verse.book not in system.max_verses:
+                continue
+            chapters = system.max_verses[verse.book]
+            if not 1 <= int(verse.chapter) <= len(chapters):
+                break
+            if verse.verse > chapters[int(verse.chapter) - 1]:
+                break
+        else:
+            return
+        raise VersificationGapError(
+            f"{ref.pretty()} has no counterpart in the {target!r} versification: it would "
+            f"land on {out[0].pretty()}, which {target!r} does not have. This happens where "
+            f"one tradition carries text the other does not, and no mapping can bridge it -- "
+            f"quote the passage from a {ref.vrs!r} text directly."
+        )
 
     def convert_range(self, span: VerseRange, target: str) -> list[VerseRange]:
         """Convert a range, returning one segment per contiguous run.
