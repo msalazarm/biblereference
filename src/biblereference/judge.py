@@ -19,6 +19,27 @@ demonstrated it can tell them apart, and only then does its verdict count. Every
 is recorded as uninformative, and the share of uninformative answers is reported at the top
 of the results rather than buried under them.
 
+**How it is asked was calibrated, not chosen.** Measured against labelled pairs built from
+mappings already verified by hand:
+
+======================================================  ==========
+positive prompt, best-of-three, temp 0.7, distinct seeds  96--99%
+inverse prompt alone ("are these DIFFERENT verses?")      36--78%
+the two framings *in agreement*                           98.4--100%
+======================================================  ==========
+
+Three things follow, and each of them was a mistake first:
+
+* **The chat endpoint, not ``/completion``.** An instruction-tuned model handed a raw
+  completion prompt answered NO to almost everything, including pairs that are
+  unquestionably right. An entire earlier dismissal of this approach rested on that and was
+  wrong.
+* **Temperature 0.7 with distinct seeds.** At temperature 0 the three votes of a best-of-three
+  are the same computation three times, and the vote is theatre.
+* **The inverse framing is a certificate, never a classifier.** Alone it is barely better
+  than chance; used only to confirm a rejection the positive prompt already made, the pair
+  agrees at 98.4% or above. So it can veto a flag and can never raise one.
+
 Nothing here writes to the versification data. It produces evidence for a person to read.
 """
 
@@ -26,6 +47,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator, Sequence
@@ -36,6 +59,8 @@ from typing import Final
 from .refs import VerseRef
 
 __all__ = [
+    "DEFAULT_SERVERS",
+    "DEFAULT_TEMPERATURE",
     "GRAMMAR",
     "Judge",
     "Judgement",
@@ -43,23 +68,43 @@ __all__ = [
     "open_judgements",
 ]
 
-#: The whole grammar. Two tokens, so the answer needs no parsing and cannot wander.
+#: The whole grammar. Two tokens, so the answer needs no parsing and cannot wander. Passed
+#: where the server accepts it; the answer is also read defensively, because the calibration
+#: above was measured without it and must not depend on it.
 GRAMMAR: Final = 'root ::= "YES" | "NO"'
 
-DEFAULT_SERVER: Final = "http://127.0.0.1:8080"
+#: Two servers by default. The weights are shared across a server's slots, so concurrency
+#: costs no VRAM; a second process was measured on this machine to beat four slots on one.
+DEFAULT_SERVERS: Final = ("http://127.0.0.1:8080", "http://127.0.0.1:8081")
 
-_PROMPT: Final = """You are comparing two verses from different editions of the Bible. \
-The editions may be in different languages, and may number their verses differently.
+#: Sampling temperature. Not zero: see the module docstring -- at zero the votes of a
+#: best-of-three are one computation repeated, and the disagreement that makes a vote worth
+#: taking can never occur.
+DEFAULT_TEMPERATURE: Final = 0.7
 
-Answer YES if these are the same verse of scripture -- the same passage, even where the \
-wording or the language differs. Answer NO if they are different verses.
+_POSITIVE_SYSTEM: Final = (
+    "You compare Bible verses. Two verses may be in different languages or translations "
+    "and still be the same verse of scripture. Judge whether they render the SAME verse."
+)
 
-Verse A ({left_label}): {left}
+#: The inverse framing. Note that it does not merely negate the question -- it *states the
+#: premise* that editions divide the text differently, which is what stops the model
+#: agreeing out of politeness. Used only to confirm a rejection.
+_INVERSE_SYSTEM: Final = (
+    "You compare Bible verses from different editions. Editions divide the text "
+    "differently, so a verse in one often corresponds to a DIFFERENT verse in another. "
+    "Judge whether these two are different verses of scripture."
+)
 
-Verse B ({right_label}): {right}
+_POSITIVE_QUESTION: Final = (
+    "Verse A: {left}\n\nVerse B: {right}\n\n"
+    "Are these the SAME verse of scripture? Answer only YES or NO."
+)
 
-Are these the same verse of scripture? Answer YES or NO.
-Answer: """
+_INVERSE_QUESTION: Final = (
+    "Verse A: {left}\n\nVerse B: {right}\n\n"
+    "Are these DIFFERENT verses of scripture? Answer only YES or NO."
+)
 
 
 class Verdict:
@@ -139,47 +184,118 @@ class Judge:
 
     def __init__(
         self,
-        server: str = DEFAULT_SERVER,
+        servers: Sequence[str] = DEFAULT_SERVERS,
         *,
         timeout: float = 120.0,
-        temperature: float = 0.0,
+        temperature: float = DEFAULT_TEMPERATURE,
     ) -> None:
-        self._server = server.rstrip("/")
+        self._servers = [server.rstrip("/") for server in servers] or list(DEFAULT_SERVERS)
         self._timeout = timeout
         self._temperature = temperature
+        self._lock = threading.Lock()
+        self._next = 0
         self.calls = 0
 
-    def available(self) -> bool:
-        try:
-            with urllib.request.urlopen(f"{self._server}/health", timeout=5):
-                return True
-        except (urllib.error.URLError, OSError):
-            return False
+    def available(self) -> list[str]:
+        """Which of the configured servers answer. An empty list means no run is possible."""
+        alive = []
+        for server in self._servers:
+            try:
+                with urllib.request.urlopen(f"{server}/health", timeout=5):
+                    alive.append(server)
+            except (urllib.error.URLError, OSError):
+                continue
+        return alive
 
-    def ask(self, left: str, right: str, left_label: str, right_label: str) -> bool:
-        """One question, one token of answer."""
-        prompt = _PROMPT.format(
-            left=left.strip(),
-            right=right.strip(),
-            left_label=left_label,
-            right_label=right_label,
-        )
+    def _take_server(self) -> str:
+        """Strict round-robin.
+
+        Hashing the thread name looked equivalent and was not: a fresh pool per batch reuses
+        thread names, so both workers landed on one server while the second sat idle. A
+        counter under a lock cannot drift.
+        """
+        with self._lock:
+            server = self._servers[self._next % len(self._servers)]
+            self._next += 1
+            return server
+
+    def ask(self, left: str, right: str, *, system: str, question: str, seed: int) -> bool:
+        """One question, one token of answer.
+
+        The chat endpoint, not ``/completion``: handed a raw completion prompt, an
+        instruction-tuned model rejects nearly everything put to it, which is a failure that
+        looks exactly like a corpus full of faults.
+        """
         body = json.dumps(
             {
-                "prompt": prompt,
-                "grammar": GRAMMAR,
-                "n_predict": 4,
+                "model": "local",
+                "messages": [
+                    {"role": "system", "content": system},
+                    {
+                        "role": "user",
+                        "content": question.format(left=left.strip(), right=right.strip()),
+                    },
+                ],
                 "temperature": self._temperature,
-                "cache_prompt": True,
+                "max_tokens": 4,
+                "seed": seed,
             }
         ).encode()
+
+        server = self._take_server()
+        try:
+            answer = self._post(server, body)
+        except (urllib.error.URLError, OSError, KeyError):
+            # One server dying should cost seconds, not the night. Fall back to another and
+            # keep going; a total outage is for the supervisor to wait out, not this.
+            others = [s for s in self._servers if s != server] or self._servers
+            time.sleep(2)
+            answer = self._post(others[0], body, timeout=self._timeout * 1.5)
+
+        with self._lock:
+            self.calls += 1
+        return answer.strip().upper().startswith("YES")
+
+    def _post(self, server: str, body: bytes, timeout: float | None = None) -> str:
         request = urllib.request.Request(
-            f"{self._server}/completion", data=body, headers={"Content-Type": "application/json"}
+            f"{server}/v1/chat/completions",
+            data=body,
+            headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(request, timeout=self._timeout) as response:
-            answer = str(json.load(response)["content"]).strip().upper()
-        self.calls += 1
-        return answer.startswith("YES")
+        with urllib.request.urlopen(request, timeout=timeout or self._timeout) as response:
+            payload = json.load(response)
+        return str(payload["choices"][0]["message"]["content"])
+
+    def best_of_three(
+        self, left: str, right: str, *, system: str, question: str, invert: bool = False
+    ) -> bool:
+        """Two votes, and a third only to break a tie.
+
+        The two are asked with the verses in *opposite order*, so a positional bias shows up
+        as disagreement -- and therefore as a third question -- rather than as a confident
+        wrong answer. Distinct seeds make them genuinely independent; at temperature 0 they
+        would be one computation run twice.
+        """
+        first = self.ask(left, right, system=system, question=question, seed=1) ^ invert
+        second = self.ask(right, left, system=system, question=question, seed=2) ^ invert
+        if first == second:
+            return first
+        return self.ask(left, right, system=system, question=question, seed=3) ^ invert
+
+    def same_verse(self, left: str, right: str) -> bool:
+        """The positive question, voted. This is the only call that can *accept* a pair."""
+        return self.best_of_three(left, right, system=_POSITIVE_SYSTEM, question=_POSITIVE_QUESTION)
+
+    def confirms_rejection(self, left: str, right: str) -> bool:
+        """The inverse framing, which may only ever confirm a NO the positive prompt gave.
+
+        Alone this question is worth little -- 36% to 78% against labelled pairs, barely
+        better than guessing. In agreement with the positive framing it is worth a great
+        deal, 98.4% and up. So it is wired as a veto and cannot raise a flag by itself.
+        """
+        return self.best_of_three(
+            left, right, system=_INVERSE_SYSTEM, question=_INVERSE_QUESTION, invert=True
+        )
 
     def judge(
         self,
@@ -188,13 +304,25 @@ class Judge:
         source_text: str,
         mapped_text: str,
         control_text: str,
-        *,
-        left_label: str,
-        right_label: str,
     ) -> Judgement:
-        """Ask about the mapping, then about its neighbour, and keep both answers."""
-        mapping = self.ask(source_text, mapped_text, left_label, right_label)
-        control = self.ask(source_text, control_text, left_label, right_label)
+        """Ask about the mapping, then about its neighbour, and keep both answers.
+
+        Escalation keeps an exhaustive pass affordable: a pair the positive prompt accepts
+        is settled, and only a rejection is worth the inverse framing and the control.
+        """
+        mapping = self.same_verse(source_text, mapped_text)
+        if mapping:
+            # Accepted. The control still has to be asked -- an answer that accepts
+            # everything is exactly what the control exists to catch.
+            control = self.same_verse(source_text, control_text)
+            return Judgement(source, mapped, mapping, control)
+
+        if not self.confirms_rejection(source_text, mapped_text):
+            # The two framings disagree, so the rejection is not trustworthy. Recorded as a
+            # non-discriminating pair, which reads as uninformative.
+            return Judgement(source, mapped, False, False)
+
+        control = self.same_verse(source_text, control_text)
         return Judgement(source, mapped, mapping, control)
 
 

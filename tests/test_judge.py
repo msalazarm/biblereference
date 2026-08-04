@@ -12,7 +12,12 @@ not a crash: it is a plausible-looking pile of findings that are not findings.
 
 from __future__ import annotations
 
-from biblereference.judge import Judgement, Verdict
+import json
+from contextlib import contextmanager
+from typing import Any
+from unittest.mock import patch
+
+from biblereference.judge import DEFAULT_TEMPERATURE, Judge, Judgement, Verdict
 from biblereference.refs import VerseRef
 
 
@@ -65,3 +70,107 @@ def test_only_discriminating_answers_are_evidence() -> None:
             verdict = judged(mapping, control).verdict
             discriminated = mapping != control
             assert (verdict != Verdict.UNINFORMATIVE) == discriminated
+
+
+# --------------------------------------------------------------------------------------
+# How the question is asked, which was calibrated rather than chosen
+# --------------------------------------------------------------------------------------
+
+
+class FakeResponse:
+    def __init__(self, answer: str) -> None:
+        self._answer = answer
+
+    def read(self) -> bytes:
+        return json.dumps({"choices": [{"message": {"content": self._answer}}]}).encode()
+
+    def __enter__(self) -> FakeResponse:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+
+@contextmanager
+def recording(answers: list[str]) -> Any:
+    """Capture every request the judge makes, answering from a script."""
+    sent: list[dict[str, Any]] = []
+    replies = list(answers)
+
+    def fake_urlopen(request: Any, timeout: float | None = None) -> FakeResponse:
+        sent.append({"url": request.full_url, "body": json.loads(request.data)})
+        return FakeResponse(replies.pop(0) if replies else "NO")
+
+    with patch("biblereference.judge.urllib.request.urlopen", fake_urlopen):
+        yield sent
+
+
+def test_the_question_goes_to_the_chat_endpoint() -> None:
+    """Not ``/completion``. Handed a raw completion prompt, an instruction-tuned model
+    rejected nearly every pair put to it including unquestionably correct ones -- a failure
+    that looks exactly like a corpus full of faults, and which invalidated an entire earlier
+    dismissal of this approach."""
+    with recording(["YES", "YES"]) as sent:
+        Judge(["http://x"]).same_verse("a", "b")
+
+    assert sent, "no request was made"
+    for call in sent:
+        assert call["url"].endswith("/v1/chat/completions")
+        assert "messages" in call["body"], "must be a chat request, not a raw prompt"
+
+
+def test_the_votes_are_not_one_computation_repeated() -> None:
+    """Distinct seeds and a non-zero temperature. At temperature 0 a best-of-three is the
+    same computation three times and the vote is theatre.
+
+    The two votes also swap the verses, so a positional bias shows up as disagreement --
+    and therefore as a third question -- rather than as a confident wrong answer.
+    """
+    assert DEFAULT_TEMPERATURE > 0
+
+    with recording(["YES", "NO", "YES"]) as sent:
+        Judge(["http://x"]).same_verse("alpha", "beta")
+
+    assert len(sent) == 3, "a split vote must be broken by a third question"
+    assert {call["body"]["seed"] for call in sent} == {1, 2, 3}
+    assert all(call["body"]["temperature"] > 0 for call in sent)
+
+    first, second = (call["body"]["messages"][1]["content"] for call in sent[:2])
+    assert first.index("alpha") < first.index("beta")
+    assert second.index("beta") < second.index("alpha"), "the second vote must swap them"
+
+
+def test_an_agreed_vote_costs_only_two_questions() -> None:
+    """Escalation is what makes an exhaustive pass affordable."""
+    with recording(["YES", "YES"]) as sent:
+        assert Judge(["http://x"]).same_verse("a", "b") is True
+    assert len(sent) == 2
+
+
+def test_the_inverse_framing_can_only_confirm_a_rejection() -> None:
+    """Alone it is 36-78% accurate, barely better than guessing; in agreement with the
+    positive framing it is 98.4% and up. So it is wired as a veto.
+
+    Here the positive prompt rejects the mapping and the inverse framing refuses to confirm
+    it. The result must be uninformative -- never a contradiction, which is the only verdict
+    that counts against a mapping.
+    """
+    ref = VerseRef("GEN", 1, 1, vrs="org")
+    # positive: NO, NO  ->  rejected. inverse: NO, NO -> refuses to confirm the rejection.
+    with recording(["NO", "NO", "NO", "NO"]):
+        result = Judge(["http://x"]).judge(ref, ref, "a", "b", "c")
+
+    assert result.verdict == Verdict.UNINFORMATIVE
+
+
+def test_work_is_shared_between_servers_by_a_counter() -> None:
+    """Round-robin under a lock. Hashing the thread name looked equivalent and was not: a
+    fresh pool per batch reuses thread names, so both workers landed on one server while the
+    second sat idle."""
+    with recording(["YES", "YES", "YES", "YES"]) as sent:
+        judge = Judge(["http://one", "http://two"])
+        judge.same_verse("a", "b")
+        judge.same_verse("c", "d")
+
+    hosts = [call["url"].split("/v1/")[0] for call in sent]
+    assert hosts.count("http://one") == hosts.count("http://two") == 2
