@@ -660,10 +660,22 @@ def _resolve_reverse(
         assert isinstance(spec, dict)
         demoted = frozenset(spec["books"])
 
+    # A book is absorbed when the other system carries it inside a differently-named book
+    # and not under its own name at all -- English has the Letter of Jeremiah only as
+    # Baruch 6, so org's LJE must resolve there rather than to an identity that would point
+    # at nothing.
+    #
+    # A *deprioritised* book does not absorb anything, and the difference is not academic.
+    # Mapping English Greek Daniel onto org's DAN made every verse of Daniel look absorbed
+    # into DAG, which suppressed the identity and sent an ordinary citation of Daniel 1:1
+    # into Greek Daniel -- a numbering no English protocanon corpus can render. The whole
+    # point of deprioritising a book is that it is an alias to fall back on, never the
+    # reason to abandon the book's own name.
     absorbed = {
         target[0]
         for target, sources in candidates.items()
         if all(source[0] != target[0] for source in sources)
+        and any(source[0] not in demoted for source in sources)
     }
 
     def in_grid(coord: _Coord) -> bool:

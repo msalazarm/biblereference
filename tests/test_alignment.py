@@ -301,6 +301,16 @@ def test_ordinary_daniel_is_not_dragged_into_greek_daniels_numbering(
     assert convert(vrs, "DAN 4:1", "org", "eng") == "DAN 4:4"
     assert convert(vrs, "DAN 6:23", "org", "eng") == "DAN 6:22"
 
+    # The chapters with no explicit English mapping of their own are the ones that broke,
+    # and the first version of this test missed them by checking only 4:1 and 6:23, which
+    # have one. Where English Daniel is a plain identity, mapping DAG onto org's DAN made
+    # the whole book look absorbed into Greek Daniel -- so the identity was suppressed and
+    # Daniel 1:1 resolved into a numbering no English protocanon corpus can render. It cost
+    # 291 of 293 disagreements on a pair that had been clean.
+    assert convert(vrs, "DAN 1:1", "org", "eng") == "DAN 1:1"
+    assert convert(vrs, "DAN 1:8", "org", "eng") == "DAN 1:8"
+    assert convert(vrs, "DAN 12:13", "org", "eng") == "DAN 12:13"
+
 
 def test_the_vulgate_splits_a_verse_in_sirach_6(vrs: Versification) -> None:
     """latvuc 6:19 'Quasi is qui arat et seminat accede ad eam' and 6:20 'In opere enim
