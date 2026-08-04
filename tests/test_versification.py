@@ -616,3 +616,55 @@ def test_the_two_latin_editions_agree_about_nehemiah_7(vrs: Versification) -> No
         assert convert(vrs, "Neh 7:72", system, "org") == "NEH 7:71", system
     # The Clementine numbers a 73rd verse where the Nova Vulgata folds it into its 72nd.
     assert convert(vrs, "Neh 7:73", "vul", "org") == "NEH 7:72"
+
+
+def test_the_greek_numbers_moves_the_cloud_to_the_end_of_the_chapter(vrs: Versification) -> None:
+    """The second three-verse rotation in the data, and the same shape as Malachi's.
+
+    Brenton has "Arise, O Lord" at 10:34 and "and the cloud overshadowed them by day" at
+    10:36; the Hebrew, the Clementine and the Nova Vulgata all put the cloud first, at
+    10:34, with the two sayings after it. Upstream recorded identity, so all three answered
+    with the wrong verse.
+    """
+    assert convert(vrs, "Num 10:34", "org", "lxx") == "NUM 10:36"
+    assert convert(vrs, "Num 10:35", "org", "lxx") == "NUM 10:34"
+    assert convert(vrs, "Num 10:36", "org", "lxx") == "NUM 10:35"
+    assert convert(vrs, "Num 10:34", "lxx", "org") == "NUM 10:35"
+    # The Latin follows the Hebrew here, so lxx and vul disagree and eng and vul do not.
+    assert convert(vrs, "Num 10:34", "org", "vul") == "NUM 10:34"
+
+
+def test_the_daughters_plea_is_missing_from_both_latin_and_greek(vrs: Versification) -> None:
+    """org's Numbers 27:4 -- "why should the name of our father be withdrawn from among his
+    family, because he has no son?" -- has no counterpart in the Clementine or the
+    Septuagint, both of which go straight from the sedition to Moses referring the case.
+
+    The Septuagint entry was already written; the Clementine's was not, so the two Latin
+    editions disagreed across four verses -- the Nova Vulgata restores the plea at its own
+    27:4.
+    """
+    for system in ("lxx", "vul"):
+        assert convert(vrs, "Num 27:4", system, "org") == "NUM 27:5", system
+        assert convert(vrs, "Num 27:7", system, "org") == "NUM 27:8", system
+    assert convert(vrs, "Num 27:4", "nvl", "org") == "NUM 27:4"
+    assert convert(vrs, "Num 27:5", "eng", "vul") == "NUM 27:4"
+
+
+def test_a_merge_and_a_split_that_cancel(vrs: Versification) -> None:
+    """Both chapters end at the same verse and the numbering still diverges in the middle,
+    which is exactly the case verse counts cannot see.
+
+    Greek Numbers 21 runs org's 21:19 and 21:20 together at its own 21:19, then splits
+    org's 21:22 across its 21:21 and 21:22. The two cancel, so the chapter ends at 35 on
+    both sides while three verses in between were displaced.
+    """
+    assert convert(vrs, "Num 21:19", "lxx", "org") == "NUM 21:20"
+    assert convert(vrs, "Num 21:21", "lxx", "org") == "NUM 21:22"
+    assert convert(vrs, "Num 21:23", "lxx", "org") == "NUM 21:23"
+    assert vrs.max_verse("lxx", "NUM", 21) == vrs.max_verse("org", "NUM", 21) == 35
+
+    # The Douay does the same thing in Numbers 15, merging org 15:15 and 15:16 and then
+    # splitting org 15:18. Both chapters end at 41.
+    assert convert(vrs, "Num 15:15", "vul", "org") == "NUM 15:16"
+    assert convert(vrs, "Num 15:19", "vul", "org") == "NUM 15:19"
+    assert vrs.max_verse("vul", "NUM", 15) == vrs.max_verse("org", "NUM", 15) == 41

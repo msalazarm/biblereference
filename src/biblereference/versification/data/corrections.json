@@ -410,6 +410,22 @@
       "REV 20:7": {
         "to": "REV 20:8",
         "reason": "The other half of the REV 20:8 entry, and the same reason as MAT 17:14. The Clementine's 20:7 carries both org 20:7 and org 20:8, and naming the second leaves the identity to cover the first, so both are reachable; naming the first would have left org 20:8 resolving to 'Et ascenderunt super latitudinem terrae', which is org 20:9."
+      },
+      "NUM 27:4-7": {
+        "to": "NUM 27:5-8",
+        "reason": "The Clementine has no counterpart to org's Numbers 27:4, the daughters' plea 'Why should the name of our father be withdrawn from among his family, because he has no son?'. latvuc and dra both go straight from 'nec fuit in seditione' at 27:3 to 'Rettulitque Moyses causam earum ad iudicium Domini' at 27:4, which is org 27:5. Identical in shape to the lxx entry of the same name, and found the same way: the Nova Vulgata restores the plea at its own 27:4, so the two Latin editions disagreed across four verses. They realign at 27:8, where the Clementine splits org's single verse across its 27:7 and 27:8."
+      },
+      "NUM 15:15": {
+        "to": "NUM 15:16",
+        "reason": "The Douay runs org's Numbers 15:15 and 15:16 together at its own 15:15 -- 'There shall be all one law and judgment both for you and for them who are strangers in the land' -- and upstream recorded identity for the whole chapter. Naming the second keeps both reachable, since the identity still covers org 15:15. The Douay condenses this chapter throughout, but this is the one place where the condensation displaces verses rather than merely rewording them."
+      },
+      "NUM 15:16": {
+        "to": "NUM 15:17",
+        "reason": "The first of the two verses carried by the merge above. 'And the Lord spoke to Moses, saying' is org 15:17."
+      },
+      "NUM 15:17": {
+        "to": "NUM 15:18",
+        "reason": "The second. The Douay then splits org 15:18 across its own 15:17 and 15:18 -- 'Speak to the children of Israel, and thou shalt say to them' and 'When you are come into the land which I will give you' -- which absorbs the shift, so 15:19 agrees again and both chapters end at 41."
       }
     },
     "lxx": {
@@ -456,6 +472,30 @@
       "MAL 3:24": {
         "to": "MAL 3:22",
         "reason": "See the entry for MAL 3:22. The third, which carries the law of Moses back to where the Hebrew has it. A monotonic alignment cannot report this one -- it is a jump forward, not a shift -- which is why only two of the three showed up as disagreements."
+      },
+      "NUM 10:34": {
+        "to": "NUM 10:35",
+        "reason": "The Greek Numbers moves the cloud verse to the end of the chapter. Brenton has 'And it came to pass when the ark set forward, that Moses said, Arise, O Lord' at 10:34, 'And in the resting he said, Turn again, O Lord' at 10:35, and 'And the cloud overshadowed them by day, when they departed from the camp' at 10:36 -- where the Hebrew, the Clementine and the Nova Vulgata all have the cloud at 10:34 and the two sayings after it. A three-verse rotation like the one at MAL 3:22, and upstream recorded identity, so all three answered with the wrong verse."
+      },
+      "NUM 10:35": {
+        "to": "NUM 10:36",
+        "reason": "See the entry for NUM 10:34. The second of the three."
+      },
+      "NUM 10:36": {
+        "to": "NUM 10:34",
+        "reason": "See the entry for NUM 10:34. The cloud, carried back to where the Hebrew has it. A monotonic alignment cannot report this one, because it is a jump forward rather than a shift."
+      },
+      "NUM 21:19": {
+        "to": "NUM 21:20",
+        "reason": "The Greek runs the two halves of the itinerary together: Brenton's 21:19 is 'and from Manthanain to Naaliel, and from Naaliel to Bamoth, and from Bamoth to Janen, which is in the plain of Moab', which is org 21:19 and 21:20 in one verse. Naming the second is what keeps both reachable, since the identity still covers org 21:19. The offset it opens is closed again at 21:22, where the Greek splits org's single verse across its own 21:21 and 21:22, which is why both chapters end at 35."
+      },
+      "NUM 21:20": {
+        "to": "NUM 21:21",
+        "reason": "The first of the two verses carried by the merge above. 'And Moses sent ambassadors to Seon king of the Amorites, with peaceable words' is org 21:21."
+      },
+      "NUM 21:21": {
+        "to": "NUM 21:22",
+        "reason": "The second, after which the Greek's own split absorbs the shift and the numbering agrees again."
       }
     },
     "rsc": {

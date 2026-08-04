@@ -322,8 +322,8 @@ Current state:
 
 ```
 eng   40,493 verses   0 ghosts     847 refused   30,903 checked (76.3%)  99.586% confirmed
-lxx   40,284 verses   0 ghosts     631 refused   19,638 checked (48.7%)  97.607% confirmed
-vul   39,160 verses   0 ghosts   3,111 refused   30,181 checked (77.1%)  98.290% confirmed
+lxx   40,284 verses   0 ghosts     631 refused   19,639 checked (48.8%)  97.632% confirmed
+vul   39,160 verses   0 ghosts   3,111 refused   30,182 checked (77.1%)  98.304% confirmed
 nvl   35,641 verses   0 ghosts   2,022 refused        0 checked  (0.0%)        - confirmed
 ```
 
@@ -340,7 +340,7 @@ same-language pivot partner anywhere and not one of its 35,641 verses can be che
 way. It is verified against `vul` instead, Latin against Latin at 99.8%, by the pair
 derivation. That is a weaker claim and is recorded as one.
 
-Of the 1,114 contradicted verses, **seven fall in runs of four or more** and every one is a
+Of the 1,105 contradicted verses, **seven fall in runs of four or more** and every one is a
 known textual fact rather than a mapping error: the Septuagint and the Douay reorder and
 condense the tabernacle account (`EXO 36`, `EXO 39`), and the censuses and tribal lists
 (`NUM 1`, `NUM 26`) are where identically-shaped neighbouring verses
@@ -410,6 +410,37 @@ time. Five of the twelve faults above were that mistake. It is written up as
   `1MA 1:49` in `vul` — because the merge sits inside a longer re-division and there is
   nowhere honest to put them. The file says so rather than guessing.
 
-Which leaves the derivation's count a poor summary on its own. It fell from 1,505 to 535
-over this work, but the last hundred moved in both directions, and only reading settles
-which way is right.
+### The four reordered books
+
+`EXO`, `JER`, `NUM` and `1KI` were set aside above because the Septuagint rearranges them
+bodily and a monotonic alignment cannot follow it. That is true of most of what they
+contain, but not all: sorting their 466 disagreements by whether the offset stays inside one
+chapter separates the reordering from the rest, and what stayed inside a chapter was read
+the same way as everything else. Four more faults came out of it:
+
+| | |
+|---|---|
+| `lxx NUM 10:34-36` | The Greek moves the cloud verse to the end of the chapter — "Arise, O Lord" at 10:34 and "the cloud overshadowed them by day" at 10:36, where the Hebrew and both Latin editions have the cloud first. A second three-verse rotation, like Malachi's. |
+| `vul NUM 27:4-7` | The Clementine, like the Septuagint, has no counterpart to the daughters' plea at org 27:4. The Greek entry had been written and the Latin one had not, so the two Latin editions disagreed across four verses. |
+| `lxx NUM 21:19-21` | A merge and a split that cancel: the Greek runs org 21:19 and 21:20 together and then divides org 21:22 in two, so both chapters end at 35 while three verses in between were displaced. |
+| `vul NUM 15:15-17` | The same shape in the Douay, which merges org 15:15 and 15:16 and splits org 15:18. Both chapters end at 41. |
+
+Those last two are the case verse counts cannot see at all, and they are the reason counting
+was never the instrument here.
+
+`EXO 39` and `EXO 40` were examined again and left alone. In both the Douay condenses rather
+than displaces — three Hebrew verses become one Latin one — so there is no offset to write,
+and the vendored arrangement already reaches two of every three. `EXO 36`, the Greek
+tabernacle account, is reordering across chapter boundaries and stays as it is.
+
+### What the count is worth
+
+Not much on its own. The derivation's disagreements fell from 1,505 to 517 over this work,
+but the last hundred moved in both directions: correcting Malachi 3 and Matthew 5 *raised*
+the count, because the aligner cannot follow a swap it now has to disagree with. Only
+reading settles which way is right.
+
+The measures that did move in one direction are the structural one — 0 ghosts, from 70 — and
+the textual confirmation rate, 98.62% to 98.63% on 80,000 checkable conversions, with
+`vul LEV 15` dropping out of the runs of four. That last is what a real fault looks like
+when it is fixed.
