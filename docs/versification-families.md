@@ -231,3 +231,45 @@ survives that filter, and appears in more than one independent pair:
 model-and-similarity sweep, which used different witnesses and a different instrument. Two
 independent methods agreeing on the same passages is the strongest signal available here,
 and these are the queue for adjudication.
+
+## Adjudication: putting the candidates to the models
+
+Each run from Phase C is a hypothesis, not a finding. The models were asked to choose
+between the two candidates — **the control is the rival, not an arbitrary neighbour**, which
+is strictly stronger than the earlier sweep's design because the alternative being tested is
+the one that actually competes. Only a discriminating pair of answers counts, and a rejection
+must be certified by the inverse framing before it is allowed to stand.
+
+Calibration first, on mappings verified by hand: **5 of 5 correct**, 5 of 6 informative.
+
+Of 780 verses in runs of 3 or more: **246 say the derived alignment is right, 74 say the
+vendored data is right**, 452 uninformative, 2 uncertified. A 41% informative rate is low,
+which is why only the discriminating answers are counted at all.
+
+The split is coherent rather than uniform, and that is the evidence that it is measuring
+something. Exodus 39 comes out **derived** on all three Latin-side pairs and **vendored** on
+both Greek-side pairs — exactly right, because the Greek Exodus genuinely reorders the
+tabernacle account while the Latin has a plain off-by-one.
+
+### Confirmed by hand as well as by the models
+
+| passage | evidence | finding |
+|---|---|---|
+| `EXO 39:27+`, Latin side | `org`→`vul` 13–1, `eng`→`vul` 9–0, `vul`→`nvl` 5–0 | **off by one.** `vul 39:28` *"cingulum vero de bysso retorta, hyacintho, purpura, ac vermiculo"* is `nvl 39:29` *"cingulum vero de bysso retorta, hyacintho, purpura ac cocco"*, not `39:28` *"et tiaram et ornatum mitrarum"* |
+| `LEV 8:20-30` | `lxx`→`vul` 10–0, `eng`→`lxx` 8–0, `org`→`lxx` 8–0 | **off by one.** `eng 8:22` *"He presented the other ram, the ram of consecration"* is `lxx 8:21` *"Moses brought the second ram, the ram of consecration"* |
+| `JDT` (whole book) | `eng`→`vul` +4 in ch. 6, seen by 3 pairs | **no mapping exists at all.** Not one entry for Judith in any system, yet `vul` numbers its chapters [12, 18, 15, 17, 29…] against `eng` [16, 28, 10, 15, 24…]. Jerome translated Judith from a different recension and every verse converts by identity |
+
+### Strong model evidence, not yet read by hand
+
+`DAG 6` (26–0), `1KI 7` (23–0, 19–0, 18–0 across three pairs), `SIR 6:20-34` (9–0),
+`NEH 7` (5–0), `BAR 6` (6–0), `NUM 26`, `NUM 27`, `NUM 15`, `EZK 7`, `LEV 15`.
+
+`DAG 6` and `BAR 6` need care: both were *already corrected* in an earlier pass, so the model
+may be reporting that those corrections went too far or not far enough.
+
+### Where the vendored data is vindicated
+
+`JER 25`, `JER 27`, `JER 29`, `JER 35` and `1KI 20` all come out **vendored**. These are the
+books where the Septuagint reorders bodily, which monotonic alignment cannot represent — the
+data is right and the derivation is the thing that is wrong. `PSA 13` likewise: 0–2 vendored,
+a superscription the instrument cannot express.
