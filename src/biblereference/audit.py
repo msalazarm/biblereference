@@ -447,3 +447,211 @@ def book_of(disagreements: Sequence[Disagreement]) -> dict[str, int]:
 
 def home_default() -> Path:
     return DataHome().root
+
+
+# --------------------------------------------------------------------------------------
+# Deriving a mapping, rather than checking one
+# --------------------------------------------------------------------------------------
+#
+# Everything above *verifies*: it takes the mapping's answer and asks whether the text
+# prefers it to its immediate neighbours. That is the right instrument for the job and the
+# wrong one for a different job, because a window of two verses cannot find a mapping it was
+# not already told about. The Psalms run a whole chapter out between families; Greek Daniel
+# further. So deriving needs a wider search and a stronger constraint to keep it honest.
+#
+# The constraint is **monotonicity**. Editions renumber verses, split them and merge them,
+# but they do not reorder scripture: if verse A precedes verse B in one edition, whatever
+# they correspond to keeps that order in the other. A per-verse argmax over a wide window
+# has no such discipline and will happily match Psalm 14 to Psalm 53, which really are near
+# duplicates. A monotonic alignment cannot.
+#
+# The exception is real and is reported rather than hidden: Septuagint Jeremiah moves the
+# oracles against the nations bodily to the middle of the book. No monotonic alignment can
+# describe that, so the quality score for such a book collapses and it is excluded from the
+# derivation instead of producing a confident wrong answer.
+
+
+#: Verses either side of the diagonal the alignment will consider. Wide enough for a
+#: whole-chapter displacement in the Psalms, narrow enough that the search stays quadratic
+#: in the band rather than in the book.
+BAND: Final = 60
+
+
+def faithful_chapters(
+    home: DataHome, corpus: str, system: str, vrs: Versification
+) -> set[tuple[str, int]]:
+    """Chapters where this corpus numbers its verses exactly as the system says.
+
+    The idea this replaces was to pick, per family, the one corpus that *is* the system and
+    compare those. It does not survive contact with the corpus: measured against the shipped
+    systems, `org` has an exact witness only in Hebrew and Greek, `eng` only in English,
+    `nvl` only in Latin -- so no two faithful witnesses share a language and the
+    same-language test could not run at all. Worse, `lxx` and `vul` have no faithful witness
+    in any language, which is why every audit of them was quietly measuring the gap between
+    the system and the nearest edition rather than the mapping.
+
+    Restricting rather than discarding rescues it. A witness wrong on ten chapters is right
+    on the other 1,179, and a comparison confined to chapters where *both* sides are faithful
+    is sound even though neither corpus is faithful throughout. That is the difference
+    between an audit that covers 99% of the text and one that cannot start.
+
+    Verse 0 is a superscription rather than a verse and is excluded from both sides.
+    """
+    connection = sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)
+    try:
+        rows = connection.execute(
+            "SELECT book, chapter, MIN(verse), MAX(verse), COUNT(DISTINCT verse) FROM verse "
+            "WHERE corpus = ? AND verse > 0 GROUP BY book, chapter",
+            (corpus,),
+        ).fetchall()
+    finally:
+        connection.close()
+
+    out: set[tuple[str, int]] = set()
+    for book, chapter, low, high, count in rows:
+        if count != high - low + 1:  # a gap: the edition did not print the whole chapter
+            continue
+        try:
+            first = max(vrs.first_verse(system, str(book), int(chapter)), 1)
+            last = vrs.max_verse(system, str(book), int(chapter))
+        except VersificationError:
+            continue
+        if (low, high) == (first, last):
+            out.add((str(book), int(chapter)))
+    return out
+
+
+#: What an unmatched verse costs. Deliberately small relative to a good match: editions
+#: genuinely add and drop verses, and a gap has to be cheaper than a bad pairing or the
+#: alignment will invent correspondences to avoid it.
+GAP: Final = -0.15
+
+#: Below this mean score over the aligned pairs, the alignment is not describing the book.
+#: Either the two editions translate different source texts, or the correspondence is not
+#: monotonic and no alignment of this kind can hold it.
+MIN_QUALITY: Final = 0.25
+
+
+def _shingles(text: str, language: str) -> frozenset[str]:
+    """Token set for the fast similarity used inside the alignment.
+
+    Jaccard over token sets rather than :func:`_ratio`, which is thirty times slower: the
+    alignment scores hundreds of thousands of candidate pairings per book, and the ordering
+    information a sequence matcher adds is exactly what the monotonicity constraint is
+    already supplying. The chosen path is rescored properly afterwards.
+    """
+    return frozenset(_tokens(text, language))
+
+
+def _jaccard(left: frozenset[str], right: frozenset[str]) -> float:
+    if not left or not right:
+        return 0.0
+    return len(left & right) / len(left | right)
+
+
+@dataclass(frozen=True, slots=True)
+class BookAlignment:
+    """One book aligned between two witnesses, with no mapping consulted."""
+
+    book: str
+    pairs: tuple[tuple[VerseRef | None, VerseRef | None], ...]
+    """Corresponding verses in reading order. A ``None`` on either side is a verse the
+    other edition has nothing for."""
+    quality: float
+    """Mean similarity over the pairs where both sides are present."""
+
+    @property
+    def reliable(self) -> bool:
+        return self.quality >= MIN_QUALITY
+
+    @property
+    def matched(self) -> tuple[tuple[VerseRef, VerseRef], ...]:
+        return tuple((a, b) for a, b in self.pairs if a is not None and b is not None)
+
+
+def align_book(
+    left: Sequence[tuple[VerseRef, str]],
+    right: Sequence[tuple[VerseRef, str]],
+    *,
+    language: str,
+    band: int = BAND,
+    gap: float = GAP,
+) -> tuple[tuple[VerseRef | None, VerseRef | None], ...]:
+    """Best monotonic correspondence between two verse sequences.
+
+    Needleman-Wunsch restricted to a diagonal band. The band is what makes it affordable --
+    Psalms is 2,461 verses, so the full matrix is six million cells and the band is three
+    hundred thousand -- and it is safe because a displacement wider than the band would be a
+    reordering, which monotonic alignment cannot describe anyway.
+    """
+    n, m = len(left), len(right)
+    if not n or not m:
+        return tuple((a, None) for a, _ in left) + tuple((None, b) for b, _ in right)
+
+    left_sets = [_shingles(text, language) for _, text in left]
+    right_sets = [_shingles(text, language) for _, text in right]
+
+    width = 2 * band + 1
+    low = float("-inf")
+    # score[i][d] is the best score for left[:i] against right[:j], where j = i - band + d.
+    score = [[low] * width for _ in range(n + 1)]
+    back = [[0] * width for _ in range(n + 1)]
+
+    def cell(i: int, j: int) -> int | None:
+        d = j - i + band
+        return d if 0 <= d < width else None
+
+    start = cell(0, 0)
+    if start is not None:
+        score[0][start] = 0.0
+    for j in range(1, min(m, band) + 1):
+        d = cell(0, j)
+        if d is not None:
+            score[0][d] = gap * j
+            back[0][d] = 2
+
+    for i in range(1, n + 1):
+        for d in range(width):
+            j = i - band + d
+            if j < 0 or j > m:
+                continue
+            best, choice = low, 0
+            if j >= 1 and score[i - 1][d] > low:  # diagonal: consume both
+                value = score[i - 1][d] + _jaccard(left_sets[i - 1], right_sets[j - 1])
+                if value > best:
+                    best, choice = value, 1
+            if d + 1 < width and score[i - 1][d + 1] > low:  # consume left only
+                value = score[i - 1][d + 1] + gap
+                if value > best:
+                    best, choice = value, 3
+            if d >= 1 and j >= 1 and score[i][d - 1] > low:  # consume right only
+                value = score[i][d - 1] + gap
+                if value > best:
+                    best, choice = value, 2
+            score[i][d], back[i][d] = best, choice
+
+    # Walk back from (n, m), or from the best reachable end if the band excludes it.
+    d = cell(n, m)
+    if d is None or score[n][d] == low:
+        candidates = [(score[n][x], x) for x in range(width) if score[n][x] > low]
+        if not candidates:
+            return tuple((a, None) for a, _ in left) + tuple((None, b) for b, _ in right)
+        d = max(candidates)[1]
+
+    i, j = n, n - band + d
+    out: list[tuple[VerseRef | None, VerseRef | None]] = []
+    while i > 0 or j > 0:
+        move = back[i][j - i + band] if 0 <= j - i + band < width else 0
+        if move == 1:
+            out.append((left[i - 1][0], right[j - 1][0]))
+            i, j = i - 1, j - 1
+        elif move == 2:
+            out.append((None, right[j - 1][0]))
+            j -= 1
+        elif move == 3 or j == 0:
+            out.append((left[i - 1][0], None))
+            i -= 1
+        else:  # pragma: no cover - only reachable if the band truncated the path
+            break
+    out.reverse()
+    return tuple(out)
