@@ -212,6 +212,56 @@ class Derivation:
         """
         return self.compatibility(signatures, min_overlap=min_overlap)
 
+    def partition(
+        self, signatures: Mapping[str, Signature], *, min_overlap: int = MIN_OVERLAP
+    ) -> dict[str, str | None]:
+        """One family per corpus, choosing the most populous when several fit.
+
+        :meth:`membership` is the truthful answer and it is a cover: the American Standard
+        Version matches the King James and the Revised Version equally, because the only
+        books those two disagree about are ones the ASV does not carry. A cover is awkward
+        to talk about, though -- "how many families are there" has no clean answer, and every
+        Protestant Bible drags a duplicate through every count.
+
+        So this collapses it to a partition on a stated preference: **the larger family
+        wins**. It is the right tie-break for this data rather than an arbitrary one. A
+        family that many editions follow uncontested is the live tradition; a family that
+        only its own edition follows is a variant of it, and where a corpus cannot tell them
+        apart the tradition is the better guess. The Revised Version keeps 2 Esdras 7 at 140
+        verses and almost nothing follows it there; the King James keeps 70 and nearly
+        everything does.
+
+        Contested corpora are settled most-constrained first, so a corpus choosing between
+        two families is placed before one choosing between nine, and the counts it produces
+        inform the harder cases. Ties fall to the family with the wider coverage and then to
+        its name, so the result does not depend on dictionary order.
+
+        Nothing is lost: :meth:`membership` still reports every family a corpus genuinely
+        matches, and the mapping between two families that a corpus could not distinguish is
+        by construction tiny.
+        """
+        member = self.membership(signatures, min_overlap=min_overlap)
+        coverage = {family.name: len(family.signature) for family in self.families}
+        counts: dict[str, int] = dict.fromkeys(coverage, 0)
+        out: dict[str, str | None] = {}
+
+        for corpus, families in member.items():
+            if len(families) == 1:
+                out[corpus] = families[0]
+                counts[families[0]] += 1
+            elif not families:
+                out[corpus] = None
+
+        contested = sorted(
+            (corpus for corpus, families in member.items() if len(families) > 1),
+            key=lambda corpus: (len(member[corpus]), -len(signatures[corpus]), corpus),
+        )
+        for corpus in contested:
+            best = max(member[corpus], key=lambda name: (counts[name], coverage[name], name))
+            out[corpus] = best
+            counts[best] += 1
+        return out
+
     def sole_members(self, signatures: Mapping[str, Signature]) -> dict[str, list[str]]:
         """Per family, the corpora that match it and nothing else."""
         member = self.membership(signatures)
@@ -364,15 +414,16 @@ def to_json(
     facts about them -- who belongs, who could not be placed, how far apart the families
     are, and which corpora the partition had to choose a home for -- are all here.
     """
-    compatible = derivation.compatibility(signatures)
+    compatible = derivation.membership(signatures)
+    placed = derivation.partition(signatures)
     return {
-        "compatibility": [
+        "membership": [
             {
                 "corpus": corpus,
                 "chapters": len(signatures[corpus]),
-                "families": families,
-                "determined": len(families) == 1,
-                "assigned": derivation.family_of(corpus),
+                "matches": families,
+                "assigned": placed[corpus],
+                "contested": len(families) > 1,
             }
             for corpus, families in sorted(compatible.items())
         ],

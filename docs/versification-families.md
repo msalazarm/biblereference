@@ -105,10 +105,38 @@ Codex Ambianensis, and Sirach 23 is 28 against 27. So they are different familie
 American Standard Version carries neither book, matches the King James exactly on
 everything they share, and matches the Revised Version exactly too. It belongs to both.
 
-Nothing is missing and no tie needs breaking: for every purpose the ASV has text for, the
-two numberings are identical. Membership is therefore a **cover**, not a partition, and a
-corpus listed under several families is fully placed. Verified: every one of the sixteen
-carries *none* of the books on which its candidate families differ.
+Nothing is missing: for every purpose the ASV has text for, the two numberings are
+identical. Membership is therefore a **cover**, not a partition. Verified: every one of the
+sixteen carries *none* of the books on which its candidate families differ.
+
+### Collapsing the cover: the larger family wins
+
+A cover is truthful and awkward to count — "how many families are there" has no clean
+answer, and every Protestant Bible drags a duplicate through every total. So the cover is
+collapsed to a partition on a stated preference: **where a corpus matches several families,
+it goes to the one with the most uncontested members.**
+
+That is the right tie-break for this data rather than an arbitrary one. A family many
+editions follow uncontested is the live tradition; a family only its own edition follows is
+a variant of it, and where a corpus cannot tell them apart the tradition is the better
+guess. The Revised Version keeps 2 Esdras 7 at 140 verses and almost nothing follows it
+there; the King James keeps 70 and nearly everything does.
+
+Contested corpora are settled most-constrained first, so a corpus choosing between two
+families is placed before one choosing between nine. Ties fall to the wider coverage, then
+to the name, so the result does not depend on dictionary order.
+
+| family | members |
+|---|---|
+| `kjv` | **14** — asv, bbe, bsb, dby, jps, kjv, kjv2006, kjvcpb, lee, msb, ourb, tnt, webster, ylt |
+| `web` | **10** — emtv, f35, web, webbe, webc, webp, webpb, webu, wmb, wmbb |
+| `lsv` | 4 — lsv, oebcw, oebus, ulb |
+| `asvbt`, `lxxup`, `lxx2012`, `novavulgata`, `ojb`, `wyc2017` | 2 each |
+| `dra`, `fbv`, `gnv`, `latvuc`, `net`, `noy`, `rv`, `swete`, `t4t`, `wlc`, `wycliffe` | 1 each |
+
+Nine families with more than one member, eleven singletons. `membership()` still reports
+every family a corpus genuinely matches, and the mapping between two families a corpus could
+not distinguish is by construction tiny — `kjv` to `rv` is two chapters.
 
 | corpus | chapters | exact to |
 |---|---|---|

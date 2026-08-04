@@ -362,6 +362,14 @@
       }
     },
     "nvl": {
+      "SIR 6:20": {
+        "to": "SIR 6:19",
+        "reason": "The Nova Vulgata splits the Greek's Sirach 6:19 exactly as the Clementine does, word for word: 6:19 'Quasi is qui arat et seminat, accede ad eam et sustine bonos fructus illius' and 6:20 'In opere enim ipsius exiguum laborabis et cito edes de generationibus illius'. Recording the split for vul alone made the two Latin editions disagree where they in fact agree -- sixteen new discrepancies on vul->nvl, which is how this was found."
+      },
+      "SIR 6:21-35": {
+        "to": "SIR 6:20-34",
+        "reason": "The fifteen verses carried by the split above, and the same shape as the vul entry. The Nova Vulgata likewise has no counterpart to org 6:35, realigning at 6:36, which is why it also numbers the chapter at 37."
+      },
       "DAN 3:91-100": {
         "to": "DAN 3:24-33",
         "reason": "Missing, so the last ten verses of the Nova Vulgata's Daniel 3 resolved to DAN 3:91-100 in the pivot -- a chapter that stops at 33. The Nova Vulgata carries the Song of the Three inline exactly as the Clementine does, giving Daniel 3 a hundred verses, and the vul file already states both halves: 'DAN 3:24-90 -> S3Y 1:1-67' for the Song, which nvl also has, and 'DAN 3:91-100 -> DAN 3:24-33' for the narrative that resumes after it, which nvl was missing. Ten verses onto ten, transposed from the file that gets it right."

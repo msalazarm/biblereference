@@ -213,3 +213,61 @@ def test_min_overlap_is_below_the_new_testament(signatures: dict[str, Signature]
     fitting everything. The threshold guards the opposite mistake, and must stay under it.
     """
     assert MIN_OVERLAP < 260
+
+
+# --------------------------------------------------------------------------------------
+# Collapsing the cover to a partition
+# --------------------------------------------------------------------------------------
+
+
+def test_a_contested_corpus_goes_to_the_larger_family() -> None:
+    """Membership is a cover, which is truthful and awkward to count. The partition
+    collapses it on a stated preference: the larger family wins.
+
+    That is the right tie-break for this data rather than an arbitrary one. A family many
+    editions follow uncontested is the live tradition; one that only its own edition follows
+    is a variant, and where a corpus cannot tell them apart the tradition is the better
+    guess.
+    """
+    signatures = {
+        # Two families differing only in TOB, which `middle` does not carry...
+        "big": spread(300) | {("TOB", n): 20 for n in range(1, 61)},
+        "big2": spread(300) | {("TOB", n): 20 for n in range(1, 61)},
+        "small": spread(300) | {("TOB", n): 21 for n in range(1, 61)},
+        "middle": spread(300),
+    }
+    result = derive(signatures)
+    assert result.membership(signatures)["middle"] == ["big", "small"]
+
+    placed = result.partition(signatures)
+    assert placed["middle"] == "big", "should follow the family with more uncontested members"
+    assert placed["big2"] == "big"
+    assert placed["small"] == "small"
+
+
+def test_the_partition_places_everything_membership_could(
+    derivation: Derivation, signatures: dict[str, Signature]
+) -> None:
+    """Only a corpus matching *no* family may go unplaced, and then only for want of text."""
+    member = derivation.membership(signatures)
+    placed = derivation.partition(signatures)
+    for corpus, families in member.items():
+        if families:
+            assert placed[corpus] in families, f"{corpus} placed outside its matches"
+        else:
+            assert placed[corpus] is None
+
+
+def test_the_king_james_family_absorbs_the_protestant_bibles(
+    derivation: Derivation, signatures: dict[str, Signature]
+) -> None:
+    """The case that motivated the rule. The King James and the Revised Version differ only
+    in 2 Esdras and Sirach, so every Protestant Bible matches both; the King James has far
+    more uncontested followers, so it takes them and the Revised Version keeps itself."""
+    placed = derivation.partition(signatures)
+    if placed.get("kjv") is None or placed.get("rv") is None:
+        pytest.skip("kjv/rv not present")
+
+    family = {corpus for corpus, name in placed.items() if name == placed["kjv"]}
+    assert {"kjv", "kjvcpb", "asv", "bbe", "ylt", "webster"} <= family
+    assert len({c for c, n in placed.items() if n == placed["rv"]}) == 1

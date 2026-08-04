@@ -393,37 +393,38 @@ def cmd_families(args: argparse.Namespace) -> int:
         print(_json.dumps(to_json(derivation, signatures, declared), indent=2))
         return 0
 
-    sole = derivation.sole_members(signatures)
-    shared = derivation.shared_members(signatures)
+    placed = derivation.partition(signatures)
+    grouped: dict[str, list[str]] = {}
+    for corpus, family in placed.items():
+        if family is not None:
+            grouped.setdefault(family, []).append(corpus)
 
     _say(f"{len(derivation.families)} families derived from {len(signatures)} corpora\n")
-    for family in sorted(derivation.families, key=lambda f: -len(sole[f.name] + shared[f.name])):
-        members = sole[family.name] + shared[family.name]
-        systems = sorted({declared.get(m, "?") for m in members}) or ["?"]
+    coverage = {f.name: len(f.signature) for f in derivation.families}
+    for name, members in sorted(grouped.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        systems = sorted({declared.get(m, "?") for m in members})
         print(
-            f"{family.name:13} {len(members):>2} member(s)  "
-            f"{len(family.signature):>4} chapters  declared {','.join(systems)}"
+            f"{name:13} {len(members):>2} member(s)  {coverage[name]:>4} chapters  "
+            f"declared {','.join(systems)}"
         )
-        if sole[family.name]:
-            print(f"              {', '.join(sole[family.name])}")
-        if shared[family.name]:
-            print(f"              also (shared): {', '.join(shared[family.name])}")
+        print(f"              {', '.join(sorted(members))}")
+        contested = sorted(m for m in members if len(compatible[m]) > 1)
+        if args.verbose and contested:
+            print(f"              contested, also match: {', '.join(contested)}")
 
     multiple = {c: f for c, f in compatible.items() if len(f) > 1}
     if multiple:
         _say(
-            f"\n{len(multiple)} corpora belong to more than one family. This is the answer, "
-            f"not a gap:\nthey match every family listed exactly on the books they share, and "
-            f"those families\ndiffer only in books these corpora do not carry."
+            f"\n{len(multiple)} of these matched more than one family and were assigned to the "
+            f"largest.\nThe families they could not tell apart differ only in books they do not "
+            f"carry, so\nthe choice costs nothing: run with -v, or --json for every match."
         )
-        for corpus, families in sorted(multiple.items(), key=lambda kv: -len(kv[1])):
-            print(f"  {corpus:13} {len(signatures[corpus]):>4} chapters  {', '.join(families)}")
 
     orphans = [c for c, f in compatible.items() if not f]
     if orphans:
         _say(
-            f"\n{len(orphans)} genuinely unplaceable -- too few complete chapters to compare: "
-            f"{', '.join(sorted(orphans))}"
+            f"\n{len(orphans)} unplaceable -- too few complete chapters to compare against "
+            f"anything: {', '.join(sorted(orphans))}"
         )
     return 0
 
