@@ -130,6 +130,8 @@ class _System:
     to_org: Mapping[_Coord, _Coord]
     from_org: Mapping[_Coord, tuple[_Coord, ...]]
     unreliable_books: frozenset[str]
+    unreliable_chapters: frozenset[tuple[str, int]]
+    """Chapters declared unmappable by hand, because counting cannot find them."""
     titled: frozenset[tuple[str, int]]
     """Chapters carrying a verse 0. In systems that number psalm superscriptions
     separately, the title is verse 0 and is not counted by ``maxVerses``."""
@@ -168,7 +170,7 @@ class Versification:
         """
         if vrs == PIVOT:
             return frozenset()
-        return self._unmappable[vrs]
+        return self._unmappable[vrs] | self._system(vrs).unreliable_chapters
 
     # -- construction ------------------------------------------------------------------
 
@@ -749,13 +751,41 @@ def _sub(corrections: dict[str, object], key: str) -> dict[str, object]:
 
 
 def _unreliable_books(corrections: dict[str, object], system: str) -> frozenset[str]:
+    """Books this system cannot be converted to or from at all.
+
+    An entry naming ``chapters`` is *not* one of these -- it refuses those chapters only,
+    through :func:`_unreliable_chapters`.
+    """
     entries = corrections.get("unreliable", [])
     assert isinstance(entries, list)
     books: set[str] = set()
     for entry in entries:
-        if system in entry["systems"]:
+        if system in entry["systems"] and not entry.get("chapters"):
             books.update(entry["books"])
     return frozenset(books)
+
+
+def _unreliable_chapters(corrections: dict[str, object], system: str) -> frozenset[tuple[str, int]]:
+    """Individual chapters declared unmappable, on top of the ones counting finds.
+
+    The automatic guard refuses a chapter whose verse count differs from the pivot's, which
+    catches most of them and is silent on the rest. A chapter can be unmappable and still
+    have the same number of verses -- the Vulgate's Sirach 18 merges two verses, expands one
+    into two, omits another and splits two more, all inside thirty-three verses that the
+    Greek also numbers thirty-three -- and counting cannot see any of it.
+
+    Naming such a chapter is the only way to refuse it. This is deliberately a list rather
+    than a rule: each entry is a chapter somebody read.
+    """
+    entries = corrections.get("unreliable", [])
+    assert isinstance(entries, list)
+    out: set[tuple[str, int]] = set()
+    for entry in entries:
+        chapters = entry.get("chapters")
+        if chapters and system in entry["systems"]:
+            for book in entry["books"]:
+                out.update((book, int(chapter)) for chapter in chapters)
+    return frozenset(out)
 
 
 def _build_system(name: str, corrections: dict[str, object]) -> _System:
@@ -808,6 +838,7 @@ def _build_system(name: str, corrections: dict[str, object]) -> _System:
         to_org=to_org,
         from_org=from_org,
         unreliable_books=_unreliable_books(corrections, name),
+        unreliable_chapters=_unreliable_chapters(corrections, name),
         titled=frozenset((book, chapter) for book, chapter, verse, _ in to_org if verse == 0),
     )
 

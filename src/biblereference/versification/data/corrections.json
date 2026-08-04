@@ -278,6 +278,14 @@
       }
     },
     "vul": {
+      "SIR 14:17": {
+        "to": "SIR 14:16",
+        "reason": "The Latin splits the Greek's Sirach 14:16 in two, exactly as it does 6:19. latvuc 14:16 is 'Da et accipe, et justifica animam tuam' and 14:17 'Ante obitum tuum operare justitiam, quoniam non est apud inferos invenire cibum'; together they are org's single 14:16, 'Give, take, and treat yourself well, because there is no seeking of luxury in Hades'. Both number the chapter at 27 verses, so nothing counting can do would find this. Which side deviates was settled the same way as for chapter 6: eng agrees with lxx verse for verse across the whole chapter, so only vul moves."
+      },
+      "SIR 14:18-25": {
+        "to": "SIR 14:17-24",
+        "reason": "The eight verses carried by the split above. 'All flesh shall fade as grass' is the Vulgate's 14:18 and org's 14:17; 'He who looketh in at her windows, and hearkeneth at her door' is 14:24 against 14:23. They realign at 14:26 because the Vulgate's 14:25 runs org's 14:24 and 14:25 together, which is what absorbs the shift and why both chapters end at 27."
+      },
       "NEH 7:44": {
         "to": "NEH 7:43",
         "reason": "The Clementine splits the Levites entry and nothing recorded it, so four verses of the list resolved one late. latvuc 7:43 is 'filii Josue et Cedmihel filiorum' and 7:44 is 'Oduiae, septuaginta quatuor. Cantores:' -- together the Nova Vulgata's single 7:43, 'Levitae: filii Iesua, hi sunt filii Cadmihel, Bennui et Odoviae, septuaginta quattuor'. Confirmed twice over: Latin against Latin, and web against the Douay-Rheims, which puts 'The singers: the children of Asaph: one hundred forty-eight' at English 7:44 and Vulgate 7:45."
@@ -469,6 +477,18 @@
         "vul"
       ],
       "reason": "Jerome translated Judith and Tobit from Aramaic recensions differing from the Greek by whole clauses, and the automatic guard only refuses a chapter whose verse count differs from the pivot's -- so the handful whose counts coincide converted by identity and returned a plausible verse containing different words. Two of Judith's sixteen chapters did that and one of Tobit's fourteen, which is the worst of both: most of the book refuses and a few chapters quietly lie. Judith 6 is the proof that the coincidence means nothing -- both number the chapter at 21 verses, and the Douay's 6:9 'they tied Achior to a tree' is the Greek's 6:13 'bound Achior, cast him down, left him at the foot of the hill', four verses apart. Measured before deciding: aligning the Douay against the World English Bible across the whole of Judith scores 0.289, barely over the floor where an ordinary book runs 0.6 to 0.8; 72 of some 345 verses have no counterpart on the other side at all; and the offsets scatter *within* almost every chapter -- seven distinct ones across the 21 matched verses of chapter 7, eight across the 24 of chapter 13. That is a different text rather than a differently numbered one, and no mapping can express it. Confined to vul deliberately. The Nova Vulgata went back to the Greek for Judith and its verse counts are identical to org's, so eng, lxx, org and nvl line up with each other and only Jerome's own numbering stands apart. Sirach is left out for the opposite reason: it is partly mappable, and Sirach 6 is now mapped."
+    },
+    {
+      "books": [
+        "SIR"
+      ],
+      "chapters": [
+        18
+      ],
+      "systems": [
+        "vul"
+      ],
+      "reason": "Sirach 18 is unmappable and both traditions number it at 33 verses, so the automatic guard cannot see it and it converted by identity. Read against the Greek, the Vulgate merges, expands, omits and splits inside fourteen verses: its 18:1 runs org's 18:1 and 18:2 together ('He that liveth for ever created all things together. God only shall be justified'), its 18:2 and 18:3 expand org's single 18:4, it has no counterpart to org 18:10 'As a drop of water from the sea, and a pebble from the sand', and its 18:10-11 and 18:12-13 each split one verse of org's. Five structural differences in both directions, which is the signature that made Jerome's Judith unmappable, in miniature. Chapters 6 and 14 of the same book are mapped, which is why this is a chapter rather than the book: the Vulgate's Sirach follows the Greek in most places and departs from it in a few, and refusing the whole book would throw away two verified fixes."
     }
   ]
 }

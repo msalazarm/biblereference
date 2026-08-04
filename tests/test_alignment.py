@@ -417,3 +417,44 @@ def test_the_vulgates_daniel_is_not_dragged_into_greek_daniel_either(
     # Susanna and Bel still reach the Vulgate's Daniel 13 and 14, which is where it puts them.
     assert convert(vrs, "SUS 1:1", "org", "vul") == "DAN 13:1"
     assert convert(vrs, "BEL 1:2", "org", "vul") == "DAN 14:1"
+
+
+def test_the_vulgate_splits_a_verse_in_sirach_14_as_well(vrs: Versification) -> None:
+    """The same fault as Sirach 6, in the same book, found once the Judith work established
+    that eng can stand in for org here: eng agrees with lxx verse for verse across Sirach,
+    so a disagreement between eng and vul is the Vulgate's.
+
+    latvuc 14:16 'Da et accipe, et justifica animam tuam' and 14:17 'Ante obitum tuum
+    operare justitiam' are together org's single 14:16. Both number the chapter at 27
+    verses, so no count-based check could ever have seen it.
+    """
+    assert convert(vrs, "SIR 14:16", "vul", "org") == "SIR 14:16"
+    assert convert(vrs, "SIR 14:17", "vul", "org") == "SIR 14:16"
+    assert convert(vrs, "SIR 14:18", "vul", "org") == "SIR 14:17"
+    assert convert(vrs, "SIR 14:26", "vul", "org") == "SIR 14:26"
+
+
+def test_a_chapter_may_be_declared_unmappable_by_hand() -> None:
+    """Counting finds a chapter whose verse count differs from the pivot's and is silent on
+    the rest, so a chapter can be unmappable and still have the same number of verses.
+
+    The Vulgate's Sirach 18 is the case that forced this. Inside fourteen verses it merges
+    two of org's into one, expands one into two, omits another entirely, and splits two
+    more -- five structural differences in both directions -- across thirty-three verses
+    that org also numbers thirty-three. It converted by identity and returned plausible
+    wrong answers, and nothing automatic could have known.
+    """
+    from biblereference.refs import parse_reference
+
+    vrs = Versification.load()
+    assert ("SIR", 18) in vrs.unmappable_chapters("vul")
+    with pytest.raises(VersificationError):
+        vrs.convert_range(parse_reference("Sir 18:5"), "vul")
+
+
+def test_naming_one_chapter_does_not_refuse_its_neighbours(vrs: Versification) -> None:
+    """A chapter-level declaration rather than a book-level one, because the Vulgate's
+    Sirach follows the Greek in most places and departs in a few. Refusing the book would
+    throw away the two chapters now mapped."""
+    assert convert(vrs, "SIR 6:23", "eng", "vul") == "SIR 6:24"
+    assert convert(vrs, "SIR 14:17", "eng", "vul") == "SIR 14:18"
