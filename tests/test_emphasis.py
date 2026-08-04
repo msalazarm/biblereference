@@ -184,3 +184,94 @@ def test_the_two_vulgates_differ_where_they_really_differ() -> None:
     """Folding must not hide a real textual variant: regit against pascit."""
     assert fold("Dominus regit me", "la") != fold("Dominus pascit me", "la")
     assert fold("vocabitur nomen ejus", "la") == fold("uocabitur nomen eius", "la")
+
+
+# --------------------------------------------------------------------------------------
+# Greek: the contractions a scribe writes instead of the words
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("ΘΣ", "θεοσ"),
+        ("θς", "θεοσ"),
+        ("ΚΣ", "κυριοσ"),
+        ("ΙΣ", "ιησουσ"),
+        ("ΧΣ", "χριστοσ"),
+        ("ΧΝ", "χριστον"),
+        ("ΠΝΑ", "πνευμα"),
+        ("ΙΛΗΜ", "ιερουσαλημ"),
+    ],
+)
+def test_nomina_sacra_expand(written: str, expected: str) -> None:
+    """Without this a quotation matched against a manuscript transcription fails on its
+    most frequent words -- God, Lord, Jesus, Christ -- which are exactly the words a
+    quotation of scripture is most likely to contain.
+
+    Note the expansions end in a plain sigma: fold normalises the final sigma, and an
+    expansion that ended in one would be a different string from every other rendering of
+    the same word.
+    """
+    assert fold(written, "grc") == expected
+
+
+def test_a_contraction_expands_in_the_middle_of_a_sentence() -> None:
+    """The contraction is a property of the whole word, which is why this cannot be done
+    character by character as the rest of the fold is."""
+    folded = fold("ἦν πρὸς τὸν ΘΝ", "grc")
+    assert folded == "ην προσ τον θεον"
+
+
+def test_a_word_that_merely_starts_like_a_contraction_is_left_alone() -> None:
+    """``θς`` is Θεός; ``θσι`` is not, and expanding on a prefix would corrupt ordinary
+    words."""
+    assert fold("θσι", "grc") == "θσι"
+
+
+def test_accents_and_breathings_already_fold() -> None:
+    """Regression: this worked before the Greek branch existed and must keep working."""
+    assert fold("Ἰησοῦς", "grc") == fold("ιησους", "grc")
+
+
+def test_final_sigma_already_folds() -> None:
+    assert fold("λόγος", "grc") == fold("λογοσ", "grc")
+
+
+def test_itacism_is_opt_in() -> None:
+    """It collapses words that are genuinely distinct in classical Greek -- ὑμεῖς and
+    ἡμεῖς, *you* and *we* -- so it must not be the default. It is the right trade against a
+    manuscript and the wrong one against an edited text."""
+    assert fold("ὑμεῖς", "grc") != fold("ἡμεῖς", "grc")
+    assert fold("ὑμεῖς", "grc", orthographic=True) == fold("ἡμεῖς", "grc", orthographic=True)
+
+
+def test_folding_latin_is_unchanged() -> None:
+    """Regression: the j/i and v/u rule must not move."""
+    assert fold("IESVS", "la") == fold("Iesus", "la")
+
+
+def test_folding_english_does_not_apply_the_other_languages_rules() -> None:
+    """v to u would turn *have* into *haue*, and a Greek rule has no business here."""
+    assert fold("have") == "have"
+    # Final sigma folds whatever the language -- that is not a Greek-only rule -- but the
+    # contraction must not expand without being told the text is Greek.
+    assert fold("θς") == "θσ"
+    assert fold("θς") != fold("θς", "grc")
+
+
+def test_an_unchanged_greek_word_keeps_its_own_offsets() -> None:
+    """The offset map is what apply_spans marks up through, and collapsing every character
+    of a word onto its first broke it quietly: a span ending on λόγος ended after the
+    lambda, so the wrong text was emphasised and nothing raised."""
+    text = "ἐν ἀρχῇ ἦν ὁ λόγος καὶ ὁ λόγος"
+    assert apply_spans(text, [Emphasis("λογος", "λογος", "bold")], "grc") == (
+        "ἐν ἀρχῇ ἦν ὁ **λόγος** καὶ ὁ λόγος"
+    )
+
+
+def test_a_span_ending_on_a_contraction_covers_what_was_written() -> None:
+    """An expansion is longer than its source, so its tail is anchored on the source's last
+    character. Otherwise a span ending on ΘΝ would mark up only the theta."""
+    text = "ἦν πρὸς τὸν ΘΝ"
+    assert apply_spans(text, [Emphasis("προσ", "θεον", "italic")], "grc") == ("ἦν *πρὸς τὸν ΘΝ*")

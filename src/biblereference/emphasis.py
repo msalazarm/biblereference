@@ -15,6 +15,7 @@ claim about the source that the output does not support.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -49,6 +50,76 @@ _LATIN_LETTERS: Final[dict[str, str]] = {"j": "i", "v": "u"}
 #: closing in another. An anchor will not include a stray bracket, so it folds away.
 _LATIN_PUNCTUATION: Final = {"[", "]"}
 
+#: Greek only. The *nomina sacra*: the words a scribe contracts rather than writes out,
+#: marked in a manuscript with an overline that a transcription usually drops.
+#:
+#: Without expansion a quotation matched against a manuscript transcription fails on its
+#: most frequent words, and they are exactly the words a quotation of scripture is most
+#: likely to contain -- God, Lord, Jesus, Christ. Keyed on the already-folded form, so the
+#: table needs no accents, no case and no final sigma of its own.
+#:
+#: Contractions only, not every abbreviation: these are the conventional sacred names, the
+#: set a transcription of a biblical manuscript actually uses.
+_NOMINA_SACRA: Final[dict[str, str]] = {
+    "θσ": "θεοσ",
+    "θυ": "θεου",
+    "θω": "θεω",
+    "θν": "θεον",
+    "κσ": "κυριοσ",
+    "κυ": "κυριου",
+    "κω": "κυριω",
+    "κν": "κυριον",
+    "ισ": "ιησουσ",
+    "ιυ": "ιησου",
+    "ιν": "ιησουν",
+    "χσ": "χριστοσ",
+    "χυ": "χριστου",
+    "χω": "χριστω",
+    "χν": "χριστον",
+    "πνα": "πνευμα",
+    "πνσ": "πνευματοσ",
+    "πηρ": "πατηρ",
+    "πρσ": "πατροσ",
+    "πρι": "πατρι",
+    "πρα": "πατερα",
+    "μηρ": "μητηρ",
+    "μρσ": "μητροσ",
+    "υσ": "υιοσ",
+    "υυ": "υιου",
+    "υν": "υιον",
+    "ανοσ": "ανθρωποσ",
+    "ανου": "ανθρωπου",
+    "ανων": "ανθρωπων",
+    "ουνοσ": "ουρανοσ",
+    "ουνου": "ουρανου",
+    "ουνων": "ουρανων",
+    "δαδ": "δαυιδ",
+    "ιηλ": "ισραηλ",
+    "ιλημ": "ιερουσαλημ",
+    "σηρ": "σωτηρ",
+    "σρσ": "σωτηροσ",
+    "στσ": "σταυροσ",
+    "εσται": "εσταυρωται",
+}
+
+#: Greek letters and digraphs that came to be pronounced alike, so that scribes writing by
+#: ear spell them interchangeably. Itacism is the single largest class of orthographic
+#: variant in Greek manuscripts.
+#:
+#: **Opt-in**, because it collapses words that are genuinely distinct in classical Greek --
+#: ὑμεῖς and ἡμεῖς, *you* and *we*, become one string. That is the right trade when matching
+#: against a manuscript and the wrong one when reading an edited text. Longest first, since
+#: the digraphs must be tried before their component letters.
+_ITACISM: Final[tuple[tuple[str, str], ...]] = (
+    ("ει", "ι"),
+    ("οι", "ι"),
+    ("υι", "ι"),
+    ("η", "ι"),
+    ("υ", "ι"),
+    ("ω", "ο"),
+    ("αι", "ε"),
+)
+
 
 class SpanNotFoundError(ValueError):
     """An emphasis span's anchors do not appear in the text, or appear out of order."""
@@ -68,8 +139,9 @@ class _Folded:
     ``text[i]``."""
 
 
-def _fold(text: str, language: str | None = None) -> _Folded:
+def _fold(text: str, language: str | None = None, *, orthographic: bool = False) -> _Folded:
     latin = language == "la"
+    greek = language == "grc"
     out: list[str] = []
     offsets: list[int] = []
     pending_space = False
@@ -99,20 +171,76 @@ def _fold(text: str, language: str | None = None) -> _Folded:
             out.append(piece)
             offsets.append(index)
 
+    if greek:
+        return _rewrite_greek(out, offsets, orthographic=orthographic)
     return _Folded("".join(out), tuple(offsets))
 
 
-def fold(text: str, language: str | None = None) -> str:
+def _rewrite_greek(out: list[str], offsets: list[int], *, orthographic: bool) -> _Folded:
+    """Expand the nomina sacra, and optionally collapse itacism, a word at a time.
+
+    The character-by-character fold above cannot do this: a contraction is a property of
+    the whole word, and ``θσ`` is only Θεός because nothing else surrounds it.
+
+    **A word that is not rewritten keeps its own offsets, character for character.** Only a
+    rewritten one collapses onto the first character of the word it came from, because an
+    expansion has no per-character correspondence to point at -- the four letters of θεου
+    stand for the two the scribe wrote.
+
+    Collapsing them all was the first attempt and it broke :func:`apply_spans` quietly: with
+    every character of λόγος pointing at the lambda, a span ending on that word ended after
+    its first letter. Emphasis is applied through this map, so an anchor that resolves to
+    the wrong end marks up the wrong text and nothing raises.
+    """
+    text = "".join(out)
+    rewritten: list[str] = []
+    positions: list[int] = []
+
+    start = 0
+    for word in re.split(r"( )", text):
+        if not word:
+            continue
+        expanded = word
+        if word != " ":
+            expanded = _NOMINA_SACRA.get(word, word)
+            if orthographic:
+                for written, spoken in _ITACISM:
+                    expanded = expanded.replace(written, spoken)
+
+        rewritten.append(expanded)
+        if expanded == word:
+            positions.extend(offsets[start : start + len(word)])
+        else:
+            # Anchored at both ends rather than collapsed onto the first character: the
+            # expansion is longer than what was written, so each character beyond the
+            # source's length points at its last. A span ending on an expanded contraction
+            # then covers the whole of what the scribe actually wrote.
+            source = offsets[start : start + len(word)] or [offsets[-1] if offsets else 0]
+            positions.extend(source[min(i, len(source) - 1)] for i in range(len(expanded)))
+        start += len(word)
+
+    return _Folded("".join(rewritten), tuple(positions))
+
+
+def fold(text: str, language: str | None = None, *, orthographic: bool = False) -> str:
     """The searchable form of ``text``: no accents, no points, collapsed whitespace.
 
     :param language: Where given, applies that language's own equivalences. ``"la"``
         treats *j* and *i* and *v* and *u* as the same letters, which they are -- the
         distinction is typographic, and the two Vulgates use opposite conventions.
+        ``"grc"`` expands the *nomina sacra*, the sacred names a scribe contracts, so that
+        a quotation matched against a manuscript transcription does not fail on the very
+        words scripture is most likely to contain.
+    :param orthographic: Greek only, and off by default. Collapses itacism -- the letters
+        and digraphs that came to sound alike, which scribes writing by ear spell
+        interchangeably. It is the largest class of variant in Greek manuscripts and the
+        right trade when matching against one; it is the wrong trade against an edited
+        text, because it makes ὑμεῖς and ἡμεῖς, *you* and *we*, one string.
 
     Exposed because it is also the right comparison for checking a supplied quotation and
     for telling two editions of one text apart.
     """
-    return _fold(text, language).text
+    return _fold(text, language, orthographic=orthographic).text
 
 
 def _after_cluster(text: str, index: int) -> int:
