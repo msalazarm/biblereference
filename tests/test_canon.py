@@ -14,6 +14,7 @@ from biblereference.canon import (
     normalize_book,
     resolve_book,
 )
+from biblereference.emphasis import fold
 
 DR = NamingScheme.DR
 LXX = NamingScheme.LXX
@@ -213,3 +214,103 @@ def test_a_book_with_no_special_title_keeps_the_modern_one() -> None:
     for scheme in NamingScheme:
         assert book_title("LUK", scheme) == "Luke"
         assert book_title("GEN", scheme) == "Genesis"
+
+
+# --------------------------------------------------------------------------------------
+# Accents, and the German names they made unreachable
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("Sprüche", "spruche"),
+        ("Spruche", "spruche"),
+        ("Hebräer", "hebraer"),
+        ("Lérins", "lerins"),
+        ("Æthelred", "aethelred"),
+    ],
+)
+def test_normalize_book_decomposes_rather_than_deleting(written: str, expected: str) -> None:
+    """The last step used to be ``[^a-z0-9]``, which does not fold a combining mark into
+    its base letter -- it takes the letter with it. ``Sprüche`` normalised to ``sprche``
+    and ``Lérins`` to ``lrins``, so an accented name and its unaccented spelling could
+    never reach each other and an alias table only worked for whichever was written into
+    it. The ligature path must keep working alongside the fix."""
+    assert normalize_book(written) == expected
+
+
+def test_normalize_book_and_fold_agree_on_accents() -> None:
+    """Two normalisations that disagree are a bug factory: a name is looked up through one
+    and its text is searched through the other."""
+    for word in ["Sprüche", "Hebräer", "Lérins", "Ἰησοῦς", "λόγος"]:
+        assert normalize_book(word) == fold(word).replace(" ", "")
+
+
+@pytest.mark.parametrize(
+    ("name", "code"),
+    [
+        ("Sacharja", "ZEC"),
+        ("Sach", "ZEC"),
+        ("1 Korinther", "1CO"),
+        ("1Ko", "1CO"),
+        ("Hebräer", "HEB"),
+        ("Hebr", "HEB"),
+        ("Offenbarung", "REV"),
+        ("Prediger", "ECC"),
+        ("Sprüche", "PRO"),
+        ("Sprueche", "PRO"),
+        ("Richter", "JDG"),
+        ("Hoheslied", "SNG"),
+        ("Klagelieder", "LAM"),
+        ("Apostelgeschichte", "ACT"),
+        ("Weisheit", "WIS"),
+        ("1 Makkabäer", "1MA"),
+        # The Pentateuch is numbered in German: 1. Mose is Genesis and 5. Mose Deuteronomy.
+        ("1. Mose", "GEN"),
+        ("5. Mose", "DEU"),
+    ],
+)
+def test_german_book_names_resolve(name: str, code: str) -> None:
+    assert resolve_book(name, NamingScheme.DE) == code
+
+
+def test_both_spellings_of_an_umlaut_reach_the_same_book() -> None:
+    """Two aliases of one book, not two books. A source may print either and a reader may
+    type either, and before the normalisation fix neither could reach the other."""
+    for umlaut, transliterated in [("Sprüche", "Sprueche"), ("Hebräer", "Hebraeer")]:
+        assert resolve_book(umlaut, NamingScheme.DE) == resolve_book(
+            transliterated, NamingScheme.DE
+        )
+
+
+def test_german_names_do_not_leak_into_the_modern_scheme() -> None:
+    """Otherwise a German abbreviation silently shadows an English one."""
+    for name in ["Sach", "Sprüche", "Offenbarung", "Apg", "Hebräer"]:
+        with pytest.raises(UnknownBookError):
+            resolve_book(name, NamingScheme.MODERN)
+
+
+def test_no_german_alias_claims_a_book_an_english_one_already_means() -> None:
+    """A cross-scheme collision resolves silently and wrongly, which is the failure mode
+    this whole module exists to prevent. Within a scheme ``_expand`` raises on a duplicate;
+    across schemes nothing does, so it is asserted here.
+
+    Names shared with English -- Daniel, Amos, Titus -- are fine precisely because they
+    mean the same book.
+    """
+    from biblereference.canon import _BY_SCHEME, _COMMON
+
+    german = _BY_SCHEME[NamingScheme.DE]
+    clashes = {
+        key: (code, _COMMON[key])
+        for key, code in german.items()
+        if key in _COMMON and _COMMON[key] != code
+    }
+    assert clashes == {}
+
+
+def test_a_scheme_without_titles_of_its_own_falls_back_to_english() -> None:
+    """DE exists so German citations can be read. Rendering titles in German is a separate
+    thing, and a half-built table would be worse than English."""
+    assert book_title("LUK", NamingScheme.DE) == "Luke"

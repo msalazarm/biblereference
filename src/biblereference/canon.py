@@ -49,6 +49,11 @@ class NamingScheme(StrEnum):
     LXX = "lxx"
     """Septuagint usage: 1 Esdras is Esdras A, the apocryphal Greek Esdras."""
 
+    DE = "de"
+    """German book names. The Patristic Text Archive is a German project and its
+    translations cite in German -- *Sacharja*, *1 Korinther*, *Hebräer* -- and a corpus in
+    any other language poses the same problem on the same axis."""
+
 
 class Canon(StrEnum):
     """Which part of the canon a book belongs to.
@@ -473,6 +478,100 @@ _BY_SCHEME: Final[dict[NamingScheme, dict[str, str]]] = {
         }
     ),
     NamingScheme.MODERN: {},
+    #: German. :class:`NamingScheme` already models "the same book under another
+    #: tradition's name"; a language is the same problem on a different axis, and these
+    #: tables are the right home for it.
+    #:
+    #: Both spellings of every umlaut are listed -- ``Sprüche`` and ``Sprueche``, ``Hebräer``
+    #: and ``Hebraeer`` -- because a source may print either and a reader may type either.
+    #: They are two aliases of one book rather than two books, which is what ``_expand``'s
+    #: duplicate-key guard is there to keep true. Note that they only reach each other at
+    #: all because :func:`normalize_book` decomposes accents; while it deleted them,
+    #: ``Sprüche`` normalised to ``sprche`` and matched nothing.
+    #:
+    #: The Pentateuch is cited by number in German -- *1. Mose* is Genesis and *5. Mose*
+    #: Deuteronomy -- which the leading-ordinal handling in :func:`normalize_book` already
+    #: reads.
+    NamingScheme.DE: _expand(
+        {
+            "1 Mose|1 Mos|Genesis": "GEN",
+            "2 Mose|2 Mos": "EXO",
+            "3 Mose|3 Mos": "LEV",
+            "4 Mose|4 Mos": "NUM",
+            "5 Mose|5 Mos": "DEU",
+            "Josua|Jos": "JOS",
+            "Richter|Ri": "JDG",
+            "Rut|Ruth": "RUT",
+            "1 Samuel|1 Sam": "1SA",
+            "2 Samuel|2 Sam": "2SA",
+            "1 Könige|1 Koenige|1 Kön|1 Koen": "1KI",
+            "2 Könige|2 Koenige|2 Kön|2 Koen": "2KI",
+            "1 Chronik|1 Chron|1 Chr": "1CH",
+            "2 Chronik|2 Chron|2 Chr": "2CH",
+            "Esra|Esr": "EZR",
+            "Nehemia|Neh": "NEH",
+            "Ester|Esther|Est": "EST",
+            "Hiob|Ijob": "JOB",
+            "Psalmen|Psalm|Ps": "PSA",
+            "Sprüche|Sprueche|Spr|Sprichwörter|Sprichwoerter": "PRO",
+            "Prediger|Kohelet|Pred|Koh": "ECC",
+            "Hoheslied|Hohelied|Hld": "SNG",
+            "Jesaja|Jes": "ISA",
+            "Jeremia|Jer": "JER",
+            "Klagelieder|Klgl": "LAM",
+            "Hesekiel|Ezechiel|Hes|Ez": "EZK",
+            "Daniel|Dan": "DAN",
+            "Hosea|Hos": "HOS",
+            "Joel|Joe": "JOL",
+            "Amos|Am": "AMO",
+            "Obadja|Obd": "OBA",
+            "Jona|Jon": "JON",
+            "Micha|Mi": "MIC",
+            "Nahum|Nah": "NAM",
+            "Habakuk|Hab": "HAB",
+            "Zefanja|Zephanja|Zef|Zeph": "ZEP",
+            "Haggai|Hag": "HAG",
+            "Sacharja|Sach": "ZEC",
+            "Maleachi|Mal": "MAL",
+            # Deuterocanonical: the Patristic Text Archive cites these constantly.
+            "Tobit|Tobias|Tob": "TOB",
+            "Judit|Judith|Jdt": "JDT",
+            "Weisheit|Weish": "WIS",
+            "Jesus Sirach|Sirach|Sir": "SIR",
+            "Baruch|Bar": "BAR",
+            "Brief des Jeremia|Brief Jeremias|BrJer": "LJE",
+            "1 Makkabäer|1 Makkabaeer|1 Makk": "1MA",
+            "2 Makkabäer|2 Makkabaeer|2 Makk": "2MA",
+            "Gebet des Manasse|Manasse": "MAN",
+            "Matthäus|Matthaeus|Mt|Matth": "MAT",
+            "Markus|Mk|Mark": "MRK",
+            "Lukas|Lk|Luk": "LUK",
+            "Johannes|Joh": "JHN",
+            "Apostelgeschichte|Apg": "ACT",
+            "Römer|Roemer|Röm|Roem": "ROM",
+            "1 Korinther|1 Kor|1Ko": "1CO",
+            "2 Korinther|2 Kor|2Ko": "2CO",
+            "Galater|Gal": "GAL",
+            "Epheser|Eph": "EPH",
+            "Philipper|Phil": "PHP",
+            "Kolosser|Kol": "COL",
+            "1 Thessalonicher|1 Thess|1 Thes": "1TH",
+            "2 Thessalonicher|2 Thess|2 Thes": "2TH",
+            "1 Timotheus|1 Tim": "1TI",
+            "2 Timotheus|2 Tim": "2TI",
+            "Titus|Tit": "TIT",
+            "Philemon|Phlm": "PHM",
+            "Hebräer|Hebraeer|Hebr": "HEB",
+            "Jakobus|Jak": "JAS",
+            "1 Petrus|1 Petr|1 Pt": "1PE",
+            "2 Petrus|2 Petr|2 Pt": "2PE",
+            "1 Johannes|1 Joh": "1JN",
+            "2 Johannes|2 Joh": "2JN",
+            "3 Johannes|3 Joh": "3JN",
+            "Judas|Jud": "JUD",
+            "Offenbarung|Offb|Apokalypse": "REV",
+        }
+    ),
 }
 
 #: USFM codes are always accepted verbatim, whatever the scheme.
@@ -597,8 +696,13 @@ def book_title(code: str, scheme: NamingScheme = NamingScheme.MODERN) -> str:
         against a Douay-Rheims will not find "1 Chronicles" or "Revelation" in it, and
         telling them to look for Paralipomenon and the Apocalypse is the difference
         between a reference they can follow and one they cannot.
+
+    A scheme with no titles of its own falls back to the modern ones, which is what
+    :data:`NamingScheme.DE` does: it exists so German citations can be *read*, and
+    rendering titles in German is a separate thing nobody has asked for. Printing a
+    half-built German table would be worse than printing English.
     """
-    return _SCHEME_TITLES[scheme].get(code) or _TITLES.get(code, code)
+    return _SCHEME_TITLES.get(scheme, {}).get(code) or _TITLES.get(code, code)
 
 
 def canonical_order(code: str) -> int:
