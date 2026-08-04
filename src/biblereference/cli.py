@@ -393,25 +393,38 @@ def cmd_families(args: argparse.Namespace) -> int:
         print(_json.dumps(to_json(derivation, signatures, declared), indent=2))
         return 0
 
+    sole = derivation.sole_members(signatures)
+    shared = derivation.shared_members(signatures)
+
     _say(f"{len(derivation.families)} families derived from {len(signatures)} corpora\n")
-    for family in sorted(derivation.families, key=lambda f: -len(f.members)):
-        systems = sorted({declared.get(m, "?") for m in family.members})
+    for family in sorted(derivation.families, key=lambda f: -len(sole[f.name] + shared[f.name])):
+        members = sole[family.name] + shared[family.name]
+        systems = sorted({declared.get(m, "?") for m in members}) or ["?"]
         print(
-            f"{family.name:13} {len(family.members):>2} member(s)  "
+            f"{family.name:13} {len(members):>2} member(s)  "
             f"{len(family.signature):>4} chapters  declared {','.join(systems)}"
         )
-        print(f"              {', '.join(sorted(family.members))}")
+        if sole[family.name]:
+            print(f"              {', '.join(sole[family.name])}")
+        if shared[family.name]:
+            print(f"              also (shared): {', '.join(shared[family.name])}")
 
-    undetermined = {c: f for c, f in compatible.items() if len(f) > 1}
-    if undetermined:
-        _say(f"\n{len(undetermined)} corpora are exact to more than one family:")
-        for corpus, families in sorted(undetermined.items(), key=lambda kv: -len(kv[1])):
+    multiple = {c: f for c, f in compatible.items() if len(f) > 1}
+    if multiple:
+        _say(
+            f"\n{len(multiple)} corpora belong to more than one family. This is the answer, "
+            f"not a gap:\nthey match every family listed exactly on the books they share, and "
+            f"those families\ndiffer only in books these corpora do not carry."
+        )
+        for corpus, families in sorted(multiple.items(), key=lambda kv: -len(kv[1])):
             print(f"  {corpus:13} {len(signatures[corpus]):>4} chapters  {', '.join(families)}")
-        _say("  (they differ only in books these corpora do not carry)")
 
     orphans = [c for c, f in compatible.items() if not f]
     if orphans:
-        _say(f"\n{len(orphans)} too small to place: {', '.join(sorted(orphans))}")
+        _say(
+            f"\n{len(orphans)} genuinely unplaceable -- too few complete chapters to compare: "
+            f"{', '.join(sorted(orphans))}"
+        )
     return 0
 
 

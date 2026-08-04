@@ -187,6 +187,50 @@ class Derivation:
     def unplaceable(self) -> list[Placement]:
         return [p for p in self.placements if p.verdict == "unplaceable"]
 
+    def membership(
+        self, signatures: Mapping[str, Signature], *, min_overlap: int = MIN_OVERLAP
+    ) -> dict[str, list[str]]:
+        """Every family each corpus belongs to. Often more than one, and that is the answer.
+
+        The rule is that a corpus belongs to a family when the books they *share* match
+        exactly; books one side simply does not carry are no obstacle, since a Protestant
+        Bible lacking Tobit and a Catholic one carrying it can still number Genesis
+        identically. That rule is right and it does not yield a partition, because it is not
+        transitive.
+
+        The concrete case: the King James and the Revised Version both carry 2 Esdras and
+        Sirach and disagree there -- 2 Esdras 7 runs to 70 verses in the one and 140 in the
+        other, the fragment restored from the Codex Ambianensis -- so they are different
+        families. The American Standard Version carries neither book, matches the King James
+        exactly on everything they share, and matches the Revised Version exactly too. It
+        belongs to both. Nothing is missing and no tie needs breaking: for any purpose the
+        ASV has text for, the two numberings are the same.
+
+        So membership is a cover rather than a partition, and a corpus listed under several
+        families is fully placed. Only an empty list means genuinely unplaceable -- too few
+        complete chapters to compare against anything.
+        """
+        return self.compatibility(signatures, min_overlap=min_overlap)
+
+    def sole_members(self, signatures: Mapping[str, Signature]) -> dict[str, list[str]]:
+        """Per family, the corpora that match it and nothing else."""
+        member = self.membership(signatures)
+        out: dict[str, list[str]] = {family.name: [] for family in self.families}
+        for corpus, families in member.items():
+            if len(families) == 1:
+                out[families[0]].append(corpus)
+        return {name: sorted(corpora) for name, corpora in out.items()}
+
+    def shared_members(self, signatures: Mapping[str, Signature]) -> dict[str, list[str]]:
+        """Per family, the corpora that match it *and* at least one other."""
+        member = self.membership(signatures)
+        out: dict[str, list[str]] = {family.name: [] for family in self.families}
+        for corpus, families in member.items():
+            if len(families) > 1:
+                for name in families:
+                    out[name].append(corpus)
+        return {name: sorted(corpora) for name, corpora in out.items()}
+
     def compatibility(
         self, signatures: Mapping[str, Signature], *, min_overlap: int = MIN_OVERLAP
     ) -> dict[str, list[str]]:

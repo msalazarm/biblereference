@@ -72,8 +72,9 @@ one name, the partition made a choice and the choice is visible.
 | `noy` | `noy` | 737 | eng |
 | `wycliffe` | `wycliffe` | 274 | eng |
 
-**35 of 55 corpora are determined** — compatible with exactly one family. No corpus is
-assigned to a family it is not compatible with, which `tests/test_families.py` enforces.
+**35 of 55 corpora match exactly one family.** The other 16 match several, and are fully
+placed in all of them — see below. No corpus is assigned to a family it is not compatible
+with, which `tests/test_families.py` enforces.
 
 ## What the declared data got wrong
 
@@ -90,11 +91,24 @@ project something:
   eleven of them.
 - **`kjv` and `rv`**, both `eng`, and the pair that proves compatibility is not transitive.
 
-## Which corpora remain undetermined
+## Sixteen corpora belong to more than one family
 
-Sixteen are exact to more than one family, always because those families differ only in
-books the corpus does not carry. This is a real limit, not a defect in the method — nothing
-in the text can settle it, because the deciding text is absent.
+This is the answer, not a gap, and it follows directly from the rule. A corpus belongs to a
+family when the books they *share* match exactly; a book one side simply does not carry is
+no obstacle, since a Protestant Bible lacking Tobit and a Catholic one carrying it can still
+number Genesis identically.
+
+That rule is right, and it does not yield a partition, because it is not transitive. The
+King James and the Revised Version both carry 2 Esdras and Sirach and disagree there — 2
+Esdras 7 runs to 70 verses in the one and 140 in the other, the fragment restored from the
+Codex Ambianensis, and Sirach 23 is 28 against 27. So they are different families. The
+American Standard Version carries neither book, matches the King James exactly on
+everything they share, and matches the Revised Version exactly too. It belongs to both.
+
+Nothing is missing and no tie needs breaking: for every purpose the ASV has text for, the
+two numberings are identical. Membership is therefore a **cover**, not a partition, and a
+corpus listed under several families is fully placed. Verified: every one of the sixteen
+carries *none* of the books on which its candidate families differ.
 
 | corpus | chapters | exact to |
 |---|---|---|
