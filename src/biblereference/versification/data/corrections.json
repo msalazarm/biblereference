@@ -320,6 +320,10 @@
       }
     },
     "lxx": {
+      "LEV 8:19-29": {
+        "to": "LEV 8:20-30",
+        "reason": "The Septuagint has no counterpart to org's Leviticus 8:19, 'He killed it; and Moses sprinkled the blood around on the altar', so eleven verses of the consecration run one behind and nothing recorded it. Brenton's 8:19 is 'And he divided the ram by its limbs', which is org's 8:20; 'And Moses took the breast, and separated it for a heave-offering' is his 8:28 against org's 8:29. They resynchronise at 8:31 because the Greek splits org's 8:30 in two, keeping 'And he sanctified Aaron and his garments' as its own 8:30 -- which is why both number the chapter at 36 despite the omission, and why no count-based check could see it. Three independent pairs flagged the run (lxx against vul 10-0, eng against lxx 8-0, org against lxx 8-0) and eng agrees with org here verse for verse across the whole chapter, so only lxx deviates."
+      },
       "DAG 3:24-90": {
         "to": "S3Y 1:1-67",
         "reason": "Upstream lxx.json maps DAG 3:1-23 and DAG 3:91-97 but leaves 3:24-90 unmapped, so citing the Song of the Three against a Septuagint corpus silently resolved to nothing. lxx maxVerses DAG chapter 3 is 97, leaving exactly verses 24-90 (67 verses) for the Song, matching org's S3Y of 67 verses."

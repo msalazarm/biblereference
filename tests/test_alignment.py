@@ -348,3 +348,17 @@ def test_baruch_1_converts_despite_a_wrong_upstream_verse_count(vrs: Versificati
     twenty-two and align verse for verse. The count is simply wrong upstream."""
     assert convert(vrs, "BAR 1:1", "eng", "org") == "BAR 1:1"
     assert convert(vrs, "BAR 1:21", "eng", "org") == "BAR 1:21"
+
+
+def test_the_septuagint_omits_a_verse_in_leviticus_8(vrs: Versification) -> None:
+    """org 8:19 is 'He killed it; and Moses sprinkled the blood around on the altar', and
+    the Greek has no counterpart -- so eleven verses of the consecration run one behind.
+
+    Both number the chapter at 36 regardless, because the Greek splits org's 8:30 in two,
+    which is why no count-based check could ever have seen this. Three independent pairs
+    flagged it and eng agrees with org verse for verse throughout the chapter.
+    """
+    assert convert(vrs, "LEV 8:18", "lxx", "org") == "LEV 8:18"
+    assert convert(vrs, "LEV 8:19", "lxx", "org") == "LEV 8:20"
+    assert convert(vrs, "LEV 8:28", "lxx", "org") == "LEV 8:29"
+    assert convert(vrs, "LEV 8:31", "lxx", "org") == "LEV 8:31"
