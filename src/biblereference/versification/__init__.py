@@ -19,6 +19,7 @@ what was wrong and how each fix was verified; see also ``data/NOTICE.md``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Iterable, Iterator, Mapping
@@ -39,6 +40,7 @@ __all__ = [
     "VersificationDataError",
     "VersificationError",
     "VersificationGapError",
+    "fingerprint",
 ]
 
 #: The versification everything converts through.
@@ -806,3 +808,32 @@ def _load_cached(systems: tuple[str, ...]) -> Versification:
 
 def _iter_books(system: _System) -> Iterator[str]:
     yield from system.max_verses
+
+
+@cache
+def fingerprint(systems: Iterable[str] = DEFAULT_SYSTEMS) -> str:
+    """A stable digest of the versification data and the corrections applied to it.
+
+    A version string cannot stand in for this. A mapping fix is a change to a JSON file
+    rather than a release -- seven of them landed in one afternoon while auditing Greek
+    Daniel, Sirach 6 and Leviticus 8 -- so anything that resolved references before them and
+    stored the results is now silently disagreeing with the library that produced it, and
+    nothing about it looks wrong.
+
+    Anything deriving stored data from this library should record what this returned and
+    warn when it moves. It exists so a dependent does not have to reach into this package's
+    data files to compute one itself.
+
+    The loaded system names are included, so asking for a different set of systems is
+    visible too: ``rsc`` and ``rso`` carry mappings the default five do not.
+    """
+    digest = hashlib.sha256()
+    data = resources.files("biblereference.versification").joinpath("data")
+    for name in sorted(entry.name for entry in data.iterdir() if entry.name.endswith(".json")):
+        digest.update(name.encode())
+        digest.update(data.joinpath(name).read_bytes())
+    # After the files, so that a system list which happens to spell a filename cannot
+    # collide with one.
+    digest.update(b"\x00systems\x00")
+    digest.update(",".join(sorted(systems)).encode())
+    return digest.hexdigest()

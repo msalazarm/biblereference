@@ -7,15 +7,21 @@ ignored, so the assertions double as documentation of what the data claims.
 
 from __future__ import annotations
 
+import hashlib
+from importlib import resources
+from pathlib import Path
+
 import pytest
 
 from biblereference.refs import VerseRef, parse_reference
 from biblereference.versification import (
     AVAILABLE_SYSTEMS,
+    DEFAULT_SYSTEMS,
     PIVOT,
     VerseOutOfRangeError,
     Versification,
     VersificationGapError,
+    fingerprint,
 )
 
 
@@ -384,3 +390,66 @@ def test_where_it_differs_conversion_refuses_rather_than_shifting(
     # Its Sirach follows the Vulgate's expanded numbering throughout.
     with pytest.raises(VersificationGapError):
         vrs.convert_range(parse_reference("Sir 1:1"), "nvl")
+
+
+# --------------------------------------------------------------------------------------
+# A fingerprint of the data, for anything that stores what this library resolved
+# --------------------------------------------------------------------------------------
+
+
+def test_the_fingerprint_is_stable_across_calls() -> None:
+    assert fingerprint() == fingerprint()
+
+
+def test_the_fingerprint_covers_the_corrections_as_well_as_the_vendored_maps() -> None:
+    """The whole point. A mapping fix is a change to corrections.json rather than a
+    release, so a digest that only covered the vendored files would miss exactly the
+    changes most likely to move a downstream index.
+
+    Recomputed independently here rather than compared to a stored constant, which would
+    only assert that the function is unchanged.
+    """
+    data = resources.files("biblereference.versification").joinpath("data")
+    names = sorted(e.name for e in data.iterdir() if e.name.endswith(".json"))
+    assert "corrections.json" in names
+
+    digest = hashlib.sha256()
+    for name in names:
+        digest.update(name.encode())
+        digest.update(data.joinpath(name).read_bytes())
+    digest.update(b"\x00systems\x00")
+    digest.update(",".join(sorted(DEFAULT_SYSTEMS)).encode())
+
+    assert fingerprint() == digest.hexdigest()
+
+
+def test_the_fingerprint_moves_when_a_correction_does(tmp_path: Path) -> None:
+    """A byte changed anywhere in the data must show, since that is the failure this
+    exists to catch: an index built yesterday silently disagreeing with today's mappings."""
+    data = resources.files("biblereference.versification").joinpath("data")
+    names = sorted(e.name for e in data.iterdir() if e.name.endswith(".json"))
+
+    def digest_over(altered: str) -> str:
+        out = hashlib.sha256()
+        for name in names:
+            out.update(name.encode())
+            raw = data.joinpath(name).read_bytes()
+            out.update(raw + b" " if name == altered else raw)
+        out.update(b"\x00systems\x00")
+        out.update(",".join(sorted(DEFAULT_SYSTEMS)).encode())
+        return out.hexdigest()
+
+    assert digest_over("corrections.json") != fingerprint()
+    assert digest_over("org.json") != fingerprint()
+
+
+def test_the_fingerprint_distinguishes_which_systems_were_loaded() -> None:
+    """rsc and rso carry mappings the default five do not, so loading them is a different
+    answer and has to look like one."""
+    assert fingerprint(DEFAULT_SYSTEMS) != fingerprint(AVAILABLE_SYSTEMS)
+
+
+def test_the_fingerprint_is_not_merely_the_version() -> None:
+    from biblereference import __version__
+
+    assert fingerprint() != __version__

@@ -116,3 +116,43 @@ def test_the_renderer_honours_the_configured_threshold(threshold: float) -> None
     renderer = Renderer(Config(quote_threshold=threshold, notices=False))
     _, report = renderer.render_text(f'[passage="Luke 2:42" original="none" context="{NRSV_ISH}"]')
     assert bool(report.warnings) is (threshold == 1.0)
+
+
+def test_a_long_supplied_quotation_is_compared_on_all_its_words() -> None:
+    """Over 200 elements difflib's autojunk discards anything occurring in more than 1% of
+    a sequence -- which for a quotation is "the", "and", "of", the connective tissue that
+    tells a quotation from a bag of shared vocabulary.
+
+    search.py documents exactly this and passes autojunk=False; check_quotation did not, so
+    the check got *looser* the longer the quotation, which is precisely backwards.
+
+    Asserted against what difflib does with and without the flag rather than against a
+    verdict, because whether one particular pair lands over the threshold depends on the
+    words chosen and would pass for the wrong reason.
+    """
+    from difflib import SequenceMatcher
+
+    supplied = (
+        "the lord is my shepherd i shall not want he maketh me to lie down in green pastures " * 15
+    ).split()
+    actual = (
+        "the lord is my shepherd i shall not want he leadeth me beside the still waters " * 15
+    ).split()
+    assert len(supplied) > 200, "autojunk only engages on sequences this long"
+
+    junked = SequenceMatcher(None, supplied, actual).ratio()
+    whole = SequenceMatcher(None, supplied, actual, autojunk=False).ratio()
+    assert junked != whole, "the fixture must actually trigger autojunk"
+
+    got = check_quotation(" ".join(supplied), " ".join(actual)).ratio
+    assert got == pytest.approx(whole)
+    assert got != pytest.approx(junked)
+
+
+def test_short_quotations_are_unaffected() -> None:
+    """Regression: below difflib's 200-element threshold autojunk never applied, so nothing
+    about short quotations may move."""
+    verse = "The LORD is my shepherd; I shall not want."
+
+    assert check_quotation("The LORD is my shepherd", verse).plausible
+    assert not check_quotation("the moon is a harsh mistress", verse).plausible
