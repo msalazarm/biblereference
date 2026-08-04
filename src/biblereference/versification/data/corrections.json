@@ -320,6 +320,18 @@
       }
     },
     "lxx": {
+      "NUM 27:4-7": {
+        "to": "NUM 27:5-8",
+        "reason": "The Septuagint has no counterpart to org's Numbers 27:4, the daughters' plea 'Why should the name of our father be withdrawn from among his family, because he has no son?', so four verses run one behind. Brenton's 27:4 is 'And Moses brought their case before the Lord', which is org 27:5; his 27:6 'The daughters of Salpaad have spoken rightly' is org 27:7. They resynchronise at 27:9 because the Greek splits org 27:8, keeping 'And thou shalt speak to the children of Israel, saying' apart from 'If a man die, and have no son'. Equal counts, different division -- the same shape as the Leviticus 8 omission recorded above, and equally invisible to any count-based check."
+      },
+      "EZK 7:3-6": {
+        "to": "EZK 7:6-9",
+        "reason": "Greek Ezekiel 7 transposes two blocks of the oracle and nothing recorded it, so seven verses resolved into the wrong half of the chapter. The Greek runs the Hebrew's 6,7,8,9 first and then its 3,4,5. Brenton's 7:3 'The end is come' is org 7:6 'Ketz is come, the ketz is come'; his 7:5 'Now I will pour out mine anger upon thee' is org 7:8 'Now will I shortly pour out My fury upon thee'. Four verses onto four. The alignment that found this could not describe it -- a monotonic alignment cannot express a swap, so it reported a plain one-verse shift over part of the block; the correspondence here was established by reading the two texts."
+      },
+      "EZK 7:7-9": {
+        "to": "EZK 7:3-5",
+        "reason": "The other half of the transposition above. Brenton's 7:7 'Now the end is come to thee, and I will send judgment upon thee' is org 7:3 'Now is the Ketz come upon thee, and I will send Mine anger'; his 7:9 'For thus saith the Lord; Behold, the end is come' is org 7:5 'Thus saith Adonoi Hashem; A ra'ah, a singular ra'ah, hinei, has come'. Three onto three, and the chapter resynchronises at 7:10, which is why both number it at 27 and no count-based check could see any of this."
+      },
       "LEV 8:19-29": {
         "to": "LEV 8:20-30",
         "reason": "The Septuagint has no counterpart to org's Leviticus 8:19, 'He killed it; and Moses sprinkled the blood around on the altar', so eleven verses of the consecration run one behind and nothing recorded it. Brenton's 8:19 is 'And he divided the ram by its limbs', which is org's 8:20; 'And Moses took the breast, and separated it for a heave-offering' is his 8:28 against org's 8:29. They resynchronise at 8:31 because the Greek splits org's 8:30 in two, keeping 'And he sanctified Aaron and his garments' as its own 8:30 -- which is why both number the chapter at 36 despite the omission, and why no count-based check could see it. Three independent pairs flagged the run (lxx against vul 10-0, eng against lxx 8-0, org against lxx 8-0) and eng agrees with org here verse for verse across the whole chapter, so only lxx deviates."

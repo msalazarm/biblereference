@@ -362,3 +362,28 @@ def test_the_septuagint_omits_a_verse_in_leviticus_8(vrs: Versification) -> None
     assert convert(vrs, "LEV 8:19", "lxx", "org") == "LEV 8:20"
     assert convert(vrs, "LEV 8:28", "lxx", "org") == "LEV 8:29"
     assert convert(vrs, "LEV 8:31", "lxx", "org") == "LEV 8:31"
+
+
+def test_greek_ezekiel_7_transposes_two_blocks(vrs: Versification) -> None:
+    """The Greek runs the Hebrew's 6,7,8,9 first and then its 3,4,5, and nothing recorded
+    it, so seven verses resolved into the wrong half of the chapter.
+
+    The alignment that found this could not describe it -- monotonic alignment cannot
+    express a swap, so it reported a plain one-verse shift over part of the block. The
+    correspondence was established by reading the texts: 'The end is come' is Brenton's 7:3
+    and org's 7:6; 'Now the end is come to thee, and I will send judgment upon thee' is his
+    7:7 and org's 7:3.
+    """
+    assert convert(vrs, "EZK 7:3", "lxx", "org") == "EZK 7:6"
+    assert convert(vrs, "EZK 7:6", "lxx", "org") == "EZK 7:9"
+    assert convert(vrs, "EZK 7:7", "lxx", "org") == "EZK 7:3"
+    assert convert(vrs, "EZK 7:9", "lxx", "org") == "EZK 7:5"
+    assert convert(vrs, "EZK 7:10", "lxx", "org") == "EZK 7:10"
+
+
+def test_the_septuagint_omits_the_daughters_plea_in_numbers_27(vrs: Versification) -> None:
+    """org 27:4 is 'Why should the name of our father be withdrawn from among his family,
+    because he has no son?' and the Greek has no counterpart, so four verses run behind."""
+    assert convert(vrs, "NUM 27:4", "lxx", "org") == "NUM 27:5"
+    assert convert(vrs, "NUM 27:6", "lxx", "org") == "NUM 27:7"
+    assert convert(vrs, "NUM 27:9", "lxx", "org") == "NUM 27:9"
