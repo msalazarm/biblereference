@@ -803,8 +803,54 @@ def _build_system(name: str, corrections: dict[str, object]) -> _System:
             )
         max_verses[book] = tuple(int(v) for v in spec["maxVerses"])
 
+    _fixed_books: set[str] = set()
+    fixes = _sub(corrections, "fix_max_verses").get(name, {})
+    assert isinstance(fixes, dict)
+    for book, spec in fixes.items():
+        if book not in max_verses:
+            raise VersificationDataError(
+                f"correction for {name!r} fixes verse counts in {book!r}, which upstream "
+                f"does not define -- the correction is stale or the book code is wrong"
+            )
+        counts = list(max_verses[book])
+        for chapter, count in spec["chapters"].items():
+            index = int(chapter) - 1
+            if not 0 <= index < len(counts):
+                raise VersificationDataError(
+                    f"correction for {name!r} fixes {book} {chapter}, which upstream does "
+                    f"not have ({book} has {len(counts)} chapters)"
+                )
+            if counts[index] == int(count):
+                raise VersificationDataError(
+                    f"correction for {name!r} sets {book} {chapter} to {count}, which is "
+                    f"already what upstream says -- the correction can be removed"
+                )
+            counts[index] = int(count)
+        max_verses[book] = tuple(counts)
+        _fixed_books.add(book)
+
     mapped_raw = raw.get("mappedVerses", {})
     assert isinstance(mapped_raw, dict)
+
+    # A corrected verse count must not orphan a mapping that was written against the old
+    # one. Checked only for books fix_max_verses touched, because the vendored data has
+    # pre-existing inconsistencies elsewhere that are not this correction's business.
+    if _fixed_books:
+        for key in mapped_raw:
+            match = _REF_RE.match(key)
+            if match is None or match["book"] not in _fixed_books:
+                continue
+            declared = max_verses.get(match["book"])
+            chapter = int(match["chapter"])
+            if not declared or chapter > len(declared):
+                continue
+            highest = int(match["verse2"] or match["verse"])
+            if highest > declared[chapter - 1]:
+                raise VersificationDataError(
+                    f"{name}: fix_max_verses set {match['book']} {chapter} to "
+                    f"{declared[chapter - 1]} verses, but the mapping {key!r} names verse "
+                    f"{highest} -- correct or drop the mapping too"
+                )
 
     if name in _sub(corrections, "ignore_self_mapped"):
         # The pivot's own "mappings" are an aside about book layout, not conversions.

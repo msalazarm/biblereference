@@ -458,3 +458,86 @@ def test_naming_one_chapter_does_not_refuse_its_neighbours(vrs: Versification) -
     throw away the two chapters now mapped."""
     assert convert(vrs, "SIR 6:23", "eng", "vul") == "SIR 6:24"
     assert convert(vrs, "SIR 14:17", "eng", "vul") == "SIR 14:18"
+
+
+# --------------------------------------------------------------------------------------
+# Verse counts: a verse the data has no slot for
+# --------------------------------------------------------------------------------------
+
+
+def test_a_verse_every_edition_prints_has_a_slot(vrs: Versification) -> None:
+    """A verse the system does not declare is unreachable -- it cannot be cited, validated
+    or rendered, whatever the mappings say.
+
+    Found by asking, per system, which chapters *every* corpus declaring it disagrees about.
+    Only the cases where the corpora print MORE than the system allows are corrected: where
+    a system declares more than our editions print, an edition we do not hold may well have
+    those verses, and absence of evidence is not evidence.
+    """
+    assert vrs.max_verse("eng", "BAR", 1) == 22
+    assert vrs.max_verse("eng", "SIR", 41) == 24
+    assert vrs.max_verse("lxx", "NUM", 6) == 27
+    assert vrs.max_verse("vul", "DAN", 14) == 42
+
+
+def test_the_pivot_was_short_too(vrs: Versification) -> None:
+    """org escaped the first pass for an honest reason: its own witnesses, the Leningrad
+    Codex and Nestle 1904, carry no deuterocanon, so nothing could contradict it there.
+
+    4 Maccabees 12:20 and Wisdom 17:21 are printed by four English editions and by Brenton,
+    Swete and both LXX2012s -- eight witnesses across two traditions -- and the pivot had no
+    slot for either. Correcting eng and lxx alone would have pointed them at nothing.
+    """
+    assert vrs.max_verse("org", "4MA", 12) == 20
+    assert vrs.max_verse("org", "WIS", 17) == 21
+    assert convert(vrs, "4MA 12:20", "eng", "org") == "4MA 12:20"
+
+
+def test_the_greek_follows_the_english_break_in_deuteronomy(vrs: Versification) -> None:
+    """lxx was declared with the Hebrew chapter break and the Greek does not use it: Brenton
+    and Swete both print Deuteronomy 28 with 68 verses and 29 with 29, as the English does,
+    while lxx declared 69 and 28 as org and the Nova Vulgata do.
+
+    eng and vul each carried the two mappings this needs and lxx carried none, so all 29
+    verses of Greek Deuteronomy 29 resolved one out -- including 29:29, "The secret things
+    belong to the Lord our God".
+    """
+    assert vrs.max_verse("lxx", "DEU", 28) == 68
+    assert vrs.max_verse("lxx", "DEU", 29) == 29
+    assert convert(vrs, "DEU 29:1", "lxx", "org") == "DEU 28:69"
+    assert convert(vrs, "DEU 29:29", "lxx", "org") == "DEU 29:28"
+    # Unchanged where the Greek really does follow the Hebrew.
+    assert vrs.max_verse("lxx", "DEU", 23) == vrs.max_verse("org", "DEU", 23)
+
+
+def test_the_greek_swaps_naboth_and_ben_hadad(vrs: Versification) -> None:
+    """3 Kingdoms 20 and 21 are the other way round in the Greek, and upstream recorded only
+    half the swap: '1KI 21:1-43 -> 1KI 20:1-43' was there and its partner was not, so all 29
+    verses of Greek chapter 20 fell through to the identity and returned Ben-Hadad's siege
+    where Naboth's vineyard belongs.
+
+    The verse counts prove it alone -- lxx 20 has 29 against org 21's 29, lxx 21 has 43
+    against org 20's 43 -- and the text agrees at both ends.
+    """
+    assert convert(vrs, "1KI 20:1", "lxx", "org") == "1KI 21:1"
+    assert convert(vrs, "1KI 20:29", "lxx", "org") == "1KI 21:29"
+    assert convert(vrs, "1KI 21:1", "lxx", "org") == "1KI 20:1"
+    assert convert(vrs, "1KI 21:43", "lxx", "org") == "1KI 20:43"
+
+
+def test_a_stale_verse_count_correction_is_refused() -> None:
+    """The same discipline as every other correction here: one that no longer applies means
+    upstream changed, and it must say so rather than sit there agreeing with itself."""
+    import json
+    from importlib import resources
+
+    from biblereference.versification import _build_system
+
+    data = resources.files("biblereference.versification").joinpath("data")
+    corrections = json.loads(data.joinpath("corrections.json").read_text(encoding="utf-8"))
+    # Upstream eng.json gives Baruch 1 twenty-one verses; a correction restating that is
+    # one that has stopped doing anything.
+    corrections["fix_max_verses"] = {"eng": {"BAR": {"chapters": {"1": 21}, "reason": "x"}}}
+
+    with pytest.raises(VersificationError, match="already what upstream says"):
+        _build_system("eng", corrections)

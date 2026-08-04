@@ -189,10 +189,6 @@
   },
   "add_mapped": {
     "eng": {
-      "BAR 1:1-21": {
-        "to": "BAR 1:1-21",
-        "reason": "States the identity that upstream leaves implicit, so the chapter is vouched for. eng.json gives Baruch 1 twenty-one verses where org gives twenty-two, and since no mapping mentioned the chapter the per-chapter guard read that as two traditions dividing the text differently and refused to convert. They do not: the World English Bible, the Douay-Rheims, the Vulgata Clementina and the Nova Vulgata all print twenty-two verses and align verse for verse ('Nevertheless we didn't listen to the voice of the Lord our God' is 1:21 in the English and 'Et non audivimus vocem Domini Dei nostri' is 1:21 in the Latin). The declared twenty-one is an upstream verse count that is simply wrong -- ten of ten English witnesses carrying Baruch say twenty-two -- and this file has no mechanism for correcting maxVerses. So the twenty-one verses eng does declare are mapped straight through, which is true as far as it goes and restores conversion; the missing twenty-second remains unreachable from eng until upstream is fixed."
-      },
       "DAG 1:1-21": {
         "to": "DAN 1:1-21",
         "reason": "See _dag_note. Identical to lxx's entry; the Greek and English number Daniel 1 alike."
@@ -329,6 +325,18 @@
       }
     },
     "lxx": {
+      "DEU 29:1": {
+        "to": "DEU 28:69",
+        "reason": "See fix_max_verses.lxx.DEU. Copied from eng's and vul's identical entries."
+      },
+      "DEU 29:2-29": {
+        "to": "DEU 29:1-28",
+        "reason": "See fix_max_verses.lxx.DEU. The other 28 verses of the chapter."
+      },
+      "1KI 20:1-29": {
+        "to": "1KI 21:1-29",
+        "reason": "Greek 3 Kingdoms swaps the Naboth and Ben-Hadad chapters, and upstream records only half the swap. '1KI 21:1-43 -> 1KI 20:1-43' is there and correct; its partner is missing, so all 29 verses of Greek chapter 20 fell through to the identity and every citation of them returned Ben-Hadad's siege where Naboth's vineyard belongs. The verse counts prove the swap on their own -- lxx 20 has 29 verses against org 21's 29, and lxx 21 has 43 against org 20's 43 -- and the text confirms it at both ends and the middle: Brenton's 20:1 'And Nabuthai the Jezraelite had a vineyard' is org's 21:1 'Navot the Yizre'eli', his 20:15 'when Jezabel heard it' is org's 21:15 'when Izevel heard that Navot was stoned', and his 20:29 'how Achaab has been pricked to the heart' is org's 21:29 'how Ach'av humbleth himself'. The Vulgate follows the Hebrew order throughout and agrees with org."
+      },
       "NUM 27:4-7": {
         "to": "NUM 27:5-8",
         "reason": "The Septuagint has no counterpart to org's Numbers 27:4, the daughters' plea 'Why should the name of our father be withdrawn from among his family, because he has no son?', so four verses run one behind. Brenton's 27:4 is 'And Moses brought their case before the Lord', which is org 27:5; his 27:6 'The daughters of Salpaad have spoken rightly' is org 27:7. They resynchronise at 27:9 because the Greek splits org 27:8, keeping 'And thou shalt speak to the children of Israel, saying' apart from 'If a man die, and have no son'. Equal counts, different division -- the same shape as the Leviticus 8 omission recorded above, and equally invisible to any count-based check."
@@ -421,6 +429,77 @@
           24
         ],
         "reason": "The Vulgate has no Esther at all upstream: vul.json carries only ESG, given the Septuagint's ten chapters and verse counts byte-identical to org's. That is not the book the Vulgate prints. The Clementine Esther runs to sixteen chapters, keeping the Hebrew text in 1:1-10:3 and appending the six Greek additions as 10:4-16:24, and it is the book the Douay-Rheims translates. Verse counts are those of the Douay-Rheims text itself, so a citation written in Vulgate numbering can at least be checked and looked up. Conversion to the original-language numbering is declared unmappable below rather than guessed: see esther_additions.json for the correspondence that *is* established, between Vulgate numbering and the A-F letter chapters."
+      }
+    }
+  },
+  "fix_max_verses": {
+    "org": {
+      "4MA": {
+        "chapters": {
+          "12": 20
+        },
+        "reason": "A verse every edition prints and the system has no slot for is unreachable: it cannot be cited, validated or rendered. Found by asking, for each system, which chapters every corpus declaring that system disagrees with it about -- 24 chapters, of which these are the ones where the corpora print MORE than the system allows. The reverse case, where a system declares more than our editions print, is deliberately not corrected: an edition we do not hold may well have those verses, and absence of evidence is not evidence. org 4 Maccabees 12 stops at 19 and 12:20 'Thus having prayed, he hurled himself into the pans; and so expired' is printed by four English editions and by Brenton, Swete and both LXX2012s -- eight witnesses across two traditions. The pivot escaped the earlier check for the honest reason that its own witnesses, the Leningrad Codex and Nestle 1904, carry no deuterocanon at all."
+      },
+      "WIS": {
+        "chapters": {
+          "17": 21
+        },
+        "reason": "A verse every edition prints and the system has no slot for is unreachable: it cannot be cited, validated or rendered. Found by asking, for each system, which chapters every corpus declaring that system disagrees with it about -- 24 chapters, of which these are the ones where the corpora print MORE than the system allows. The reverse case, where a system declares more than our editions print, is deliberately not corrected: an edition we do not hold may well have those verses, and absence of evidence is not evidence. Wisdom 17:21 'over them only was spread a heavy night, an image of that darkness' is in Brenton and Swete and in the English editions. Same blind spot: nothing faithful to org carries Wisdom."
+      }
+    },
+    "eng": {
+      "4MA": {
+        "chapters": {
+          "12": 20
+        },
+        "reason": "A verse every edition prints and the system has no slot for is unreachable: it cannot be cited, validated or rendered. Found by asking, for each system, which chapters every corpus declaring that system disagrees with it about -- 24 chapters, of which these are the ones where the corpora print MORE than the system allows. The reverse case, where a system declares more than our editions print, is deliberately not corrected: an edition we do not hold may well have those verses, and absence of evidence is not evidence. Corrected in org as well; see there."
+      },
+      "BAR": {
+        "chapters": {
+          "1": 22
+        },
+        "reason": "A verse every edition prints and the system has no slot for is unreachable: it cannot be cited, validated or rendered. Found by asking, for each system, which chapters every corpus declaring that system disagrees with it about -- 24 chapters, of which these are the ones where the corpora print MORE than the system allows. The reverse case, where a system declares more than our editions print, is deliberately not corrected: an edition we do not hold may well have those verses, and absence of evidence is not evidence. Ten of ten English witnesses carrying Baruch print 22 verses, as do the Douay-Rheims, the Clementine and the Nova Vulgata, and they align verse for verse. This was documented as uncorrectable when corrections.json had no mechanism for verse counts; it does now, and the identity mapping added as a workaround is dropped below."
+      },
+      "SIR": {
+        "chapters": {
+          "41": 24
+        },
+        "reason": "A verse every edition prints and the system has no slot for is unreachable: it cannot be cited, validated or rendered. Found by asking, for each system, which chapters every corpus declaring that system disagrees with it about -- 24 chapters, of which these are the ones where the corpora print MORE than the system allows. The reverse case, where a system declares more than our editions print, is deliberately not corrected: an edition we do not hold may well have those verses, and absence of evidence is not evidence. Sirach 41:24 'So you will be ashamed of the right things and find favor in the sight of all men' is in ten English witnesses. org gives the chapter 27 verses, so the identity carries it once the slot exists."
+      }
+    },
+    "lxx": {
+      "4MA": {
+        "chapters": {
+          "12": 20
+        },
+        "reason": "A verse every edition prints and the system has no slot for is unreachable: it cannot be cited, validated or rendered. Found by asking, for each system, which chapters every corpus declaring that system disagrees with it about -- 24 chapters, of which these are the ones where the corpora print MORE than the system allows. The reverse case, where a system declares more than our editions print, is deliberately not corrected: an edition we do not hold may well have those verses, and absence of evidence is not evidence. Corrected in org and eng as well."
+      },
+      "NUM": {
+        "chapters": {
+          "6": 27
+        },
+        "reason": "A verse every edition prints and the system has no slot for is unreachable: it cannot be cited, validated or rendered. Found by asking, for each system, which chapters every corpus declaring that system disagrees with it about -- 24 chapters, of which these are the ones where the corpora print MORE than the system allows. The reverse case, where a system declares more than our editions print, is deliberately not corrected: an edition we do not hold may well have those verses, and absence of evidence is not evidence. Numbers 6:27 'And they shall put my name upon the children of Israel' is in Brenton and Swete, and org already gives the chapter 27 verses, so only lxx was short."
+      },
+      "WIS": {
+        "chapters": {
+          "17": 21
+        },
+        "reason": "A verse every edition prints and the system has no slot for is unreachable: it cannot be cited, validated or rendered. Found by asking, for each system, which chapters every corpus declaring that system disagrees with it about -- 24 chapters, of which these are the ones where the corpora print MORE than the system allows. The reverse case, where a system declares more than our editions print, is deliberately not corrected: an edition we do not hold may well have those verses, and absence of evidence is not evidence. Corrected in org as well; see there."
+      },
+      "DEU": {
+        "chapters": {
+          "28": 68,
+          "29": 29
+        },
+        "reason": "The Greek follows the English and Latin chapter break here and lxx was declared with the Hebrew one. Brenton and Swete both print Deuteronomy 28 with 68 verses and 29 with 29, exactly as the World English Bible does, while lxx declared 69 and 28 as org and the Nova Vulgata do. eng and vul each carry the pair of mappings this needs and lxx carried none, so all 29 verses of Greek Deuteronomy 29 resolved one out -- including 29:29 'The secret things belong to the Lord our God'. The mappings are added below, copied from eng's, which are verified. Found by checking every chapter that eng and vul both map and lxx does not: 61 of them, of which the Greek witnesses show this to be the only fault."
+      }
+    },
+    "vul": {
+      "DAN": {
+        "chapters": {
+          "14": 42
+        },
+        "reason": "The Clementine's Daniel 14 has 42 verses and vul declared 41, so its last verse -- 'Then the king said: Let all the inhabitants of the whole earth fear the God of Daniel' -- could not be cited, validated or rendered at all. Both Vulgate witnesses print it. It has no Greek counterpart: Bel ends at 42 and the Latin runs one ahead throughout because the Clementine prints the Astyages verse as Daniel 13:65, so 'DAN 14:1-41 -> BEL 1:2-42' is complete and 14:42 is a Latin plus. Conversion of it still refuses, which is right; what changes is that the verse now exists."
       }
     }
   },
