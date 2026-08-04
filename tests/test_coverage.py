@@ -143,16 +143,21 @@ def test_the_unreachable_half_is_reported_rather_than_assumed(walked) -> None:  
 def test_the_contradictions_that_remain_are_the_ones_we_can_name(walked) -> None:  # type: ignore[no-untyped-def]
     """Isolated flags are noise; runs are faults. Only runs are evidence.
 
-    The eight runs left are each a known textual fact rather than a mapping error, and they
-    are pinned here by name so a ninth appearing is a test failure:
+    The runs left are each a known textual fact rather than a mapping error, and they are
+    pinned here by name so a new one appearing is a test failure:
 
     * `EXO 36` / `EXO 39` -- the Septuagint and the Douay reorder and condense the
       tabernacle account bodily. Monotonic alignment cannot describe a transposition.
-    * `NUM 1` / `NUM 26` / `LEV 15` -- the censuses, the tribal lists and the purity laws,
-      where every verse has the identical shape and a neighbour outscores the true match by
-      accident. `NUM 1:6` is "Of Symeon, Salamiel the son of Surisadai" in Brenton and "Of
-      Shim'on, Shelumiel ben Tzurishaddai" in the Orthodox Jewish Bible: the same verse,
-      mapped by identity, correctly.
+    * `NUM 1` / `NUM 26` -- the censuses and the tribal lists, where every verse has the
+      identical shape and a neighbour outscores the true match by accident. `NUM 1:6` is
+      "Of Symeon, Salamiel the son of Surisadai" in Brenton and "Of Shim'on, Shelumiel ben
+      Tzurishaddai" in the Orthodox Jewish Bible: the same verse, mapped by identity,
+      correctly.
+
+    `vul LEV 15` used to be here and is the reason this test is worth having. It was not
+    repetition -- the Douay splits org 15:19 into two and nothing recorded it, so three
+    verses of the purity law resolved one early. Reading the run is what found it; the run
+    went away when the split was written down.
     """
     _, _, contradicted = walked
     runs = {(system, book, chapter) for system, book, chapter, _, _ in runs_of(contradicted, 4)}
@@ -161,7 +166,6 @@ def test_the_contradictions_that_remain_are_the_ones_we_can_name(walked) -> None
         ("lxx", "NUM", 26),
         ("lxx", "NUM", 1),
         ("vul", "EXO", 39),
-        ("vul", "LEV", 15),
         ("vul", "NUM", 1),
     }
 

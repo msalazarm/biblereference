@@ -322,8 +322,8 @@ Current state:
 
 ```
 eng   40,493 verses   0 ghosts     847 refused   30,903 checked (76.3%)  99.586% confirmed
-lxx   40,284 verses   0 ghosts     631 refused   19,637 checked (48.7%)  97.596% confirmed
-vul   39,160 verses   0 ghosts   3,111 refused   30,181 checked (77.1%)  98.260% confirmed
+lxx   40,284 verses   0 ghosts     631 refused   19,638 checked (48.7%)  97.607% confirmed
+vul   39,160 verses   0 ghosts   3,111 refused   30,181 checked (77.1%)  98.290% confirmed
 nvl   35,641 verses   0 ghosts   2,022 refused        0 checked  (0.0%)        - confirmed
 ```
 
@@ -340,10 +340,10 @@ same-language pivot partner anywhere and not one of its 35,641 verses can be che
 way. It is verified against `vul` instead, Latin against Latin at 99.8%, by the pair
 derivation. That is a weaker claim and is recorded as one.
 
-Of the 1,125 contradicted verses, **eight fall in runs of four or more** and every one is a
+Of the 1,114 contradicted verses, **seven fall in runs of four or more** and every one is a
 known textual fact rather than a mapping error: the Septuagint and the Douay reorder and
-condense the tabernacle account (`EXO 36`, `EXO 39`), and the censuses, tribal lists and
-purity laws (`NUM 1`, `NUM 26`, `LEV 15`) are where identically-shaped neighbouring verses
+condense the tabernacle account (`EXO 36`, `EXO 39`), and the censuses and tribal lists
+(`NUM 1`, `NUM 26`) are where identically-shaped neighbouring verses
 outscore the true match by accident. `NUM 1:6` is "Of Symeon, Salamiel the son of
 Surisadai" in Brenton and "Of Shim'on, Shelumiel ben Tzurishaddai" in the Orthodox Jewish
 Bible — the same verse, mapped by identity, correctly.
@@ -355,5 +355,61 @@ biblereference coverage               # the whole walk; non-zero exit if any gho
 biblereference coverage --min-run 6   # only the longest runs
 ```
 
-`tests/test_coverage.py` pins all of this, including the eight runs by name, so a ninth
-appearing is a test failure.
+`tests/test_coverage.py` pins all of this, including the runs by name, so a new one
+appearing is a test failure. `vul LEV 15` used to be among them and was not repetition at
+all -- see the next section.
+
+## The residue, read verse by verse
+
+The exhaustive walk narrows a claim; it does not settle one. Every disagreement outside the
+four books already known to be bodily reordered (Exodus, Jeremiah, Numbers, 3 Kingdoms) was
+then read against the text, in the source language wherever a witness exists. That is 99
+disagreements across about 25 chapters, and the answers divide three ways.
+
+**Twelve were faults in the data.** Each is now written down with its evidence:
+
+| | |
+|---|---|
+| `eng BAR 6:44-50` | The English Letter of Jeremiah is not one straight offset. It merges two verses at 6:43 and splits one at 6:50, and the two cancel — so 6:44 to 6:50 agree exactly with the Latin, where a single range had made them all one out. "Whatsoever is done among them is false" was resolving to "when any one of them lieth with him". Eight English witnesses and three Latin, unanimous. |
+| `nvl SIR 14:17-25` | The Nova Vulgata splits the Greek's Sirach 14:16 exactly as the Clementine does. Recording it for one Latin edition alone made the two disagree across nine verses where they agree word for word. |
+| `lxx MAL 3:22-24` | The Greek Malachi puts "Remember the law of Moses" last. Swete has it at 4:6, Brenton at 3:24; the Hebrew has it first at 3:22. A three-verse rotation — which is why a monotonic alignment could only ever report two thirds of it. |
+| `vul MAT 5:4-5` | The Clementine puts the meek before those who mourn. A real variant of the Latin tradition, not a numbering habit, and upstream recorded identity — so both beatitudes answered with the wrong verse. |
+| `vul LEV 15:20-23` | The Douay splits the Hebrew's 15:19 in two. This one was found by the exhaustive walk as a run of four, and looked exactly like the repetition-noise the other runs are. |
+| `vul MIC 5:11` | Merges org 5:10 and 5:11; upstream named the second, which left "I will cut off the cities of thy land" unreachable. Settled three disagreements at once. |
+| `vul 1MA 1:36`, `1:52-54` | The Douay divides the chapter twice where org divides once, and the two cancel — so only the verses between them were wrong. |
+| `vul REV 20:7-8` | The Clementine merges org 20:7 and 20:8, so "he shall go out to deceive the nations" was resolving to "and they went up on the breadth of the earth". |
+| `vul MAT 17:14` | Merges org 17:14 and 17:15; naming the first left "Lord, have mercy on my son" answering with "and I brought him to thy disciples". |
+| `eng`/`nvl NEH 7:68` | org has no counterpart to the horses of Nehemiah 7:68 — the Leningrad Codex goes straight from the singers to the camels. The Clementine said so and the other two did not. |
+
+**A rule came out of it.** A system verse carrying two org verses can name only one, because
+the forward direction is one-to-one; the reverse fills gaps with the identity. So the target
+to name is **the one the identity will not reach** — the second where the system is in step
+before the merge and one behind after, the first where it is one ahead before and in step
+after. Naming by "whichever the verse opens with" looks principled and is wrong half the
+time. Five of the twelve faults above were that mistake. It is written up as
+`_merged_verse_note` in `corrections.json`.
+
+**The rest are the instrument, not the data**, and each was confirmed by reading:
+
+- **Brenton is not always the Septuagint.** He merges Proverbs 7:6-7, he prints Joshua 24 in
+  the Hebrew order where Swete follows the Greek, and he silently restores the Hebrew order
+  of the Decalogue in Deuteronomy 5 where Swete has "Οὐ μοιχεύσεις" before "Οὐ φονεύσεις".
+  In all three the vendored data is right and the witness is the outlier. This is why a
+  Greek witness was consulted rather than an English one wherever the question was Greek.
+- **Monotonic alignment cannot express a transposition or a swap.** Ezekiel 7:3-9 was read
+  verse by verse and the data has it exactly (org 3→7, 4→8, 6→3, 7→4, 8→5, 9→6); the
+  aligner reports twelve disagreements because it cannot go backwards. The same is true of
+  Malachi 3 and Matthew 5 *after* they were fixed — correcting them raised the derivation's
+  disagreement count while making the data more correct.
+- **A merged verse always reads as a disagreement.** The aligner matches by bulk and lands
+  on whichever half is longer, which is not the half the mapping names. Joshua 21,
+  1 Chronicles 12, Acts 7, Acts 14, Nehemiah 3, 1 Samuel 20 and Baruch 3 are all this, and
+  in every one of them the vendored arrangement is the one that keeps both org verses
+  reachable.
+- **Two org verses have no counterpart in one system at all** — `LJE 1:43` in `eng` and
+  `1MA 1:49` in `vul` — because the merge sits inside a longer re-division and there is
+  nowhere honest to put them. The file says so rather than guessing.
+
+Which leaves the derivation's count a poor summary on its own. It fell from 1,505 to 535
+over this work, but the last hundred moved in both directions, and only reading settles
+which way is right.

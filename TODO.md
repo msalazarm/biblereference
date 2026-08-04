@@ -8,6 +8,14 @@ and `docs/versification-audit.md`, and every fix carries its reasoning in
 State at the time of writing: 461 tests passing, ruff clean, mypy at its 19 pre-existing
 errors (none in files this work touched), working tree clean.
 
+**Updated 2026-08-04, second pass.** Items 1, 2, 3, 4 and 5 are now closed; 6 and 7 stand.
+591 tests. `biblereference coverage` walks every one of the 155,578 conversions and reports
+**0 ghosts** — no conversion returns a verse the pivot does not have — with 51.9% checkable
+against text at 98.62% confirmed and the unreachable half reported rather than assumed. The
+derivation's residue was then read verse by verse outside the four bodily-reordered books:
+twelve more faults found and fixed, the rest confirmed as limits of the aligner or of the
+witnesses. See the last two sections of `docs/versification-audit.md`.
+
 ---
 
 ## Where things live
@@ -113,6 +121,23 @@ new.
 
 </details>
 
+### ~~3. `lxx` and `vul` have no faithful witness~~ — MITIGATED, and now measured
+
+Still true and still unfixable, but no longer silent. `biblereference coverage` walks all
+155,578 conversions and reports per system how many could be checked against text and how
+many could not, so nobody can read silence as agreement:
+
+```
+eng  30,903 checked (76.3%)   lxx  19,638 (48.7%)   vul  30,181 (77.1%)   nvl  0 (0.0%)
+```
+
+`nvl` at 0% is the honest form of what item 6 says about `rsc`/`rso`: its only witness is
+Latin, `org` has none, so no same-language comparison exists. It is verified against `vul`
+instead — Latin against Latin at 99.88% — which is a weaker claim and is now recorded as
+one. The first proposed approach below is what was taken; the other two stand.
+
+<details><summary>original entry</summary>
+
 ### 3. `lxx` and `vul` have no faithful witness — the deepest problem
 
 **No corpus follows either system.** Not Brenton (29 chapters off), not Swete (112), not the
@@ -135,11 +160,27 @@ chapters it excludes.
 - Find a corpus that genuinely follows the shipped systems. Probably does not exist; these
   are Paratext-derived schemes rather than descriptions of one printed edition.
 
-### 4. One passage that cannot be judged at all
+</details>
+
+### ~~4. One passage that cannot be judged at all~~ — DONE
 
 **`SIR 14` and `JDT 6` are resolved** — see item 1. The claim that they could not be judged
 was wrong: `ojb` carries no deuterocanon, but `eng` was triangulated as equal to `org` for
 Sirach, so it stands in. Judith needed no witness in the end, being unmappable outright.
+
+**`BAR 6` is resolved too, and the answer was not the one the models gave.** No org witness
+was needed in the end: `eng` and `vul` both carry the letter and could be read directly
+against each other, and eight English witnesses and three Latin ones are unanimous. The
+English is not one straight offset from the Latin — it merges two verses at 6:43 and splits
+one at 6:50, and the two cancel, so 6:44 to 6:50 agree exactly. The old single range had all
+seven of those wrong. Written up as `_letter_of_jeremiah_note` and pinned by
+`test_the_english_letter_of_jeremiah_is_not_one_straight_offset`.
+
+One thing did *not* resolve: org `LJE 1:43` has no English verse of its own, because English
+carries it inside 6:43 and the data model maps each source verse to exactly one target. The
+file says so rather than guessing.
+
+<details><summary>original entry</summary>
 
 `BAR 6` remains. It has model evidence (6–0) and no org witness, and unlike Sirach there is
 no triangulation available: `eng` carries the Letter of Jeremiah as Baruch 6 and `org` as a
@@ -150,6 +191,16 @@ mapping in question.
 (none of the 55 held here is), or triangulate through `nvl`, which is exact to `nvl` and
 close to `org` — but note `nvl` was found to disagree with `org` at the Nehemiah 7 tail, so
 it is not a safe proxy without checking each case.
+
+</details>
+
+### ~~5. Two upstream verse counts are wrong and cannot be corrected~~ — DONE
+
+`fix_max_verses` exists, with the two invariants the entry asked for: a correction that
+matches upstream is rejected as stale, and no mapping may be left naming a verse outside a
+corrected range. Twenty-four chapters corrected, including `eng BAR 1`.
+
+<details><summary>original entry</summary>
 
 ### 5. Two upstream verse counts are wrong and cannot be corrected
 
@@ -167,6 +218,8 @@ errors are therefore documented and unfixed:
 `_build_system`. Small change, but it alters declared structure rather than mappings, so it
 needs its own invariants — at minimum, that no existing mapping is left pointing outside the
 corrected range.
+
+</details>
 
 ### 6. `rsc` and `rso` cannot be audited at all
 

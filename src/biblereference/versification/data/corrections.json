@@ -15,6 +15,8 @@
   "_synodal_psalm_note": "The rsc and rso files carry the Greek psalm numbering, as lxx and vul do, but state it in fragments rather than in whole ranges -- and several of those fragments contradict each other or map an unequal number of verses. lxx and vul each render the affected psalms as a single clean range ('PSA 86:0-7 -> PSA 87:0-7', 'PSA 89:0-17 -> PSA 90:0-17', 'PSA 141:0-8 -> PSA 142:0-8'), and every correction below reassembles exactly that alignment out of the pieces, keeping whichever fragments are already exact. Nothing here is an invention: the target is independently attested twice over, by two systems that load and are in daily use. Note that mappings onto verse 0 are *not* faults -- org has no verse 0 in the Psalms, but lxx and vul target it 139 and 149 times respectively, because it is how the Copenhagen data models the superscription slot. Only contradictions and unequal ranges block a load.",
   "_dag_note": "org has no DAG book at all -- Greek Daniel lives there as DAN plus the three standalone books S3Y, SUS and BEL. lxx.json spells the whole correspondence out; eng.json recorded only Susanna and Bel, so every English citation of Greek Daniel 1-12 fell through to 'org DAG x:y', a book the pivot does not have. The gap invariant in tests/test_alignment.py does not catch it because it skips books the target system lacks rather than refusing them, so this was silent. The ranges below mirror lxx's, which are verified, and differ only where the English tradition does: it keeps the Aramaic chapter break by printing 'Darius the Mede received the kingdom' as 5:31, where the Greek opens chapter 6 with it. Hence eng DAG 5 has 31 verses to the Greek's 30, eng DAG 6 has 28 to the Greek's 29, and everything in chapter 6 runs one behind. Measured on web against brenton: chapters 1-4 and 7-12 align verse for verse at offset 0, chapter 5 puts exactly one verse at the next chapter's opening, and all 28 verses of chapter 6 sit at +1.",
   "_psalm_title_note": "Examined and deliberately not corrected. lxx maps 135 of its 138 titled psalms as a single straight range from verse 0 -- 'PSA 12:0-6 -> PSA 13:0-6' -- while vul curates a handful of the same psalms by hand, and comparing the two suggests lxx is one out. It is not, or not in a way this file can fix. The Copenhagen data models a superscription as verse 0 on both sides of a mapping, while org's own maxVerses counts it as verse 1: the Leningrad Codex's Psalm 13:1 is 'lamnatzeach mizmor ledavid', the title, and org gives the psalm six verses. Those two conventions disagree upstream, so a mapping that looks off by one against the verse counts is consistent with the convention the mappings themselves use. Where vul departs from the straight range it is for a real reason and those entries stand: the Latin merges Psalm 12's title with its first line into one verse and splits the Hebrew's 13:3 in two, which is why it needs 12:2 and 12:3 both mapping to 13:3. Rewriting 135 lxx psalms on a convention this project does not control would risk far more than it fixes, and the measured cost of leaving them is seven flagged rows across the whole derivation. See audit.faithful_chapters, which cannot see this either.",
+  "_letter_of_jeremiah_note": "The Letter of Jeremiah is org's standalone LJE and English's Baruch 6, and the two number it differently in three places rather than one. The English tradition counts the letter's heading -- 'A copy of a letter that Jeremy sent to those who were to be led captives into Babylon' -- as 6:1, which the Latin does not, so English opens one ahead. It then merges two verses at 6:43, where every English witness reads 'The women also with cords about them sit in the ways, burning bran for incense: but if any of them, drawn by some that pass by, lie with him, she reproacheth her neighbour' and the Latin keeps 'Mulieres autem circumdatae funibus in viis sedent' at 42 and 'cum autem aliqua ex ipsis, attracta ab aliquo transeunte, dormierit cum eo' at 43 -- which cancels the offset, and 6:44 to 6:50 agree exactly. It then splits the Latin's 6:50 in two, and the offset resumes to the end. This was originally written as one straight range and the middle seven verses were wrong: 'Whatsoever is done among them is false' resolved to 'when any one of them lieth with him', a different sentence entirely. Read against all eight English witnesses that carry the book (asvbt, kjv, kjvcpb, rv, web, webbe, webc, webu, unanimous at 73 verses) and all three Latin ones (dra, latvuc, novavulgata, unanimous at 72). One consequence is stated rather than hidden. Because the data model maps each source verse to exactly one target, the merged English 6:43 can name only one of the two Latin verses it carries, and it names the first -- so nothing maps forward onto LJE 1:43. Converting that verse back into English therefore falls through to the identity and answers LJE 1:43, in the standalone naming rather than as BAR 6:43. That answer is textually right, since the English verse 43 does contain the material, and it is the reason 6:43 maps to 42 rather than to 43: the mirror-image arrangement would leave LJE 1:42 to fall through to English 1:42, which reads 'Yet they cannot perceive this themselves' and is the wrong verse. Before this correction LJE 1:43 answered BAR 6:44, 'Whatsoever is done among them is false' -- a different sentence entirely.",
+  "_merged_verse_note": "A system verse that carries two org verses can name only one of them, because the forward direction is one-to-one. Which one is not a matter of taste, and getting it wrong is how five faults in this file were introduced and then found. The reverse direction fills gaps with the identity, so the rule is: name the org verse the identity will NOT reach, and both become reachable. In practice that means looking at which side of the merge the offset changes on. Where the system is in step with org before the merge and one behind after it -- vul at MAT 17:14, ACT 7:55, ACT 14:6, NEH 3:30, REV 20:7, JOS 21:36 -- name the SECOND, because the identity still covers the first. Where the system is one ahead before the merge and in step after it -- eng at BAR 6:43, vul at MIC 5:11 -- name the FIRST, because the identity covers the second. Naming by 'whichever the verse opens with' looks principled and is wrong half the time: it leaves the other org verse resolving to a system verse a full position away, which reads as a confident answer about a different sentence. Where neither choice works, because the merge sits inside a longer re-division, one org verse is simply unreachable in that system and the file says so rather than guessing -- org LJE 1:43 in eng, org 1MA 1:49 in vul.",
   "drop_mapped": {
     "eng": [
       {
@@ -120,6 +122,12 @@
           "DAG 6:1-28"
         ],
         "reason": "The Daniel 5/6 boundary, left untreated for Greek Daniel in the one file that also states it correctly for Hebrew Daniel. 'DAG 5:1-31 -> DAN 5:1-31' targets a verse org does not have, since org's Daniel 5 has thirty; and 'DAG 6:1-28 -> DAN 6:1-28' then leaves org's Daniel 6:29 unreachable. The sentence at issue is 'And Darius the Mede succeeded to the kingdom', which the Greek and Latin print as 5:31 and the Aramaic as 6:1 -- the Douay-Rheims and the World English Bible both put it at 5:31, and this same file already records the shift correctly for the ordinary Daniel: 'DAN 5:31 -> DAN 6:1' and 'DAN 6:1-28 -> DAN 6:2-29'. Replaced below with those three entries transposed onto DAG, which is the same correction lxx received."
+      },
+      {
+        "keys": [
+          "1MA 1:49-67"
+        ],
+        "reason": "The Douay divides the last third of 1 Maccabees 1 twice where org divides once, and upstream carried a single straight range across both. It runs org's 1:48 and 1:49 together at its 1:51 -- 'that they should leave their children uncircumcised, and let their souls be defiled with all uncleannesses and abominations, to the end that they should forget the law' -- and then splits org's 1:51 across its own 1:53 and 1:54, 'according to all these words he wrote to his whole kingdom, and he appointed rulers over the people' and 'and they commanded the cities of Juda to sacrifice'. The two cancel, which is why 1:55 onward was right and only 1:52 and 1:53 were wrong: 'whosoever would not do according to the word of king Antiochus should be put to death' resolved onto 'that they might forget the law'. Both Latin editions and both Greek witnesses agree on the content; only the Clementine's divisions differ. org 1:49 keeps no Douay verse of its own because 1:51 carries it."
       }
     ],
     "rsc": [
@@ -265,17 +273,33 @@
         "to": "BAR 3:36-38",
         "reason": "Missing entirely, so the last three verses of Baruch 3 resolved one verse early from English numbering. The English tradition gives Baruch 3 thirty-seven verses where org, lxx, vul and nvl all give thirty-eight, because it merges the two halves of the star passage into a single 3:34 -- the World English Bible reads 'The stars shone in their watches, and were glad. When he called them, they said, Here we are', where the Douay-Rheims keeps 'and rejoiced' at 3:34 and 'They were called, and they said: Here we are' at 3:35. Everything after is displaced. Without this, a citation of Baruch 3:36 in English numbering returned 'He found out all the way of knowledge' instead of 'This is our God, and there shall no other be accounted of in comparison to him' -- a verse the tradition reads christologically, and one of the more likely in the book to be cited."
       },
-      "BAR 6:2-73": {
-        "to": "LJE 1:1-72",
-        "reason": "Seventy-two verses onto seventy-two, leaving the English heading at 6:1 without an org counterpart because org does not number it. Brings the English into line with vul, which already states 'BAR 6:1-72 -> LJE 1:1-72' correctly, and with lxx and org, which both declare 72."
+      "BAR 6:2-43": {
+        "to": "LJE 1:1-42",
+        "reason": "See _letter_of_jeremiah_note. The head of the letter, where the English heading at 6:1 puts every verse one ahead of the Latin. This replaces a single 'BAR 6:2-73 -> LJE 1:1-72' that carried the offset the whole way and was wrong for the middle of the chapter: the English merges two Greek verses at 6:43 and resumes the Latin's own numbering at 6:44."
+      },
+      "BAR 6:44-50": {
+        "to": "LJE 1:44-50",
+        "reason": "See _letter_of_jeremiah_note. Seven verses where English and Latin agree exactly, because the merge at 6:43 has cancelled the heading's offset. 'Whatsoever is done among them is false: how may it then be thought or said that they are gods?' is 6:44 in all eight English witnesses and 'Omnia autem quae illi fiunt, falsa sunt' is 6:44 in all three Latin ones."
+      },
+      "BAR 6:51-73": {
+        "to": "LJE 1:50-72",
+        "reason": "See _letter_of_jeremiah_note. The tail, one ahead again because the English splits the Latin's 6:50 in two. The Authorised Version, the Revised Version and the American Standard all print 6:51 with a lower-case opening -- 'and it shall manifestly appear to all nations and kings' -- which is the sentence of 6:50 continuing, not a new verse."
       },
       "BAR 6:1": {
         "to": "LJE 1:1",
         "reason": "The letter's heading, which org does not number separately. Without an entry it falls through to identity and lands on org BAR 6:1 -- a chapter org does not have, since its Baruch stops at five. Sent to the letter's first verse instead, which is where the heading belongs and what the previous whole-book range effectively did."
       },
-      "LJE 1:2-73": {
-        "to": "LJE 1:1-72",
-        "reason": "Seventy-two onto seventy-two. Without it the last verse resolved to LJE 1:73, which org does not have. eng records this book twice, as Baruch 6 and as a standalone LJE, and only the Baruch 6 form had been corrected; this brings the two into agreement."
+      "LJE 1:2-43": {
+        "to": "LJE 1:1-42",
+        "reason": "See _letter_of_jeremiah_note. eng records this book twice, as Baruch 6 and as a standalone LJE, and the two must say the same thing -- so the three segments written for the Baruch 6 form are repeated here verse for verse."
+      },
+      "LJE 1:51-73": {
+        "to": "LJE 1:50-72",
+        "reason": "See _letter_of_jeremiah_note. The tail of the standalone form, matching the Baruch 6 form."
+      },
+      "NEH 7:68": {
+        "to": "NEH 7:67",
+        "reason": "org has no counterpart to the horses of Nehemiah 7:68: the Leningrad Codex gives the chapter 72 verses and goes straight from the servants and singers of 7:67 to the camels and asses of 7:68, where the English tradition and the Clementine both carry 'their horses were seven hundred thirty-six; their mules two hundred forty-five' as a verse of its own. vul already states this, sending its 7:68 to org 7:67, and the English was left to fall through to the identity -- which put the horses on org's camels and made English disagree with Latin about a verse they in fact number alike. Attaching an omitted verse to the one before it is the convention the Vulgate entry already uses here."
       }
     },
     "vul": {
@@ -338,6 +362,54 @@
       "DAG 6:1-28": {
         "to": "DAN 6:2-29",
         "reason": "The remainder of the chapter, displaced by one, exactly as the file's own 'DAN 6:1-28 -> DAN 6:2-29' already states for Hebrew Daniel."
+      },
+      "LEV 15:20": {
+        "to": "LEV 15:19",
+        "reason": "The Douay splits org's Leviticus 15:19 in two and nothing recorded it, so three verses of the purity law resolved one early. The Hebrew's 15:19 carries both clauses -- 'if a woman have an issue, and her issue in her flesh be blood, she shall be seven days in her separation' and 'whosoever toucheth her shall be unclean until the even' -- and latvuc divides them at 15:19 'Mulier quae redeunte mense patitur fluxum sanguinis, septem diebus separabitur' and 15:20 'Omnis qui tetigerit eam, immundus erit usque ad vesperum'. The Nova Vulgata keeps them together in its own 15:19, word for word with the second clause appended, which is how the split was localised to the Clementine."
+      },
+      "LEV 15:21-23": {
+        "to": "LEV 15:20-22",
+        "reason": "The three verses carried by the split above. They realign at 15:24, 'Si coierit cum ea vir', which is org's 15:24 in every witness, because the Douay condenses org 15:23 -- the clause about touching the bed or the seat she sat on -- rather than numbering it."
+      },
+      "REV 20:8": {
+        "to": "REV 20:9",
+        "reason": "The Clementine runs org's Revelation 20:7 and 20:8 together at its own 20:7 -- 'solvetur Satanas de carcere suo, et exibit, et seducet gentes, quae sunt super quatuor angulos terrae' where the Nova Vulgata and the Greek both stop at 'de carcere suo' and begin a new verse at 'et exibit' -- so everything after is displaced by one until the Clementine's own re-division at 20:9/20:10 absorbs it. Without this, latvuc 20:8 'Et ascenderunt super latitudinem terrae' resolved to org 20:8, which is 'he shall go out to deceive the nations', a different sentence. org 20:8 keeps no Clementine verse of its own because 20:7 carries it."
+      },
+      "1MA 1:49-51": {
+        "to": "1MA 1:46-48",
+        "reason": "See the drop of '1MA 1:49-67'. The head of the range, unchanged, up to and including the verse that merges org 1:48 and 1:49."
+      },
+      "1MA 1:52": {
+        "to": "1MA 1:50",
+        "reason": "See the drop of '1MA 1:49-67'. 'And that whosoever would not do according to the word of king Antiochus should be put to death' is org 1:50, not 1:49."
+      },
+      "1MA 1:53": {
+        "to": "1MA 1:51",
+        "reason": "See the drop of '1MA 1:49-67'. The first half of org 1:51."
+      },
+      "1MA 1:54": {
+        "to": "1MA 1:51",
+        "reason": "See the drop of '1MA 1:49-67'. The second half of org 1:51, which the Clementine numbers separately."
+      },
+      "1MA 1:55-67": {
+        "to": "1MA 1:52-64",
+        "reason": "See the drop of '1MA 1:49-67'. The tail, where the two divergent divisions have cancelled and the numbering agrees again to the end of the chapter."
+      },
+      "MAT 5:4": {
+        "to": "MAT 5:5",
+        "reason": "The Clementine puts the meek before those who mourn. latvuc 5:4 is 'Beati mites: quoniam ipsi possidebunt terram' and 5:5 'Beati qui lugent: quoniam ipsi consolabuntur', where the Greek, the Nova Vulgata and every other system have them the other way round -- novavulgata 5:4 'Beati, qui lugent' and 5:5 'Beati mites'. It is a real variant of the Latin tradition, not a numbering habit, and upstream records identity, so both beatitudes resolved to the wrong verse. A two-verse exchange, which is one of the few reorderings this file can state exactly."
+      },
+      "MAT 5:5": {
+        "to": "MAT 5:4",
+        "reason": "See the entry for MAT 5:4. The other half of the exchange."
+      },
+      "MAT 17:14": {
+        "to": "MAT 17:15",
+        "reason": "The Douay runs org's Matthew 17:14 and 17:15 together at its own 17:14 -- 'there came to him a man falling down on his knees before him, saying: Lord, have mercy on my son, for he is a lunatic' -- and upstream begins its range at 17:15, leaving 17:14 to the identity. That left org 17:15 with no Latin verse: 'Lord, have mercy on my son' resolved to 'and I brought him to thy disciples'. Naming the second of a merged pair is what makes both reachable, because the identity still covers the first, and it is the arrangement upstream itself uses for the same shape at ACT 7:55, ACT 14:6 and NEH 3:30."
+      },
+      "REV 20:7": {
+        "to": "REV 20:8",
+        "reason": "The other half of the REV 20:8 entry, and the same reason as MAT 17:14. The Clementine's 20:7 carries both org 20:7 and org 20:8, and naming the second leaves the identity to cover the first, so both are reachable; naming the first would have left org 20:8 resolving to 'Et ascenderunt super latitudinem terrae', which is org 20:9."
       }
     },
     "lxx": {
@@ -372,6 +444,18 @@
       "DAG 3:24-90": {
         "to": "S3Y 1:1-67",
         "reason": "Upstream lxx.json maps DAG 3:1-23 and DAG 3:91-97 but leaves 3:24-90 unmapped, so citing the Song of the Three against a Septuagint corpus silently resolved to nothing. lxx maxVerses DAG chapter 3 is 97, leaving exactly verses 24-90 (67 verses) for the Song, matching org's S3Y of 67 verses."
+      },
+      "MAL 3:22": {
+        "to": "MAL 3:23",
+        "reason": "The Greek Malachi puts 'Remember the law of Moses my servant' last, where the Hebrew puts it first of the three closing verses. Swete has it at 4:6 -- 'Mnesthete nomou Mose tou doulou mou' -- after 4:4 'Idou ego apostello hymin Elian ton Thesbiten' and 4:5 'hos apokatastesei kardian patros pros huion'; the Hebrew order is 3:22 law, 3:23 Elijah, 3:24 hearts. Brenton, numbering the chapter as 24 verses rather than splitting a fourth chapter off, prints the same order at 3:22-24 and so agrees. Upstream records identity, which sent every one of the three to the wrong verse. Two Greek witnesses in two numberings, so this is the Septuagint's order and not one edition's habit."
+      },
+      "MAL 3:23": {
+        "to": "MAL 3:24",
+        "reason": "See the entry for MAL 3:22. The second of the three."
+      },
+      "MAL 3:24": {
+        "to": "MAL 3:22",
+        "reason": "See the entry for MAL 3:22. The third, which carries the law of Moses back to where the Hebrew has it. A monotonic alignment cannot report this one -- it is a jump forward, not a shift -- which is why only two of the three showed up as disagreements."
       }
     },
     "rsc": {
@@ -395,6 +479,14 @@
       }
     },
     "nvl": {
+      "SIR 14:17": {
+        "to": "SIR 14:16",
+        "reason": "The same split as vul's entry of the same name, and found the same way: recording it for the Clementine alone made the two Latin editions disagree across nine verses where they in fact agree word for word. novavulgata 14:16 is 'Da et accipe et oblecta animam tuam' and 14:17 'ante obitum tuum operare iustitiam, quoniam non est apud inferos quaerere voluptatem' -- the second beginning lower-case, because it is the same sentence continuing. latvuc divides at exactly the same point."
+      },
+      "SIR 14:18-25": {
+        "to": "SIR 14:17-24",
+        "reason": "The eight verses carried by the split above, identical in shape to vul's entry. The Nova Vulgata likewise runs org's 14:24 and 14:25 together at its own 14:25, 'qui requiescit iuxta domum illius et in parietibus illius figens palum', which absorbs the shift and is why both realign at 14:26 and both chapters end at 27."
+      },
       "SIR 6:20": {
         "to": "SIR 6:19",
         "reason": "The Nova Vulgata splits the Greek's Sirach 6:19 exactly as the Clementine does, word for word: 6:19 'Quasi is qui arat et seminat, accede ad eam et sustine bonos fructus illius' and 6:20 'In opere enim ipsius exiguum laborabis et cito edes de generationibus illius'. Recording the split for vul alone made the two Latin editions disagree where they in fact agree -- sixteen new discrepancies on vul->nvl, which is how this was found."
@@ -406,6 +498,14 @@
       "DAN 3:91-100": {
         "to": "DAN 3:24-33",
         "reason": "Missing, so the last ten verses of the Nova Vulgata's Daniel 3 resolved to DAN 3:91-100 in the pivot -- a chapter that stops at 33. The Nova Vulgata carries the Song of the Three inline exactly as the Clementine does, giving Daniel 3 a hundred verses, and the vul file already states both halves: 'DAN 3:24-90 -> S3Y 1:1-67' for the Song, which nvl also has, and 'DAN 3:91-100 -> DAN 3:24-33' for the narrative that resumes after it, which nvl was missing. Ten verses onto ten, transposed from the file that gets it right."
+      },
+      "NEH 7:68": {
+        "to": "NEH 7:67",
+        "reason": "The same omission as eng's and vul's entries of the same name, and the Nova Vulgata prints the horses exactly as they do: 'Equi eorum septingenti triginta sex, muli eorum ducenti quadraginta quinque' at 7:68, which org does not have. Recording it for the Clementine alone made the two Latin editions disagree across five verses where they in fact agree word for word."
+      },
+      "NEH 7:69-72": {
+        "to": "NEH 7:68-71",
+        "reason": "The four verses carried by the omission above -- camels and asses, the governor's gift, the heads of families, the rest of the people. The Nova Vulgata gives the chapter 72 verses to the Clementine's 73 because it also folds the Clementine's 7:73, 'Habitaverunt autem sacerdotes et Levitae', into the tail of its own 7:72, exactly as org does."
       }
     }
   },
@@ -420,6 +520,16 @@
         "from": "BEL 1:42",
         "to": "BEL 1:1-42",
         "reason": "Length mismatch: a 42-verse key mapped to a single verse. Greek Daniel 14 is Bel and the Dragon in full; org BEL chapter 1 has 42 verses, so the alignment is one-to-one."
+      },
+      "MIC 5:11": {
+        "from": "MIC 5:11",
+        "to": "MIC 5:10",
+        "reason": "The Douay runs org's Micah 5:10 and 5:11 together at its own 5:11 -- 'And I will destroy the cities of thy land, and will throw down all thy strong holds, and I will take away sorceries out of thy hand' -- where org, lxx and nvl all keep the cities at 5:10 and the sorceries at 5:11. Upstream sends it to the second of the two; sending it to the first is what the rest of this file does for a merged verse, and it is what the text says, since the Douay verse opens with the cities. Fixing it settles three separate disagreements at once, on org->vul, eng->vul and vul->nvl, which is what identified it. org 5:11 keeps no Douay verse of its own because 5:11 carries it."
+      },
+      "1MA 1:36": {
+        "from": "1MA 1:35",
+        "to": "1MA 1:34",
+        "reason": "The Douay runs org's 1 Maccabees 1:34 and the head of 1:35 together at its own 1:36 -- 'And they placed there a sinful nation, wicked men, and they fortified themselves therein: and they stored up armour, and victuals' -- and upstream sends it to the second of the two, leaving org 1:34 with no Douay verse at all and resolving 'they put there a sinful nation' onto 'they stored up arms'. The verse opens with the sinful nation, so it belongs to 1:34; 1:37, 'And laid them up there: and they became a great snare', already carries 1:35 and keeps it."
       }
     }
   },

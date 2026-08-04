@@ -155,18 +155,43 @@ def test_letter_of_jeremiah_is_baruch_6(vrs: Versification) -> None:
     assert convert(vrs, "Bar 6:2", "eng", "org") == "LJE 1:1"
     assert convert(vrs, "Bar 6:73", "eng", "org") == "LJE 1:72"
 
-    # Coming back gives Baruch 6, which is how English Bibles print it...
+    # Coming back gives Baruch 6, which is how English Bibles print it -- including at the
+    # heading, where org's single first verse is the English heading and its first verse
+    # together. That used to come back in the standalone naming, as LJE 1:1-2, because the
+    # tie-break preferred the identity over the deprioritised book; writing the English
+    # letter as three segments rather than one range settled it on the Baruch naming, which
+    # is what the rest of the book already answered.
+    assert convert(vrs, "LJE 1:1", "org", "eng") == "BAR 6:1-2"
     assert convert(vrs, "LJE 1:5", "org", "eng") == "BAR 6:6"
     assert convert(vrs, "LJE 1:72", "org", "eng") == "BAR 6:73"
-    # ...except at the heading, where the tie-break prefers the identity over the
-    # deprioritised book. Both names are valid English references for the same words, and
-    # the span is right either way: org's first verse is the English heading and its first
-    # verse together.
-    assert convert(vrs, "LJE 1:1", "org", "eng") == "LJE 1:1-2"
 
     # The Latin, which does not number the heading, lines up one for one throughout.
     assert convert(vrs, "Bar 6:1", "vul", "org") == "LJE 1:1"
     assert convert(vrs, "Bar 6:72", "vul", "org") == "LJE 1:72"
+
+
+def test_the_english_letter_of_jeremiah_is_not_one_straight_offset(vrs: Versification) -> None:
+    """The heading is not the only place the two traditions divide differently, and writing
+    it as a single range got the middle of the chapter wrong for a long time.
+
+    English merges two verses at 6:43 -- "burning bran for incense; but if any of them,
+    drawn by some that pass by, lie with him" is the Latin's 6:42 and 6:43 together -- and
+    that cancels the heading's offset, so 6:44 to 6:50 agree exactly. English then splits
+    the Latin's 6:50 across its own 6:50 and 6:51 (the Authorised Version prints 6:51 with
+    a lower-case opening, "and it shall manifestly appear"), and the offset resumes.
+
+    Before this was written down, "Whatsoever is done among them is false" resolved to
+    "when any one of them lieth with him": a different sentence, seven verses running.
+    """
+    assert convert(vrs, "Bar 6:43", "eng", "org") == "LJE 1:42"
+    assert convert(vrs, "Bar 6:44", "eng", "org") == "LJE 1:44"
+    assert convert(vrs, "Bar 6:50", "eng", "org") == "LJE 1:50"
+    assert convert(vrs, "Bar 6:51", "eng", "org") == "LJE 1:50"
+    assert convert(vrs, "Bar 6:52", "eng", "org") == "LJE 1:51"
+
+    # The standalone naming must say the same thing as the Baruch 6 naming.
+    assert convert(vrs, "LJE 1:44", "eng", "org") == "LJE 1:44"
+    assert convert(vrs, "LJE 1:51", "eng", "org") == "LJE 1:50"
 
 
 # --------------------------------------------------------------------------------------
@@ -504,3 +529,90 @@ def test_sirach_is_left_mappable_because_it_partly_is(vrs: Versification) -> Non
     assert convert(vrs, "SIR 6:23", "eng", "vul") == "SIR 6:24"
     with pytest.raises(VersificationGapError):
         vrs.convert_range(parse_reference("Sir 24:1"), "vul")
+
+
+# --------------------------------------------------------------------------------------
+# Editions that divide the same words differently
+# --------------------------------------------------------------------------------------
+
+
+def test_the_greek_malachi_puts_the_law_of_moses_last(vrs: Versification) -> None:
+    """A three-verse rotation, not a shift, which is why a monotonic alignment could only
+    ever report two thirds of it.
+
+    Swete has "Remember the law of Moses my servant" at 4:6, after Elijah at 4:4 and the
+    turning of hearts at 4:5; the Hebrew has the law first, at 3:22. Brenton, who numbers
+    the chapter to 24 rather than splitting a fourth chapter off, prints the same order.
+    Two Greek witnesses in two numberings, so this is the Septuagint and not one edition.
+    """
+    assert convert(vrs, "Mal 3:22", "org", "lxx") == "MAL 3:24"
+    assert convert(vrs, "Mal 3:23", "org", "lxx") == "MAL 3:22"
+    assert convert(vrs, "Mal 3:24", "org", "lxx") == "MAL 3:23"
+    assert convert(vrs, "Mal 3:24", "lxx", "org") == "MAL 3:22"
+
+
+def test_the_clementine_puts_the_meek_before_those_who_mourn(vrs: Versification) -> None:
+    """A real variant of the Latin tradition rather than a numbering habit: latvuc 5:4 is
+    "Beati mites" and 5:5 "Beati qui lugent", where the Greek, the Nova Vulgata and every
+    English witness have them the other way round. Upstream recorded identity, so both
+    beatitudes answered with the wrong verse."""
+    assert convert(vrs, "Matt 5:4", "org", "vul") == "MAT 5:5"
+    assert convert(vrs, "Matt 5:5", "org", "vul") == "MAT 5:4"
+    assert convert(vrs, "Matt 5:3", "org", "vul") == "MAT 5:3"
+    assert convert(vrs, "Matt 5:6", "org", "vul") == "MAT 5:6"
+
+
+def test_a_merged_verse_names_the_one_the_identity_will_not_reach(vrs: Versification) -> None:
+    """The rule that keeps both halves of a merged verse reachable.
+
+    A verse carrying two org verses can name only one of them, because the forward
+    direction is one to one, and the reverse fills gaps with the identity. So the target to
+    name is the one the identity will *not* reach.
+
+    Where the system is in step before the merge and one behind after -- the Douay's
+    Matthew 17:14, which carries both "there came to him a man falling down on his knees"
+    and "Lord, have mercy on my son" -- name the second, and the identity still covers the
+    first. Naming the first instead left org 17:15 resolving to "and I brought him to thy
+    disciples".
+    """
+    assert convert(vrs, "Matt 17:14", "org", "vul") == "MAT 17:14"
+    assert convert(vrs, "Matt 17:15", "org", "vul") == "MAT 17:14"
+    assert convert(vrs, "Matt 17:16", "org", "vul") == "MAT 17:15"
+
+    # And the mirror image: where the system is one ahead before the merge and in step
+    # after, name the first, because there the identity covers the second. The Douay's
+    # Micah 5:11 carries org 5:10 and 5:11, and org 5:11 gets home by the identity.
+    assert convert(vrs, "Mic 5:10", "org", "vul") == "MIC 5:11"
+    assert convert(vrs, "Mic 5:11", "org", "vul") == "MIC 5:11"
+    assert convert(vrs, "Mic 5:9", "org", "vul") == "MIC 5:10"
+
+
+def test_the_douay_splits_the_law_of_the_menstruant(vrs: Versification) -> None:
+    """Found as a run of four consecutive contradicted verses in the exhaustive walk, and
+    it was a real fault rather than the repetition it looked like.
+
+    The Hebrew's Leviticus 15:19 carries both "she shall be seven days in her impurity"
+    and "whoever touches her shall be unclean until the evening"; the Douay divides them at
+    15:19 and 15:20 while the Nova Vulgata keeps them together. Everything to 15:23 was
+    displaced, so "everything that she lies on shall be unclean" answered with "every one
+    that toucheth her".
+    """
+    assert convert(vrs, "Lev 15:19", "org", "vul") == "LEV 15:19-20"
+    assert convert(vrs, "Lev 15:20", "org", "vul") == "LEV 15:21"
+    assert convert(vrs, "Lev 15:22", "org", "vul") == "LEV 15:23"
+    assert convert(vrs, "Lev 15:24", "org", "vul") == "LEV 15:24"
+    # The Nova Vulgata follows the Hebrew here, so the two Latin editions differ.
+    assert convert(vrs, "Lev 15:20", "org", "nvl") == "LEV 15:20"
+
+
+def test_the_two_latin_editions_agree_about_nehemiah_7(vrs: Versification) -> None:
+    """org has no counterpart to the horses of Nehemiah 7:68 -- the Leningrad Codex gives
+    the chapter 72 verses and goes straight from the singers to the camels -- and the
+    Clementine said so while the Nova Vulgata and the English did not. That made three
+    traditions disagree across five verses they in fact number alike."""
+    for system in ("eng", "vul", "nvl"):
+        assert convert(vrs, "Neh 7:68", system, "org") == "NEH 7:67", system
+        assert convert(vrs, "Neh 7:69", system, "org") == "NEH 7:68", system
+        assert convert(vrs, "Neh 7:72", system, "org") == "NEH 7:71", system
+    # The Clementine numbers a 73rd verse where the Nova Vulgata folds it into its 72nd.
+    assert convert(vrs, "Neh 7:73", "vul", "org") == "NEH 7:72"
