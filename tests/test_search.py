@@ -127,6 +127,20 @@ def searcher(home: DataHome) -> Searcher:
     return Searcher(home)
 
 
+@pytest.fixture
+def searcher_dated(home: DataHome) -> Searcher:
+    """The same texts, but under corpus ids the date table knows.
+
+    Searched as text written in 407 -- a Greek father reaching us through a translator who
+    wrote in King James register. The ids matter: an undated corpus is never called
+    anachronistic, so `archaic` and `modern` would prove nothing here.
+    """
+    build(home, "kjv", {**ARCHAIC, **FILLER})
+    build(home, "web", {**MODERN, **FILLER})
+    build_index(home)
+    return Searcher(home, composed=407)
+
+
 # --------------------------------------------------------------------------------------
 # Building the index
 # --------------------------------------------------------------------------------------
@@ -491,3 +505,100 @@ def test_the_query_floor_is_configurable(home: DataHome) -> None:
 
     assert Searcher(home).search("Jesus wept") == []
     assert Searcher(home, min_query=2, min_run=2).search("Jesus wept")
+
+
+# --------------------------------------------------------------------------------------
+# Naming a translation the author could not have read
+# --------------------------------------------------------------------------------------
+
+
+def test_a_translation_postdating_the_text_is_reported_as_anachronistic(
+    searcher_dated: Searcher,
+) -> None:
+    """``identified`` conflates two claims: that these words match a translation, and that
+    the author was reading it. For a sermon both hold. For a father who died in 407 and
+    reaches us through a Victorian translator only the first does -- and the library named
+    the King James anyway.
+
+    The translations stay named, because which one an editor followed is a real fact about
+    editorial practice. What is refused is the inference a reader would otherwise draw.
+    """
+    (match, *_) = searcher_dated.search(ARCHAIC["JHN 3:16"])
+
+    assert match.identified, "the words do match; that part was never in doubt"
+    assert match.anachronistic
+    assert all(w.translated and w.translated > 407 for w in match.translations())
+    assert "postdate" in match.describe()
+
+
+def test_a_translation_the_author_could_have_read_is_not_anachronistic(
+    home: DataHome,
+) -> None:
+    """False whenever *any* named translation was available, since then the attribution
+    stands on its own. A seventeenth-century Puritan could have read the King James."""
+    build(home, "kjv", {**ARCHAIC, **FILLER})
+    build_index(home)
+
+    (match, *_) = Searcher(home, composed=1650).search(ARCHAIC["JHN 3:16"])
+    assert not match.anachronistic
+
+
+def test_saying_nothing_about_when_a_text_was_written_doubts_nothing(
+    searcher: Searcher,
+) -> None:
+    """A date nobody supplied is not grounds for suspicion, and the default behaviour must
+    not change for the sermon corpus this was built for."""
+    (match, *_) = searcher.search(ARCHAIC["JHN 3:16"])
+    assert match.composed is None
+    assert not match.anachronistic
+
+
+def test_the_record_carries_the_dates_it_judged_on(searcher_dated: Searcher) -> None:
+    """A count of who quoted what should filter on `anachronistic` rather than on
+    `identified`, so both it and the evidence behind it have to reach the pipeline."""
+    record = searcher_dated.search(ARCHAIC["JHN 3:16"])[0].to_dict()
+
+    assert record["anachronistic"] is True
+    assert record["composed"] == 407
+    assert all(t["translated"] for t in record["translations"])
+
+
+def test_an_ancient_text_is_anachronistic_to_nobody() -> None:
+    """The distinction the dates are *of the wording* rather than of the edition. Swete's
+    Septuagint is an 1890s edition of an ancient text, so a Greek father could read those
+    words -- and dating it 1894 would fire the flag on every father against the very corpus
+    they actually quoted."""
+    from biblereference.dating import anachronistic
+
+    assert not anachronistic("swete", 407)
+    assert not anachronistic("n1904", 407)
+    assert not anachronistic("wlc", 407)
+    assert anachronistic("kjv", 407)
+    # The King James modernised in 2006 is still the wording of 1611.
+    assert not anachronistic("kjv2006", 1650)
+    # The Nova Vulgata is Latin and still anachronistic: a new translation, not an edition
+    # of Jerome's.
+    assert anachronistic("novavulgata", 407)
+    assert not anachronistic("latvuc", 407)
+
+
+def test_an_undated_corpus_is_never_accused() -> None:
+    """Silence is not evidence, and a false accusation would suppress a real attribution."""
+    from biblereference.dating import anachronistic
+
+    assert not anachronistic("no-such-corpus", 407)
+
+
+def test_every_built_corpus_has_a_date() -> None:
+    """An undated corpus is invisible to the check, so a new one must not be forgotten."""
+    import sqlite3
+    from pathlib import Path
+
+    from biblereference.dating import TRANSLATED
+
+    database = Path.home() / ".local/share/biblereference/db/corpus.sqlite"
+    if not database.exists():
+        pytest.skip("corpus not built")
+    with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
+        built = {row[0] for row in connection.execute("SELECT corpus FROM source_meta")}
+    assert built - set(TRANSLATED) == set()

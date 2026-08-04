@@ -43,6 +43,7 @@ from typing import Final
 
 from .corpora.base import CorpusError, VerseUnavailable
 from .corpora.web import KNOWN_VERSIONS, BibleGatewayCorpus
+from .dating import translated as _translated
 from .emphasis import fold
 from .refs import VerseRange, VerseRef
 from .store import DataHome, open_store, read_chapter
@@ -433,6 +434,9 @@ class Witness:
     """How alike this rendering and the query are, symmetrically. This is what names the
     translation, and :data:`IDENTIFIED` and :meth:`Match.translations` are calibrated on
     it."""
+    translated: int | None = None
+    """When this rendering's wording was made, or ``None`` where it is ancient. See
+    :mod:`biblereference.dating`."""
     coverage: float = 0.0
     """Share of the query this rendering accounts for.
 
@@ -461,6 +465,13 @@ class Match:
     words; Psalm 14 and Psalm 53 are one poem printed twice. Where the words alone cannot
     say which was meant, naming one and discarding the rest would put a fabricated
     precision into a count of who quotes what.
+    """
+    composed: int | None = None
+    """When the searched text was written, where the caller said so.
+
+    Set from :class:`Searcher`'s ``composed``. It is what lets :attr:`anachronistic` tell a
+    quotation from a translation the author was reading from a translation his *translator*
+    was reading.
     """
     identified_at: float = IDENTIFIED
     """The similarity at which this match's translation may be named.
@@ -492,6 +503,25 @@ class Match:
         """
         return self.similarity >= self.identified_at
 
+    @property
+    def anachronistic(self) -> bool:
+        """Whether every named translation postdates the text being searched.
+
+        True means the wording is real evidence about the *edition in hand* and none at all
+        about what its author read: a scripture quotation in a Victorian translation of
+        Chrysostom matches the King James word for word, and Chrysostom died in 407.
+
+        False whenever any named translation could have been read, since then the
+        attribution stands on its own. Also false when the caller did not say when the text
+        was written, because a date nobody supplied is not grounds for doubting anything.
+        """
+        if self.composed is None:
+            return False
+        named = self.translations()
+        return bool(named) and all(
+            w.translated is not None and w.translated > self.composed for w in named
+        )
+
     def translations(self, margin: float = DEFAULT_MARGIN) -> tuple[Witness, ...]:
         """The witnesses too close to the best to be told apart from it."""
         if not self.witnesses:
@@ -514,6 +544,14 @@ class Match:
             )
         named = ", ".join(w.corpus for w in self.translations())
         rivals = f"; or {', '.join(p.pretty() for p in self.alternates)}" if self.alternates else ""
+        if self.anachronistic:
+            # Named, but as a fact about the edition rather than about its author. The
+            # wording is the translator's; the text is older than every translation it
+            # matches.
+            return (
+                f"{where} ({self.similarity:.0%}) -- this edition's wording follows "
+                f"{named}, all of which postdate the text{rivals}"
+            )
         if self.decisive:
             return f"{where} ({self.similarity:.0%}) -- {named}{rivals}"
         return f"{where} ({self.similarity:.0%}) -- {named} (indistinguishable here){rivals}"
@@ -526,14 +564,25 @@ class Match:
             "book": self.passage.book,
             "vrs": self.passage.vrs,
             "similarity": round(self.similarity, 4),
+            "coverage": round(self.coverage, 4),
             "identified": self.identified,
             "decisive": self.decisive,
+            # True means the named translations describe the edition in hand and not what
+            # its author read. A count of who quoted what should filter on this rather than
+            # on `identified`, or it will report that Chrysostom read the King James.
+            "anachronistic": self.anachronistic,
+            "composed": self.composed,
             "span": list(self.span) if self.span else None,
             "quoted": self.quoted or None,
             "ambiguous": self.ambiguous,
             "alternates": [str(passage) for passage in self.alternates],
             "translations": [
-                {"corpus": w.corpus, "label": w.label, "similarity": round(w.similarity, 4)}
+                {
+                    "corpus": w.corpus,
+                    "label": w.label,
+                    "similarity": round(w.similarity, 4),
+                    "translated": w.translated,
+                }
                 for w in self.translations(margin)
             ],
         }
@@ -564,6 +613,7 @@ class Searcher:
         identified: float = IDENTIFIED,
         min_run: int | Callable[[int], int] = _MIN_RUN,
         min_query: int = _MIN_QUERY,
+        composed: int | None = None,
     ) -> None:
         """
         :param corpora: Search only these, by id.
@@ -614,7 +664,17 @@ class Searcher:
 
             Searcher(home, languages=["grc"], coverage=0.5, min_query=3,
                      min_run=lambda n: max(3, min(5, n // 2)))
+
+        :param composed: The year the text being searched was written. Where given, a match
+            whose every named translation postdates it is reported as
+            :attr:`Match.anachronistic`: the wording is evidence about the edition in hand
+            and none at all about what its author read. A scripture quotation in a Victorian
+            translation of Chrysostom matches the King James word for word, and Chrysostom
+            died in 407. Nothing is suppressed -- the translations are still named, because
+            which one an editor followed is a real fact about editorial practice -- but the
+            inference a reader would otherwise draw is refused.
         """
+        self._composed = composed
         self._quotation = quotation
         self._coverage = coverage
         self._identified = identified
@@ -840,7 +900,14 @@ class Searcher:
             meta = self._corpora[corpus]
             tokens = _tokens(text, meta.language)
             witnesses.append(
-                Witness(corpus, meta.label, text, _ratio(query, tokens), _coverage(query, tokens))
+                Witness(
+                    corpus,
+                    meta.label,
+                    text,
+                    _ratio(query, tokens),
+                    _translated(corpus),
+                    _coverage(query, tokens),
+                )
             )
         # Best-covered first, because that is the question being asked here -- which passage
         # these words came from. Similarity breaks the tie, since among passages that
@@ -960,7 +1027,14 @@ class Searcher:
             passage = VerseRange(
                 VerseRef(book, chapter, start, vrs=vrs), VerseRef(book, chapter, end, vrs=vrs)
             )
-            matches.append(Match(passage, tuple(witnesses[:20]), identified_at=self._identified))
+            matches.append(
+                Match(
+                    passage,
+                    tuple(witnesses[:20]),
+                    composed=self._composed,
+                    identified_at=self._identified,
+                )
+            )
 
         matches.sort(key=lambda m: -m.similarity)
         return _one_per_passage(matches)[:limit]
@@ -1093,7 +1167,14 @@ class Searcher:
             VerseRef(book, chapter, start, vrs=vrs), VerseRef(book, chapter, end, vrs=vrs)
         )
         span = (words[low][1], words[high - 1][2])
-        return Match(passage, tuple(exact[:20]), span=span, quoted=_original(words, low, high))
+        return Match(
+            passage,
+            tuple(exact[:20]),
+            span=span,
+            quoted=_original(words, low, high),
+            composed=self._composed,
+            identified_at=self._identified,
+        )
 
 
 def _one_per_passage(matches: Sequence[Match]) -> list[Match]:
