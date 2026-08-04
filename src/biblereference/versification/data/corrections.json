@@ -189,6 +189,10 @@
   },
   "add_mapped": {
     "eng": {
+      "DAG 13:64": {
+        "to": "SUS 1:64",
+        "reason": "Found by converting every verse of every system and checking that what came back is a verse org actually has. org carries Greek Daniel as DAN plus the standalone S3Y, SUS and BEL and has no DAG at all, so an unmapped DAG verse does not merely resolve oddly -- it resolves to a book that does not exist. Seventy such verses remained after the same fault was fixed for eng's DAG 1-12; these are the rest. The same missing last verse of Susanna on the English side."
+      },
       "DAG 1:1-21": {
         "to": "DAN 1:1-21",
         "reason": "See _dag_note. Identical to lxx's entry; the Greek and English number Daniel 1 alike."
@@ -275,6 +279,18 @@
       }
     },
     "vul": {
+      "DAG 3:1-23": {
+        "to": "DAN 3:1-23",
+        "reason": "Found by converting every verse of every system and checking that what came back is a verse org actually has. org carries Greek Daniel as DAN plus the standalone S3Y, SUS and BEL and has no DAG at all, so an unmapped DAG verse does not merely resolve oddly -- it resolves to a book that does not exist. Seventy such verses remained after the same fault was fixed for eng's DAG 1-12; these are the rest. vul maps Greek Daniel 3 densely from verse 24 onward, where the Song of the Three begins, and never maps the twenty-three verses before it. lxx states exactly this range for the same chapter."
+      },
+      "DAG 11:1-45": {
+        "to": "DAN 11:1-45",
+        "reason": "Found by converting every verse of every system and checking that what came back is a verse org actually has. org carries Greek Daniel as DAN plus the standalone S3Y, SUS and BEL and has no DAG at all, so an unmapped DAG verse does not merely resolve oddly -- it resolves to a book that does not exist. Seventy such verses remained after the same fault was fixed for eng's DAG 1-12; these are the rest. Chapter 11 is absent from vul's DAG mappings altogether, though its neighbours 10 and 12 are both there and both identity. org's Daniel 11 has 45 verses, as does vul's Greek Daniel 11."
+      },
+      "DAG 13:64": {
+        "to": "SUS 1:64",
+        "reason": "Found by converting every verse of every system and checking that what came back is a verse org actually has. org carries Greek Daniel as DAN plus the standalone S3Y, SUS and BEL and has no DAG at all, so an unmapped DAG verse does not merely resolve oddly -- it resolves to a book that does not exist. Seventy such verses remained after the same fault was fixed for eng's DAG 1-12; these are the rest. Susanna has 64 verses in org and vul's Greek Daniel 13 has 64, but the mapping stops at 63 and left the last verse pointing at a nonexistent org DAG. Consistent with this file's own 'DAN 13:1-64 -> SUS 1:1-64'."
+      },
       "SIR 14:17": {
         "to": "SIR 14:16",
         "reason": "The Latin splits the Greek's Sirach 14:16 in two, exactly as it does 6:19. latvuc 14:16 is 'Da et accipe, et justifica animam tuam' and 14:17 'Ante obitum tuum operare justitiam, quoniam non est apud inferos invenire cibum'; together they are org's single 14:16, 'Give, take, and treat yourself well, because there is no seeking of luxury in Hades'. Both number the chapter at 27 verses, so nothing counting can do would find this. Which side deviates was settled the same way as for chapter 6: eng agrees with lxx verse for verse across the whole chapter, so only vul moves."
