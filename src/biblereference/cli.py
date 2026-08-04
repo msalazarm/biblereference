@@ -368,6 +368,53 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_families(args: argparse.Namespace) -> int:
+    """Derive the versification families from the corpora rather than the declared data.
+
+    A corpus belongs to a family only when its structure is exact to every other member.
+    Where a corpus is exact to *several* families -- because they differ only in books it
+    does not carry -- that is reported rather than resolved.
+    """
+    import json as _json
+
+    from .families import declared_systems, derive, read_signatures, to_json
+
+    home = _home(args)
+    signatures = read_signatures(home)
+    if not signatures:
+        _say("no corpora built; run `biblereference sync` first")
+        return 1
+
+    derivation = derive(signatures)
+    declared = declared_systems(home)
+    compatible = derivation.compatibility(signatures)
+
+    if args.json:
+        print(_json.dumps(to_json(derivation, signatures, declared), indent=2))
+        return 0
+
+    _say(f"{len(derivation.families)} families derived from {len(signatures)} corpora\n")
+    for family in sorted(derivation.families, key=lambda f: -len(f.members)):
+        systems = sorted({declared.get(m, "?") for m in family.members})
+        print(
+            f"{family.name:13} {len(family.members):>2} member(s)  "
+            f"{len(family.signature):>4} chapters  declared {','.join(systems)}"
+        )
+        print(f"              {', '.join(sorted(family.members))}")
+
+    undetermined = {c: f for c, f in compatible.items() if len(f) > 1}
+    if undetermined:
+        _say(f"\n{len(undetermined)} corpora are exact to more than one family:")
+        for corpus, families in sorted(undetermined.items(), key=lambda kv: -len(kv[1])):
+            print(f"  {corpus:13} {len(signatures[corpus]):>4} chapters  {', '.join(families)}")
+        _say("  (they differ only in books these corpora do not carry)")
+
+    orphans = [c for c, f in compatible.items() if not f]
+    if orphans:
+        _say(f"\n{len(orphans)} too small to place: {', '.join(sorted(orphans))}")
+    return 0
+
+
 def _runs_of(disagreements: Sequence[object], minimum: int) -> list[tuple[str, int, int, int, int]]:
     """Group flagged verses into consecutive runs sharing one offset.
 
@@ -727,6 +774,17 @@ def build_parser() -> argparse.ArgumentParser:
         "(default 3; lower it to see the noise, raise it to see only the clearest faults)",
     )
     audit.set_defaults(func=cmd_audit)
+
+    families = subparsers.add_parser(
+        "families",
+        help="derive the versification families from the corpora themselves",
+        description="Groups corpora by exact structural identity rather than by what they "
+        "declare. Found that the Orthodox Jewish Bible and the Leningrad Codex are not one "
+        "numbering, that Swete and Brenton are not one numbering, and that the single "
+        "declared English family is really eleven.",
+    )
+    families.add_argument("--json", action="store_true", help="emit the whole derivation as JSON")
+    families.set_defaults(func=cmd_families)
 
     doctor = subparsers.add_parser("doctor", help="report what is cached and built")
     doctor.add_argument(
