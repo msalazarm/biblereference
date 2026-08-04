@@ -593,6 +593,27 @@ class Searcher:
             from 9% found to 72%.
         :param min_query: Words below which a search is refused outright. Two words match
             something everywhere; the floor is what stops the index being asked.
+
+        The defaults are deliberately conservative, and for a language they were not
+        calibrated on they leave most of the gain on the table. Measured against 4,470
+        quotations a human editor tagged by hand in Greek patristic prose, scored on landing
+        in the right book:
+
+        =========================================  =========
+        the gates as they were before coverage     25.0%
+        these defaults                             30.3%
+        ``coverage=0.5``, ``min_run`` scaled,      **61.3%**
+        ``min_query=3``
+        =========================================  =========
+
+        The defaults move Greek by five points and the parameters move it by thirty-one,
+        which is the whole argument for having them. A Greek quotation carries inflectional
+        variation an English one does not, so it rarely accounts for 90% of the words it
+        was written with, and the median tagged quotation is seven words long where
+        ``min_run`` alone wants six of them unbroken::
+
+            Searcher(home, languages=["grc"], coverage=0.5, min_query=3,
+                     min_run=lambda n: max(3, min(5, n // 2)))
         """
         self._quotation = quotation
         self._coverage = coverage
