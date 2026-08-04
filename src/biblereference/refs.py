@@ -21,7 +21,9 @@ from typing import Final
 
 from .canon import (
     SINGLE_CHAPTER_BOOKS,
+    AmbiguousBookError,
     NamingScheme,
+    UnknownBookError,
     book_title,
     canonical_order,
     resolve_book,
@@ -32,6 +34,8 @@ __all__ = [
     "VerseRange",
     "VerseRef",
     "parse_reference",
+    "parse_references",
+    "roman_to_arabic",
 ]
 
 #: The letters used for Esther's six Greek additions, in the NRSV/NABRE citation style.
@@ -177,6 +181,9 @@ _TAIL_RE: Final = re.compile(
     re.VERBOSE,
 )
 
+#: A tail that is nothing but a chapter number, for ``allow_chapter``.
+_CHAPTER_ONLY_RE: Final = re.compile(r"\d{1,3}")
+
 #: Fallback for single-chapter books, where "Jude 5" means Jude 1:5.
 _BARE_VERSE_TAIL_RE: Final = re.compile(
     r"(?P<rest>\d+[a-z]? (?:\s*[-–—]\s* \d+[a-z]?)? ) \s*$", re.VERBOSE
@@ -196,6 +203,7 @@ def parse_reference(
     *,
     vrs: str = "eng",
     naming: NamingScheme = NamingScheme.MODERN,
+    allow_chapter: bool = False,
 ) -> VerseRange:
     """Parse a reference like ``"Luke 2:42"``, ``"Sir 24:1-9"``, or ``"Est C:12-30"``.
 
@@ -208,6 +216,10 @@ def parse_reference(
         :class:`~biblereference.canon.NamingScheme`.
     :raises ReferenceParseError: the string is not a reference this can read.
     :raises ~biblereference.canon.UnknownBookError: the book name is unrecognised.
+    :param allow_chapter: Read a bare chapter -- ``"1 Cor 15"`` -- as the whole of it,
+        expanded to the verses the versification says it holds. Off by default, because a
+        chapter with no verse is a mistake in this library's own tag syntax; on for reading
+        somebody else's footnotes, where ``1 Cor. xv`` is how an editor cites a chapter.
     :raises ~biblereference.canon.AmbiguousBookError: the book name is tradition-dependent
         and ``naming`` does not settle it.
     """
@@ -230,6 +242,8 @@ def parse_reference(
     book = resolve_book(name, naming)
 
     if implicit_chapter and book not in SINGLE_CHAPTER_BOOKS:
+        if allow_chapter:
+            return _whole_chapter(book, match.group("rest").strip(), vrs, text)
         raise ReferenceParseError(
             f"{book_title(book)} has more than one chapter, so {text!r} needs a "
             f"chapter:verse reference"
@@ -249,6 +263,32 @@ def parse_reference(
         return VerseRange(start, end)
     except ValueError as exc:
         raise ReferenceParseError(f"{exc} (in {text!r})") from None
+
+
+def _whole_chapter(book: str, rest: str, vrs: str, text: str) -> VerseRange:
+    """``1 Cor 15`` as the range of verses that chapter actually holds.
+
+    Expanded to its verses rather than left open-ended, so that every existing consumer of
+    a :class:`VerseRange` keeps working and the range is exact rather than a promise. The
+    count comes from the versification, which is also what makes ``Ps 200`` an error rather
+    than an empty range.
+    """
+    if not _CHAPTER_ONLY_RE.fullmatch(rest):
+        raise ReferenceParseError(f"could not parse reference: {text!r}")
+
+    # Deferred: versification imports this module, so importing it at the top would be a
+    # cycle. Only a whole-chapter reference needs to know how long a chapter is.
+    from .versification import Versification
+
+    chapter = int(rest)
+    vrs_data = Versification.load()
+    last = vrs_data.max_verse(vrs, book, chapter)
+    # max(..., 1) because the Psalms model a superscription as verse 0, and a citation of
+    # the whole psalm means its text rather than its title.
+    first = max(vrs_data.first_verse(vrs, book, chapter), 1)
+    return VerseRange(
+        VerseRef(book, chapter, first, vrs=vrs), VerseRef(book, chapter, last, vrs=vrs)
+    )
 
 
 def _parse_endpoint(
@@ -283,3 +323,212 @@ def _parse_endpoint(
         )
 
     raise ReferenceParseError(f"could not parse {token!r} as a chapter:verse reference")
+
+
+# --------------------------------------------------------------------------------------
+# The forms printed editions actually use
+# --------------------------------------------------------------------------------------
+
+_ROMAN: Final[dict[str, int]] = {
+    "i": 1,
+    "v": 5,
+    "x": 10,
+    "l": 50,
+    "c": 100,
+    "d": 500,
+    "m": 1000,
+}
+
+#: A chapter as a lower-case roman numeral between periods: ``1 Tim. iii. 16``. The book
+#: may itself begin with a numeral, which is why the book group allows a leading digit.
+#: Lower case matters -- it is the convention in this position, and it usefully separates a
+#: numeral from a book name that happens to be spelled with the same letters.
+_ROMAN_REF_RE: Final = re.compile(
+    r"""^\s*
+    (?P<book>(?:[1-4]\s*)?[A-Za-z][A-Za-z.\s]*?)
+    \s*\.?\s+
+    (?P<chapter>[ivxlcdm]+)
+    (?:\s*\.\s*(?P<verses>[\d,\s–-]+))?
+    \s*\.?\s*$
+    """,
+    re.VERBOSE,
+)
+
+#: Chapter and verse in arabic with a period between them: ``Psa. 3.1``, ``2 Chron. 6.42``.
+#: Tried last, because a period is also a sentence stop and ``Psa. 3.`` alone must not
+#: become ``PSA 3:1``.
+_DOTTED_REF_RE: Final = re.compile(
+    r"^\s*(?P<book>(?:[1-4]\s*)?[A-Za-z][A-Za-z.\s]*?)\s*\.?\s+(?P<chapter>\d+)"
+    r"\s*\.\s*(?P<verses>[\d,\s–-]+)\s*$"
+)
+
+#: ``Rom 1:21, 22`` -- one reference naming several verses of one chapter.
+_VERSE_LIST_RE: Final = re.compile(
+    r"^\s*(?P<head>.*?[:.]\s*\d+[a-z]?)\s*,\s*(?P<tail>[\d,\s–-]+?)\s*$"
+)
+
+
+def roman_to_arabic(text: str) -> int | None:
+    """Read a roman numeral, or ``None`` where the text is not one."""
+    lowered = text.strip().lower()
+    if not lowered or any(character not in _ROMAN for character in lowered):
+        return None
+    total = 0
+    highest = 0
+    for character in reversed(lowered):
+        value = _ROMAN[character]
+        total += -value if value < highest else value
+        highest = max(highest, value)
+    return total or None
+
+
+def parse_references(
+    text: str,
+    *,
+    vrs: str = "eng",
+    naming: NamingScheme = NamingScheme.MODERN,
+    allow_chapter: bool = False,
+) -> list[VerseRange]:
+    """Every passage a reference string names, in the forms printed editions use.
+
+    :func:`parse_reference` reads the form a modern writer types. It does not read the forms
+    nineteenth-century editions print, which is most of what any historical corpus contains:
+    verse lists, semicolon-separated references, roman-numeral chapters, and chapters
+    separated from their verse by a period. Of 43,963 editor-tagged references in a patristic
+    corpus, 15,706 -- 36% -- are one of those four, and none of them is patristics-specific.
+    Anyone reading Spurgeon, Wesley, Newman or the Puritans meets the same set.
+
+    A cascade, unambiguous forms first:
+
+    1. split on ``;`` and recurse, since one tag routinely holds several citations
+    2. :func:`parse_reference` unchanged -- most input is ordinary and this is the fast path
+    3. a verse list, ``Rom. i. 21, 22``, which is two verses where ``21-22`` is one range
+    4. a roman-numeral chapter, ``1 Tim. iii. 16``
+    5. a dotted chapter, ``Psa. 3.1``, last because a period is also a sentence stop
+
+    :raises ReferenceParseError: nothing in the string could be read as a reference. An
+        unreadable string raises rather than returning empty, so a caller cannot mistake
+        "could not read this" for "names no passages".
+    """
+    found = _references(text, vrs=vrs, naming=naming, allow_chapter=allow_chapter)
+    if not found:
+        raise ReferenceParseError(f"could not parse reference: {text!r}")
+    return found
+
+
+def _references(
+    text: str, *, vrs: str, naming: NamingScheme, allow_chapter: bool
+) -> list[VerseRange]:
+    """The cascade itself, returning ``[]`` rather than raising so it can recurse."""
+    stripped = text.strip()
+    if not stripped:
+        return []
+
+    if ";" in stripped:
+        out: list[VerseRange] = []
+        for part in stripped.split(";"):
+            out.extend(_references(part, vrs=vrs, naming=naming, allow_chapter=allow_chapter))
+        return out
+
+    # Trailing sentence stop, which an editor's footnote carries and a reference does not.
+    trimmed = stripped.rstrip(".").strip()
+
+    for reader in (_plain, _verse_list, _roman_chapter, _dotted_chapter):
+        got = reader(trimmed, vrs, naming, allow_chapter)
+        if got:
+            return got
+    return []
+
+
+def _try(text: str, vrs: str, naming: NamingScheme, allow_chapter: bool) -> list[VerseRange]:
+    try:
+        return [parse_reference(text, vrs=vrs, naming=naming, allow_chapter=allow_chapter)]
+    except (ReferenceParseError, UnknownBookError, AmbiguousBookError, ValueError):
+        return []
+
+
+def _plain(text: str, vrs: str, naming: NamingScheme, allow_chapter: bool) -> list[VerseRange]:
+    """An ordinary modern citation, which :func:`parse_reference` reads unaided."""
+    return _try(text, vrs, naming, allow_chapter)
+
+
+def _verse_list(text: str, vrs: str, naming: NamingScheme, allow_chapter: bool) -> list[VerseRange]:
+    """``Rom 1:21, 22`` -- several verses of one chapter, one range each.
+
+    Note that ``21, 22`` is two verses and ``21-22`` is one range. Both occur, and an editor
+    means something slightly different by each: the list is two citations and the range is
+    one passage.
+    """
+    match = _VERSE_LIST_RE.match(text)
+    if match is None or ":" not in match.group("head"):
+        # Only the modern form is handled here. A roman or dotted reference also lists its
+        # verses with commas -- "Rom. i. 21, 22" -- but its own reader captures the whole
+        # list and _spread splits it, so intercepting here would take the head and drop the
+        # tail.
+        return []
+
+    head = _references(match.group("head"), vrs=vrs, naming=naming, allow_chapter=allow_chapter)
+    if not head:
+        return []
+
+    prefix = match.group("head").rsplit(":", 1)[0]
+    out = list(head)
+    for piece in match.group("tail").split(","):
+        piece = piece.strip()
+        if piece:
+            out.extend(
+                _references(f"{prefix}:{piece}", vrs=vrs, naming=naming, allow_chapter=False)
+            )
+    return out
+
+
+def _roman_chapter(
+    text: str, vrs: str, naming: NamingScheme, allow_chapter: bool
+) -> list[VerseRange]:
+    """``1 Tim. iii. 16`` -- the form Schaff and his contemporaries print."""
+    match = _ROMAN_REF_RE.match(text)
+    if match is None:
+        return []
+    chapter = roman_to_arabic(match.group("chapter"))
+    if chapter is None:
+        return []
+    return _spread(match.group("book"), chapter, match.group("verses"), vrs, naming, allow_chapter)
+
+
+def _dotted_chapter(
+    text: str, vrs: str, naming: NamingScheme, allow_chapter: bool
+) -> list[VerseRange]:
+    """``Psa. 3.1`` -- arabic chapter, period before the verse."""
+    match = _DOTTED_REF_RE.match(text)
+    if match is None:
+        return []
+    return _spread(
+        match.group("book"),
+        int(match.group("chapter")),
+        match.group("verses"),
+        vrs,
+        naming,
+        allow_chapter,
+    )
+
+
+def _spread(
+    book: str,
+    chapter: int,
+    verses: str | None,
+    vrs: str,
+    naming: NamingScheme,
+    allow_chapter: bool,
+) -> list[VerseRange]:
+    """One book and chapter over however many verses the reference lists."""
+    name = book.strip().rstrip(".").strip()
+    if not verses or not verses.strip():
+        if allow_chapter:
+            return _try(f"{name} {chapter}", vrs, naming, True)
+        return []
+    out: list[VerseRange] = []
+    for piece in verses.split(","):
+        piece = piece.strip()
+        if piece:
+            out.extend(_try(f"{name} {chapter}:{piece}", vrs, naming, False))
+    return out

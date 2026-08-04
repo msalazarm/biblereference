@@ -2,8 +2,16 @@ from __future__ import annotations
 
 import pytest
 
-from biblereference.canon import NamingScheme
-from biblereference.refs import ReferenceParseError, VerseRange, VerseRef, parse_reference
+from biblereference.canon import NamingScheme, UnknownBookError
+from biblereference.refs import (
+    ReferenceParseError,
+    VerseRange,
+    VerseRef,
+    parse_reference,
+    parse_references,
+    roman_to_arabic,
+)
+from biblereference.versification import VerseOutOfRangeError
 
 
 @pytest.mark.parametrize(
@@ -129,3 +137,102 @@ def test_verse_zero_is_allowed_for_psalm_titles() -> None:
 def test_invalid_letter_chapter_is_rejected() -> None:
     with pytest.raises(ValueError, match="letter chapter"):
         VerseRef("EST", "G", 1)
+
+
+# --------------------------------------------------------------------------------------
+# The forms printed editions actually use
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("1 Tim. iii. 16", ["1TI 3:16"]),
+        ("Matt. v. 13", ["MAT 5:13"]),
+        ("Eccles. vii. 29", ["ECC 7:29"]),
+        ("Isa. liii. 5", ["ISA 53:5"]),
+        ("Rom. i. 21, 22", ["ROM 1:21", "ROM 1:22"]),
+        ("1 Cor. xv. 3, 4", ["1CO 15:3", "1CO 15:4"]),
+        ("Luke xiv. 34, 35; Matt. v. 13", ["LUK 14:34", "LUK 14:35", "MAT 5:13"]),
+        ("Psa. 3.1", ["PSA 3:1"]),
+        ("2 Chron. 6.42", ["2CH 6:42"]),
+        ("Jn. 1:14", ["JHN 1:14"]),
+        ("Rom 1:21, 22", ["ROM 1:21", "ROM 1:22"]),
+        ("Luke 14:34, 35; Matt 5:13", ["LUK 14:34", "LUK 14:35", "MAT 5:13"]),
+        # A range is one passage where a list is two citations, and editors mean the
+        # difference.
+        ("Rom 1:21-22", ["ROM 1:21-22"]),
+    ],
+)
+def test_the_forms_printed_editions_use_all_read(text: str, expected: list[str]) -> None:
+    """Of 43,963 editor-tagged references in a patristic corpus, 15,706 are one of these
+    four forms. None is patristics-specific -- anyone reading Spurgeon, Wesley, Newman or
+    the Puritans meets the same set."""
+    assert [str(r) for r in parse_references(text)] == expected
+
+
+def test_a_plain_reference_gives_exactly_one_range() -> None:
+    assert len(parse_references("John 3:16")) == 1
+
+
+def test_parse_reference_is_unchanged() -> None:
+    """The singular entry point keeps its contract: one range, and it raises. Callers route
+    between dialects on which error it raises, so widening it would break them."""
+    with pytest.raises(UnknownBookError):
+        parse_reference("Rom. i. 21, 22")
+
+
+def test_an_unreadable_string_raises_rather_than_returning_empty() -> None:
+    """Otherwise a caller cannot tell "could not read this" from "names no passages"."""
+    with pytest.raises(ReferenceParseError):
+        parse_references("not a reference at all")
+
+
+def test_a_trailing_period_is_not_read_as_a_division() -> None:
+    assert [str(r) for r in parse_references("Matt. v. 13.")] == ["MAT 5:13"]
+
+
+@pytest.mark.parametrize(
+    ("numeral", "value"), [("i", 1), ("iii", 3), ("iv", 4), ("xiv", 14), ("liii", 53)]
+)
+def test_roman_numerals_read(numeral: str, value: int) -> None:
+    assert roman_to_arabic(numeral) == value
+
+
+def test_something_that_is_not_a_numeral_is_not_read_as_one() -> None:
+    assert roman_to_arabic("john") is None
+    assert roman_to_arabic("") is None
+
+
+# --------------------------------------------------------------------------------------
+# Whole-chapter references
+# --------------------------------------------------------------------------------------
+
+
+def test_a_whole_chapter_becomes_its_verses() -> None:
+    """Expanded rather than left open-ended, so every consumer of a VerseRange keeps
+    working and the range is exact."""
+    assert str(parse_reference("1 Cor 15", allow_chapter=True)) == "1CO 15:1-58"
+
+
+def test_a_whole_chapter_is_still_an_error_by_default() -> None:
+    """The library's own tag syntax must keep refusing it: there, a chapter with no verse
+    is a mistake rather than a citation."""
+    with pytest.raises(ReferenceParseError):
+        parse_reference("1 Cor 15")
+
+
+def test_a_whole_book_is_an_error_even_when_chapters_are_allowed() -> None:
+    with pytest.raises(ReferenceParseError):
+        parse_reference("1 Corinthians", allow_chapter=True)
+
+
+def test_the_chapter_length_comes_from_the_versification() -> None:
+    """Psalm 119 is 176 verses in every system; Psalm 117 is 2."""
+    assert str(parse_reference("Ps 117", allow_chapter=True)) == "PSA 117:1-2"
+    assert str(parse_reference("Ps 119", allow_chapter=True)) == "PSA 119:1-176"
+
+
+def test_a_chapter_the_versification_lacks_is_refused() -> None:
+    with pytest.raises(VerseOutOfRangeError):
+        parse_reference("Ps 200", allow_chapter=True)
