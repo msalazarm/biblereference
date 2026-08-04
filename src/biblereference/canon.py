@@ -18,6 +18,7 @@ Guessing at either one silently miscites a treatise, so ambiguous names raise
 from __future__ import annotations
 
 import re
+import unicodedata
 from enum import StrEnum
 from typing import Final
 
@@ -264,10 +265,26 @@ def normalize_book(name: str) -> str:
     Case, punctuation, spacing, and the many ways of writing a leading ordinal all
     collapse: ``"II Machabees"``, ``"2 Macc."``, and ``"secondmaccabees"`` are treated
     as three spellings of one key.
+
+    Accents are *decomposed and dropped*, matching :func:`biblereference.emphasis.fold`
+    exactly. Until this was fixed the last step deleted anything outside ``[a-z0-9]``, so a
+    combining mark did not fold into its base letter -- it took the letter with it.
+    ``Sprüche`` normalised to ``sprche`` and ``Lérins`` to ``lrins``, which meant an
+    accented name and its unaccented spelling could never reach each other and an alias
+    table only worked for whichever one happened to be written into it.
+
+    The two functions agreeing matters beyond the missing letters: a name is looked up
+    through this and its text is searched through ``fold``, and two normalisations that
+    disagree are a bug factory.
     """
     s = name.strip().lower()
     s = re.sub(r"[‐-―−]", "-", s)  # unicode dashes -> ascii hyphen
-    s = s.replace("æ", "ae").replace("œ", "oe")
+    # Before decomposition: these are distinct letters rather than composed ones, so NFD
+    # leaves them alone and only an explicit substitution expands them.
+    s = s.replace("æ", "ae").replace("œ", "oe").replace("ﬁ", "fi").replace("ﬂ", "fl")
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    s = s.replace("ς", "σ")  # as fold does, so a final sigma is not a different letter
 
     match = _PREFIX_RE.match(s)
     if match:
@@ -276,7 +293,9 @@ def normalize_book(name: str) -> str:
         if digit:
             s = digit + s[match.end() :]
 
-    return re.sub(r"[^a-z0-9]", "", s)
+    # Every alphanumeric survives, not merely the ASCII ones. `[^a-z0-9]` was what deleted
+    # the umlauts above, and it also silently emptied any name in a non-Latin script.
+    return re.sub(r"[\W_]", "", s)
 
 
 def _expand(spec: dict[str, str]) -> dict[str, str]:

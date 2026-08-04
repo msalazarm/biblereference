@@ -14,7 +14,17 @@ from pathlib import Path
 import pytest
 
 from biblereference.refs import VerseRef
-from biblereference.search import Searcher, build_index, index_is_stale
+from biblereference.search import (
+    COVERAGE,
+    IDENTIFIED,
+    QUOTATION,
+    Searcher,
+    _coverage,
+    _ratio,
+    _tokens,
+    build_index,
+    index_is_stale,
+)
 from biblereference.store import DataHome, SourceMeta, write_corpus
 
 # Two renderings of the same passages, far enough apart to tell apart. The archaic one
@@ -322,3 +332,162 @@ def test_the_record_carries_everything_a_pipeline_needs(searcher: Searcher) -> N
     assert record["span"] and len(record["span"]) == 2
     assert record["translations"][0]["corpus"] == "archaic"
     assert record["ambiguous"] is False
+
+
+# --------------------------------------------------------------------------------------
+# Coverage: finding a quotation shorter than the verse it came from
+# --------------------------------------------------------------------------------------
+
+
+def test_a_short_exact_quotation_of_a_long_verse_is_found(searcher: Searcher) -> None:
+    """The whole point of the second measure.
+
+    Six words quoted perfectly out of a twenty-six-word verse score 2*6/32 = 0.375 on a
+    symmetric ratio, below any threshold that keeps ordinary religious language out, so this
+    was refused however exact it was. Preachers quote whole verses and the ratio suits them;
+    the fathers quote a clause and argue from it.
+    """
+    matches = searcher.search("he gave his only begotten Son")
+
+    assert matches
+    assert str(matches[0].passage) == "JHN 3:16"
+    assert matches[0].coverage == 1.0
+    assert matches[0].similarity < QUOTATION, "must have been admitted on coverage alone"
+
+
+def test_coverage_is_insensitive_to_how_long_the_passage_is() -> None:
+    quote = ["he", "gave", "his", "only", "begotten", "son"]
+    short = _coverage(quote, quote)
+    long = _coverage(quote, [*quote, "that", "whosoever", "believeth"] * 5)
+    assert short == long == 1.0
+
+
+def test_coverage_asks_a_different_question_from_similarity() -> None:
+    """A clause of a verse is a complete quotation and a poor resemblance. Both numbers are
+    right; they answer different questions, which is why both are kept."""
+    query = ["he", "gave", "his", "only", "begotten", "son"]
+    verse = _tokens(ARCHAIC["JHN 3:16"])
+    assert _coverage(query, verse) == 1.0
+    assert _ratio(query, verse) < 0.5
+
+
+def test_ordinary_religious_language_still_matches_nothing(searcher: Searcher) -> None:
+    """The most important regression test here.
+
+    Coverage is a looser gate than a symmetric ratio, so this is where a false-positive
+    regression would show. *We are saved by grace through faith alone* is the one that bites:
+    Darby reads "ye are saved by grace, through faith", so the phrase really does carry six
+    consecutive words of Ephesians 2:8 and the contiguity gate cannot tell the difference.
+    Only requiring both measures to be unconvinced keeps it out.
+    """
+    for phrase in [
+        "we are saved by grace through faith alone",
+        "the Lord is good and his mercy endures",
+        "let us pray for one another as brothers and sisters",
+        "God has a wonderful plan for your life",
+    ]:
+        assert searcher.search(phrase) == [], phrase
+
+
+def test_similarity_still_answers_which_translation(home: DataHome) -> None:
+    """Regression guard: attribution must not move.
+
+    ARCHAIC and REPRINT render this verse identically, so they tie. The tie is decided on
+    similarity, not coverage, and must stay a tie -- IDENTIFIED and translations(margin) are
+    calibrated on the symmetric measure and request 1 was written to leave them alone.
+    """
+    build(home, "archaic", {**ARCHAIC, **FILLER})
+    build(home, "reprint", {**ARCHAIC, **FILLER})
+    build(home, "modern", {**MODERN, **FILLER})
+    build_index(home)
+    searcher = Searcher(home)
+
+    (match, *_) = searcher.search(ARCHAIC["ROM 8:28"])
+    assert [w.corpus for w in match.translations()] == ["archaic", "reprint"]
+    assert not match.decisive
+
+
+def test_a_quotation_spanning_verses_still_grows_to_the_span(searcher: Searcher) -> None:
+    """Guards the band where the existing implementation was already the better one."""
+    match = searcher.search(f"{ARCHAIC['PSA 23:1']} {ARCHAIC['PSA 23:2']}")[0]
+    assert str(match.passage) == "PSA 23:1-2"
+
+
+def test_growing_stops_when_it_stops_helping(searcher: Searcher) -> None:
+    """Coverage cannot fall as a passage grows, so growth needs more than a
+    strict-improvement test or every match runs to _MAX_PASSAGE.
+
+    Strictness alone is not enough either: against a scan window, which carries the
+    speaker's own prose as well as the quotation, adding the neighbouring verse picks up
+    scattered words from the surrounding sentence and coverage genuinely rises. Requiring
+    two consecutive words is what separates a quotation continuing into the next verse from
+    a neighbour that merely shares vocabulary.
+    """
+    match = searcher.search(ARCHAIC["JHN 3:16"])[0]
+    assert str(match.passage) == "JHN 3:16"
+    assert match.passage.start.verse == match.passage.end.verse
+
+
+# --------------------------------------------------------------------------------------
+# The scoring constants as parameters
+# --------------------------------------------------------------------------------------
+
+
+def test_the_thresholds_default_to_todays_constants(home: DataHome) -> None:
+    """Nothing changes for an existing caller."""
+    build(home, "archaic", {**ARCHAIC, **FILLER})
+    build_index(home)
+    text = ARCHAIC["ROM 8:28"]
+
+    plain = Searcher(home).search(text)
+    explicit = Searcher(
+        home, quotation=QUOTATION, coverage=COVERAGE, identified=IDENTIFIED, min_run=6
+    ).search(text)
+
+    assert [str(m.passage) for m in plain] == [str(m.passage) for m in explicit]
+
+
+def test_a_lower_contiguity_gate_admits_a_shorter_quotation(home: DataHome) -> None:
+    build(home, "archaic", {**ARCHAIC, **FILLER})
+    build_index(home)
+    phrase = "he leadeth me beside"
+
+    assert Searcher(home, min_run=6).search(phrase) == []
+    assert Searcher(home, min_run=3).search(phrase)
+
+
+def test_min_run_may_scale_with_the_query(home: DataHome) -> None:
+    """A callable is what lets the gate be proportional without the caller reimplementing
+    it: three words out of four is evidence and three out of forty is not."""
+    build(home, "archaic", {**ARCHAIC, **FILLER})
+    build_index(home)
+    scaled = Searcher(home, min_run=lambda n: max(3, min(6, n // 2)))
+
+    assert scaled.search("he leadeth me beside")
+    assert scaled._min_run_for(4) == 3
+    assert scaled._min_run_for(40) == 6
+
+
+def test_raising_the_gates_refuses_more(home: DataHome) -> None:
+    """Self-calibrating rather than hard-coded: find what the match actually scores, then
+    set both gates above it. A fixed 0.99 proves nothing against an exact quotation, which
+    scores 1.0 on coverage and cannot be refused by any threshold at all."""
+    build(home, "archaic", {**ARCHAIC, **FILLER})
+    build_index(home)
+    text = "and we know that all things work together for good to them that love the Lord"
+
+    (found, *_) = Searcher(home).search(text)
+    assert found.coverage < 1.0, "need an imperfect recollection for this to mean anything"
+
+    strict = Searcher(home, quotation=found.similarity + 0.01, coverage=found.coverage + 0.01)
+    assert strict.search(text) == []
+
+
+def test_the_query_floor_is_configurable(home: DataHome) -> None:
+    """Four tokens is a safe English default and the entire reason a three-word Greek
+    quotation could never be found: search() returned [] before scoring happened."""
+    build(home, "archaic", {**ARCHAIC, **FILLER})
+    build_index(home)
+
+    assert Searcher(home).search("Jesus wept") == []
+    assert Searcher(home, min_query=2, min_run=2).search("Jesus wept")

@@ -49,6 +49,7 @@ from .store import DataHome, open_store, read_chapter
 from .versification import Versification, VersificationError
 
 __all__ = [
+    "COVERAGE",
     "DEFAULT_BUDGET",
     "DEFAULT_MARGIN",
     "IDENTIFIED",
@@ -75,12 +76,43 @@ __all__ = [
 #: grace through faith alone* as Ephesians 2:8 at 51%. Between those, recall is flat and
 #: noise is zero, so this sits in the middle of the clean band rather than at its edge.
 #:
-#: The ceiling is partial quotation. A ratio compares the whole query with the whole
-#: passage, so quoting half a verse and stopping caps the score near a half whatever the
-#: words are. *Be still and know that I am God* is missed for that reason at any threshold
-#: that keeps the noise out, and lowering the floor far enough to catch it costs more than
-#: it gains.
+#: This is a floor on :func:`_ratio`, and it is no longer the only way to be a quotation:
+#: see :data:`COVERAGE`, which is what admits the short exact quotation this measure cannot
+#: reach.
 QUOTATION: Final = 0.55
+
+#: The other way to be a quotation: this share of the *searched words* accounted for, however
+#: little the two texts resemble each other overall.
+#:
+#: :data:`QUOTATION` alone caps a short quotation of a long verse, because a symmetric ratio
+#: divides by both lengths -- *he gave his only begotten Son* is every word of it taken from
+#: John 3:16 and scores 0.39. Preachers quote whole verses and the ratio suits them;
+#: patristic prose quotes a clause and argues from it, and on 4,549 hand-marked Greek
+#: quotations the ratio finds 27% against 62% for coverage.
+#:
+#: The two gates are an **or**, so nothing the ratio used to find is lost. Measured on the
+#: built corpus, they also fail differently, which is what makes the pair safe where either
+#: alone is not:
+#:
+#: ==========================================  ==========  ==========
+#: ..                                          coverage    ratio
+#: ==========================================  ==========  ==========
+#: *he gave his only begotten Son*             **1.00**    0.39
+#: an unindexed rendering of Ephesians 2:8     0.82        **0.82**
+#: *we are saved by grace through faith alone* 0.75        0.46
+#: ==========================================  ==========  ==========
+#:
+#: The last is the one to keep out, and it is ordinary religious language rather than a
+#: quotation -- but Darby reads "ye are saved by grace, through faith", so it really does
+#: carry six consecutive words of the verse and the contiguity gate cannot see the
+#: difference. Only requiring *both* measures to be unconvinced excludes it.
+#:
+#: Calibrated on English, like every constant here, over twelve real quotations, eight
+#: recalled imperfectly (0.90 to 1.00) and ten phrases of ordinary religious language (0.75
+#: and below). Nothing measured falls between, so this sits in the gap rather than at an
+#: edge -- and it is a parameter because Greek carries inflectional variation English does
+#: not. See :class:`Searcher`.
+COVERAGE: Final = 0.90
 
 #: At or above this, the wording is close enough to name the translation. Between this and
 #: :data:`QUOTATION` the passage is identified and the translation is not: that is the
@@ -151,6 +183,12 @@ _SPAN_GAP: Final = 8
 #: genuine quotations of the same length run nine and fourteen. See :func:`longest_run`.
 _MIN_RUN: Final = 6
 
+#: Words below which a search is refused before scoring happens. At two words everything
+#: matches something. Four is a safe default for English and is a parameter because it is
+#: not one everywhere: a three-word Greek quotation can be perfectly distinctive, and this
+#: floor alone accounted for every miss in the one-to-three word band of a patristic corpus.
+_MIN_QUERY: Final = 4
+
 #: Shorter than this and a run of words is not attributable. *God is love* is genuinely
 #: 1 John 4:8, but three words appear across enough of the corpus, and enough of ordinary
 #: religious speech, that calling them a quotation would be a guess.
@@ -181,6 +219,49 @@ def _ratio(left: Sequence[str], right: Sequence[str]) -> float:
     if not left or not right:
         return 0.0
     return _matcher(left, right).ratio()
+
+
+def _coverage(query: Sequence[str], passage: Sequence[str], *, min_block: int = 1) -> float:
+    """What share of the *query* the passage accounts for.
+
+    Asymmetric, and insensitive to how long the passage is. It answers "is what was written
+    taken from this verse", where :func:`_ratio` answers "how alike are these two texts" --
+    which is the right question for naming a translation and the wrong one for finding a
+    quotation.
+
+    The difference is not marginal. ``ratio`` is ``2 * matched / (len(query) + len(passage))``,
+    so a short exact quotation of a long verse is capped by the verse's length however
+    perfect it is: *he gave his only begotten Son* against John 3:16 scores 0.44 and is
+    refused at :data:`QUOTATION`, while every word of it is present. Preachers quote whole
+    verses and the ratio suits them; patristic prose quotes a clause and argues from it, and
+    on 4,549 hand-marked Greek quotations the ratio finds 27% of them against this measure's
+    62%.
+
+    :param min_block: Ignore agreements shorter than this. At the default of 1 every
+        matching word counts, which is what the quotation gate wants. Growth wants 2 -- see
+        :data:`_GROWTH_BLOCK`.
+    """
+    if not query or not passage:
+        return 0.0
+    matcher = _matcher(query, passage)
+    return sum(
+        block.size for block in matcher.get_matching_blocks() if block.size >= min_block
+    ) / len(query)
+
+
+#: Agreements shorter than this do not justify extending a passage.
+#:
+#: Coverage cannot fall as a passage grows, so growth is decided on whether it *rises* --
+#: and against a scan window, which carries the speaker's own prose as well as the
+#: quotation, it rises for the wrong reason. Adding John 3:17 to John 3:16 picks up "him",
+#: "the world" and "for God" from the surrounding sentence and coverage climbs from 0.543
+#: to 0.587, so every quotation grew into its neighbour.
+#:
+#: Requiring two consecutive words separates the two cases exactly: a quotation genuinely
+#: continuing into the next verse brings a run of words with it, while a neighbour that
+#: merely shares vocabulary brings scattered singletons. Measured on the fixtures, the
+#: John 3:16 window stops growing and a short quotation spanning Psalm 23:1-2 still grows.
+_GROWTH_BLOCK: Final = 2
 
 
 def longest_run(left: Sequence[str], right: Sequence[str]) -> int:
@@ -349,6 +430,16 @@ class Witness:
     label: str
     text: str
     similarity: float
+    """How alike this rendering and the query are, symmetrically. This is what names the
+    translation, and :data:`IDENTIFIED` and :meth:`Match.translations` are calibrated on
+    it."""
+    coverage: float = 0.0
+    """Share of the query this rendering accounts for.
+
+    Used to decide whether the text is a quotation at all, where :attr:`similarity` decides
+    which translation it is. The two questions want different measures: a quotation of six
+    words from a twenty-six-word verse is a complete quotation and a poor resemblance.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,6 +462,13 @@ class Match:
     say which was meant, naming one and discarding the rest would put a fabricated
     precision into a count of who quotes what.
     """
+    identified_at: float = IDENTIFIED
+    """The similarity at which this match's translation may be named.
+
+    Carried on the match rather than read from the module constant, so that a
+    :class:`Searcher` configured with a different threshold produces matches which agree
+    with it. Defaults to :data:`IDENTIFIED`, so a hand-built ``Match`` behaves as before.
+    """
 
     @property
     def ambiguous(self) -> bool:
@@ -381,13 +479,18 @@ class Match:
         return self.witnesses[0].similarity if self.witnesses else 0.0
 
     @property
+    def coverage(self) -> float:
+        """Share of the searched words this passage accounts for. See :func:`_coverage`."""
+        return self.witnesses[0].coverage if self.witnesses else 0.0
+
+    @property
     def identified(self) -> bool:
         """Whether the wording is close enough to name the translation.
 
         False where the passage is clear but the wording is not any indexed translation --
         the ordinary case for a quotation from the NIV, ESV, NASB or NKJV.
         """
-        return self.similarity >= IDENTIFIED
+        return self.similarity >= self.identified_at
 
     def translations(self, margin: float = DEFAULT_MARGIN) -> tuple[Witness, ...]:
         """The witnesses too close to the best to be told apart from it."""
@@ -456,6 +559,11 @@ class Searcher:
         corpora: Sequence[str] | None = None,
         families: Sequence[str] | None = None,
         languages: Sequence[str] | None = None,
+        quotation: float = QUOTATION,
+        coverage: float = COVERAGE,
+        identified: float = IDENTIFIED,
+        min_run: int | Callable[[int], int] = _MIN_RUN,
+        min_query: int = _MIN_QUERY,
     ) -> None:
         """
         :param corpora: Search only these, by id.
@@ -465,7 +573,32 @@ class Searcher:
             wrong number is a fault rather than a translation difference.
         :param languages: Search only corpora in these languages. Latin against Latin
             measures the numbering almost alone, with no translator standing between.
+
+        The four scoring parameters default to this module's constants, which are calibrated
+        on English prose. They are parameters because that calibration does not travel: six
+        unbroken words is a longer commitment in Latin than in English, and longer again in
+        heavily inflected Greek.
+
+        :param quotation: Similarity a passage must reach to count as quoted at all. A
+            passage clearing either this or ``coverage`` is a quotation; see
+            :data:`COVERAGE` for why it takes both to keep the noise out.
+        :param coverage: Share of the searched words a passage must account for to count
+            as quoted whatever its overall resemblance. This is what finds a short exact
+            quotation of a long verse.
+        :param identified: Similarity at which the translation may be named.
+        :param min_run: Words a match must share consecutively. Either a fixed count or a
+            function of the query's length -- ``lambda n: max(3, min(6, n // 2))`` makes the
+            gate proportional, so three words out of four is evidence and three out of forty
+            is not. Measured on short Greek quotations, that took the four-to-six word band
+            from 9% found to 72%.
+        :param min_query: Words below which a search is refused outright. Two words match
+            something everywhere; the floor is what stops the index being asked.
         """
+        self._quotation = quotation
+        self._coverage = coverage
+        self._identified = identified
+        self._min_run = min_run
+        self._min_query = min_query
         self._connection = sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)
         self._corpora = self._load_corpora(corpora, families, languages)
         self._texts = int(
@@ -562,18 +695,25 @@ class Searcher:
         scored.sort(reverse=True)
         return [token for _, token in scored[:limit]]
 
+    def _min_run_for(self, length: int) -> int:
+        """The contiguity gate for a query of this length."""
+        return self._min_run(length) if callable(self._min_run) else self._min_run
+
     def _is_quotation(self, query: Sequence[str], best: Witness) -> bool:
         """Whether the best-matching text is close enough, and contiguous enough, to keep.
 
-        Two gates, because either alone lets the wrong things through. The similarity
-        ratio says how much of the passage and the query correspond at all; the longest
-        unbroken run says whether that correspondence is a quotation or a coincidence.
-        Formulaic religious speech clears the first regularly and the second almost never.
+        Two gates, because either alone lets the wrong things through. Coverage says how
+        much of what was written this passage accounts for; the longest unbroken run says
+        whether that correspondence is a quotation or a coincidence. Formulaic religious
+        speech clears the first regularly and the second almost never -- which is why the
+        first can afford to be the looser, asymmetric measure.
         """
-        if best.similarity < QUOTATION:
+        if best.similarity < self._quotation and best.coverage < self._coverage:
             return False
         meta = self._corpora[best.corpus]
-        return longest_run(query, _tokens(best.text, meta.language)) >= _MIN_RUN
+        return longest_run(query, _tokens(best.text, meta.language)) >= self._min_run_for(
+            len(query)
+        )
 
     def _candidates(self, terms: Sequence[str], limit: int) -> list[tuple[int, float]]:
         """Indexed texts sharing words with the query, best first.
@@ -677,17 +817,33 @@ class Searcher:
         witnesses: list[Witness] = []
         for corpus, text in self._renderings(vrs, book, chapter, first, last).items():
             meta = self._corpora[corpus]
-            score = _ratio(query, _tokens(text, meta.language))
-            witnesses.append(Witness(corpus, meta.label, text, score))
-        witnesses.sort(key=lambda w: (-w.similarity, w.corpus))
+            tokens = _tokens(text, meta.language)
+            witnesses.append(
+                Witness(corpus, meta.label, text, _ratio(query, tokens), _coverage(query, tokens))
+            )
+        # Best-covered first, because that is the question being asked here -- which passage
+        # these words came from. Similarity breaks the tie, since among passages that
+        # account for the query equally the closest wording is the one being read.
+        witnesses.sort(key=lambda w: (-w.coverage, -w.similarity, w.corpus))
         return witnesses
 
     def _grow(
         self, vrs: str, book: str, chapter: int, first: int, last: int, query: Sequence[str]
     ) -> tuple[int, int, list[Witness]]:
-        """Extend one span outward while doing so makes the match better."""
+        """Extend one span outward while doing so makes the match better.
+
+        Growth is judged on coverage, not similarity. Adding a verse lengthens the
+        *passage*, which a symmetric ratio can punish even when the added verse contains
+        more of the quotation -- so a quotation running across a verse boundary was being
+        cut short by its own denominator. Coverage cannot fall as the passage grows, so
+        growth stops when it stops helping rather than when the arithmetic turns against it.
+
+        That makes the strict-improvement test load-bearing rather than incidental: without
+        it, a measure that never falls would walk every span out to :data:`_MAX_PASSAGE`.
+        Strictness alone is not enough either, which is what :data:`_GROWTH_BLOCK` is for.
+        """
         witnesses = self._witnesses(vrs, book, chapter, first, last, query)
-        best = witnesses[0].similarity if witnesses else 0.0
+        best = self._span_score(witnesses, query)
 
         improved = True
         while improved:
@@ -696,11 +852,24 @@ class Searcher:
                 if start < 1 or end - start > _MAX_PASSAGE:
                     continue
                 grown = self._witnesses(vrs, book, chapter, start, end, query)
-                score = grown[0].similarity if grown else 0.0
+                score = self._span_score(grown, query)
                 if score > best + 1e-9:
                     first, last, witnesses, best = start, end, grown, score
                     improved = True
         return first, last, witnesses
+
+    def _span_score(self, witnesses: Sequence[Witness], query: Sequence[str]) -> float:
+        """How well a span accounts for the query, for deciding whether to keep growing.
+
+        Coverage over runs of at least :data:`_GROWTH_BLOCK` words, so that a neighbouring
+        verse has to carry some of the quotation to be admitted rather than merely share
+        vocabulary with the sentence around it.
+        """
+        if not witnesses:
+            return 0.0
+        best = witnesses[0]
+        tokens = _tokens(best.text, self._corpora[best.corpus].language)
+        return _coverage(query, tokens, min_block=_GROWTH_BLOCK)
 
     def _best_span(
         self, vrs: str, book: str, chapter: int, first: int, last: int, query: Sequence[str]
@@ -721,7 +890,9 @@ class Searcher:
         best: tuple[float, int, int, list[Witness]] | None = None
         for seed in range(first, min(last, first + _MAX_SEEDS - 1) + 1):
             start, end, witnesses = self._grow(vrs, book, chapter, seed, seed, query)
-            score = witnesses[0].similarity if witnesses else 0.0
+            # The same measure :meth:`_grow` decides on, so that choosing between seeds and
+            # choosing whether to extend one are answering the same question.
+            score = self._span_score(witnesses, query)
             if best is None or score > best[0]:
                 best = (score, start, end, witnesses)
         if best is None:  # pragma: no cover - a run always has at least one verse
@@ -739,7 +910,7 @@ class Searcher:
         sentences would put noise into every count made from its output.
         """
         query = _tokens(text)
-        if len(query) < 4:
+        if len(query) < self._min_query:
             return []
 
         terms = self._query_terms(query)
@@ -768,7 +939,7 @@ class Searcher:
             passage = VerseRange(
                 VerseRef(book, chapter, start, vrs=vrs), VerseRef(book, chapter, end, vrs=vrs)
             )
-            matches.append(Match(passage, tuple(witnesses[:20])))
+            matches.append(Match(passage, tuple(witnesses[:20]), identified_at=self._identified))
 
         matches.sort(key=lambda m: -m.similarity)
         return _one_per_passage(matches)[:limit]

@@ -65,7 +65,13 @@ def check_quotation(
     if not supplied_words or not actual_words:
         ratio = 0.0
     else:
-        ratio = SequenceMatcher(None, supplied_words, actual_words).ratio()
+        # autojunk=False for the same reason search.py gives: difflib otherwise treats any
+        # element occurring in more than 1% of a sequence of 200 or more as noise and drops
+        # it, and the elements it discards are "the", "and", "of" -- the connective tissue
+        # that tells a quotation from a bag of shared vocabulary. A supplied quotation of a
+        # whole psalm is that long, so without this the check got *looser* the longer the
+        # quotation, which is precisely backwards.
+        ratio = SequenceMatcher(None, supplied_words, actual_words, autojunk=False).ratio()
     return QuoteCheck(
         ratio=ratio, threshold=threshold, supplied=supplied.strip(), actual=actual.strip()
     )
