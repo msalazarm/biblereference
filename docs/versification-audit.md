@@ -102,7 +102,10 @@ already scores **99.41%**. `nvl` against the other families follows from that th
 
 ## What was found and fixed
 
-**The Vulgate's Jonah, and it was real.** `vul.json` carried the *English* Jonah mapping —
+Five faults, all of them silent, all now corrected in `corrections.json` with their
+reasoning and pinned by `tests/test_alignment.py`.
+
+**1. The Vulgate's Jonah.** `vul.json` carried the *English* Jonah mapping —
 `JON 1:17 → JON 2:1` and `JON 2:1-10 → JON 2:2-11`. The proof is in the file's own data:
 it gives Vulgate Jonah 1 sixteen verses, so the source verse `JON 1:17` does not exist.
 Only the English tradition puts the great fish at 1:17; the Vulgate follows the Hebrew,
@@ -118,6 +121,44 @@ scores 100% agreement across all seven pairs.
 That fault also yielded a cheap invariant now enforced as a test: **no mapping may name a
 verse its own system does not have.** A file that does is describing a different Bible.
 
+**2. Bel and the Dragon, one verse out for its entire length — and an error of mine.**
+The data carries both `DAN 13:65 -> BEL 1:1` and `DAN 14:1 -> BEL 1:1`, and an earlier
+pass over this file took them for two printings of one verse and *preferred* 14:1. They
+are two different verses. The Clementine's 13:65 is *Et rex Astyages appositus est ad
+patres suos*, which is Bel 1:1; its 14:1 is *Erat autem Daniel conviva regis*, which is
+Bel 1:2. The Clementine closes Susanna with the Astyages sentence instead of opening Bel
+with it, so the whole book runs one behind. Measured against the Douay-Rheims, Bel 1:n+1
+beats Bel 1:n on **41 of 42 verses**. Corrected to `DAN 14:1-41 -> BEL 1:2-42`.
+
+This is also why the first pass of this audit called Bel "an edition difference, not a
+mapping fault" — a conclusion that was wrong, and wrong because it stopped at the first
+plausible explanation instead of counting the verses.
+
+**3. Baruch 3:35–37.** The English merges the star passage into a single 3:34 — *"The
+stars shone in their watches, and were glad. When he called them, they said, Here we
+are"* — where every other system splits it. English Baruch 3 therefore has 37 verses and
+the rest have 38, and no mapping recorded it. A citation of Baruch 3:36 returned *"He
+found out all the way of knowledge"* instead of *"This is our God, and there shall no
+other be accounted of in comparison to him."*
+
+**4. The Letter of Jeremiah.** The English counts the letter's heading as verse 1 and the
+Latin does not, so the English runs one ahead for all 72 verses. The old mapping sent its
+last verse to `LJE 1:73` — a verse org does not have. That is the Jonah ghost pointing the
+other way, and it is now caught by its own invariant: **no mapping may target a verse the
+pivot lacks.**
+
+**5. Greek Daniel 5/6 in the Vulgate file.** `DAG 5:1-31 -> DAN 5:1-31` targets an org
+verse that does not exist, and `DAG 6:1-28 -> DAN 6:1-28` then leaves org's Daniel 6:29
+unreachable. The sentence at issue is *"And Darius the Mede succeeded to the kingdom"*,
+which the Greek and Latin print as 5:31 and the Aramaic as 6:1 — and the same file already
+states the shift correctly for ordinary Daniel. Found by the second invariant, minutes
+after it was written.
+
+**One consequence worth stating on its own.** Every verse of `eng`, `lxx` and `vul` now
+round-trips through the pivot and comes back to itself. There used to be exactly one
+residual, documented in the test suite as a principled exception — the Bel preference. It
+was not principled; it was the symptom of fault 2. The test now asserts an empty list.
+
 ## What was found and is *not* a fault
 
 This is the part that matters for reading the other 39, and it is why they are not
@@ -130,10 +171,16 @@ both begin *Et rex Astyages appositus est ad patres suos*. The Clementine simply
 the Astyages verse** and still numbers its chapter 1–42. The 1979 revision restored it. The
 editions genuinely differ; the mapping aligns the numbers, which is its job.
 
-**Deuteronomy 29 (28 verses) and the Letter of Jeremiah (26 + 21).** Here the confound is
-the witness. Brenton's Letter of Jeremiah has 73 verses where every system declares 72, and
-its Deuteronomy 29:1 matches the Douay's 29:1 rather than sitting one behind it. Brenton
-fits `lxx` at 97% overall — correctly filed — but these books are in its 3% tail.
+**Deuteronomy 29 and the Letter of Jeremiah (Brenton), Jeremiah 31 and Job 3 (Orthodox
+Jewish Bible).** Here the confound is the witness rather than the data. Brenton's Letter of
+Jeremiah has 73 verses where every system declares 72, and its Deuteronomy 29:1 matches the
+Douay's rather than sitting one behind. The Orthodox Jewish Bible begins Jeremiah 31 a
+verse later than every other witness and merges Job 3:1 with 3:2. Both corpora are
+correctly filed — Brenton fits `lxx` at 97%, the OJB fits `org` at 99% — but each has a
+tail, and the tail lands in the audit as a run.
+
+This matters more for `org` than anywhere else, because the OJB is its only full English
+witness. Results on the `org` side carry that noise floor and should be read with it.
 
 **The limitation this exposes, stated plainly:** both instruments measure whether the
 *text* lines up. Neither can distinguish "the mapping is wrong" from "the two editions
@@ -188,16 +235,20 @@ not that these belong somewhere else.
 
 ## Status
 
-- **1 mapping fault found, confirmed from four independent witnesses, and fixed** — the
-  Vulgate's Jonah. Pinned by `tests/test_alignment.py`; Jonah now scores 100% agreement
-  across all seven pairs.
-- **39 runs where both instruments agree the content is offset.** Seven examined by hand —
-  Bel and the Dragon, Daniel 14, Deuteronomy 29, the Letter of Jeremiah twice, Sirach 6 and
-  Exodus 39 — and **none is a mapping fault**. Every one is an edition difference or a
-  quirk of the witness. The remaining ~33 are candidates, not defects, and the prior
-  established by the six is that most will be the same thing: the deuterocanon is where the
-  Latin and Greek traditions genuinely transmit different texts, and that is precisely
-  where the flags cluster.
+- **5 mapping faults found and fixed**, each confirmed against the text of two or more
+  editions: Jonah, Bel and the Dragon, Baruch 3, the Letter of Jeremiah, and Greek Daniel
+  5/6. All pinned by `tests/test_alignment.py`.
+- **Every verse of `eng`, `lxx` and `vul` now round-trips through the pivot**, with no
+  documented exceptions left.
+- **Runs fell from 91 to 85**, but the count understates it: the runs that went were the
+  large ones. Bel alone was 81 verses across two pairs, and Baruch and the Letter of
+  Jeremiah another 60.
+- **Every run of ten verses or more has now been read.** Beyond the five faults, they fall
+  into two kinds and neither is a defect in the data: editions that genuinely differ
+  (Exodus 39's tabernacle account, rearranged rather than renumbered; Sirach, a different
+  recension at 1,605 verses to the Greek's 1,401) and witnesses with their own verse
+  divisions (Brenton in Deuteronomy 29 and the Letter of Jeremiah; the Orthodox Jewish
+  Bible in Jeremiah 31 and Job 3).
 - **All 45 English corpora verified as belonging to `eng`**, forty by text alignment
   directly and five by the independent structural check where paraphrase defeats the
   text test.

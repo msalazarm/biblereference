@@ -67,6 +67,100 @@ def test_the_septuagint_agrees_with_the_hebrew_on_jonah(vrs: Versification) -> N
     assert convert(vrs, "JON 2:1", "lxx", "org") == "JON 2:1"
 
 
+# --------------------------------------------------------------------------------------
+# Bel and the Dragon: one verse out for its whole length
+# --------------------------------------------------------------------------------------
+
+
+def test_the_clementine_closes_susanna_with_the_astyages_verse(vrs: Versification) -> None:
+    """Daniel 13:65 is 'Et rex Astyages appositus est ad patres suos', the opening of Bel
+    in the Greek. The Clementine prints it as the last verse of Susanna rather than the
+    first of Bel, so its chapter 14 begins at the Greek's second verse."""
+    assert convert(vrs, "DAN 13:65", "vul", "org") == "BEL 1:1"
+    assert convert(vrs, "DAN 14:1", "vul", "org") == "BEL 1:2"
+
+
+def test_bel_runs_one_behind_for_the_whole_book(vrs: Versification) -> None:
+    """The data carried both 'DAN 13:65 -> BEL 1:1' and 'DAN 14:1 -> BEL 1:1' and an
+    earlier reading of this file took them for two printings of one verse. They are two
+    different verses, and taking them otherwise displaced all forty-two."""
+    assert convert(vrs, "DAN 14:2", "vul", "org") == "BEL 1:3"
+    assert convert(vrs, "DAN 14:41", "vul", "org") == "BEL 1:42"
+
+
+def test_bel_resolves_back_to_the_verse_the_clementine_prints_it_at(
+    vrs: Versification,
+) -> None:
+    assert convert(vrs, "BEL 1:1", "org", "vul") == "DAN 13:65"
+    assert convert(vrs, "BEL 1:2", "org", "vul") == "DAN 14:1"
+
+
+# --------------------------------------------------------------------------------------
+# Baruch: two separate faults, one at each end of the book
+# --------------------------------------------------------------------------------------
+
+
+def test_the_english_merges_the_star_passage_in_baruch_3(vrs: Versification) -> None:
+    """English Baruch 3 has 37 verses where every other system has 38, because it runs
+    'The stars shone in their watches, and were glad' together with 'they said, Here we
+    are' as a single 3:34. No mapping recorded it, so the last three verses resolved one
+    early -- and 3:36 is 'This is our God, and there shall no other be accounted of in
+    comparison to him', which is not an obscure verse to get wrong."""
+    assert convert(vrs, "BAR 3:34", "eng", "org") == "BAR 3:34"
+    assert convert(vrs, "BAR 3:35", "eng", "org") == "BAR 3:36"
+    assert convert(vrs, "BAR 3:37", "eng", "org") == "BAR 3:38"
+
+
+def test_the_english_counts_the_letter_of_jeremiah_heading_as_a_verse(
+    vrs: Versification,
+) -> None:
+    """'A copy of a letter that Jeremy sent' is verse 1 in English and unnumbered in the
+    Latin, so the English runs one ahead for all seventy-two verses. The old mapping sent
+    its last verse to LJE 1:73, which org does not have -- the same ghost that identified
+    the Jonah fault, pointing the other way."""
+    assert convert(vrs, "BAR 6:2", "eng", "org") == "LJE 1:1"
+    assert convert(vrs, "BAR 6:73", "eng", "org") == "LJE 1:72"
+    assert convert(vrs, "BAR 6:1", "vul", "org") == "LJE 1:1"
+
+
+def test_no_mapping_targets_a_verse_the_pivot_lacks() -> None:
+    """The mirror of the ghost-source invariant below, and the one that would have caught
+    the Letter of Jeremiah. A mapping may not send a verse somewhere org cannot hold it."""
+    import json
+    import re
+    from importlib import resources
+
+    pattern = re.compile(r"^(\w+) (\d+):(\d+)(?:-(\d+))?$")
+    data = resources.files("biblereference.versification").joinpath("data")
+    org = json.loads(data.joinpath("org.json").read_text(encoding="utf-8"))["maxVerses"]
+    corrections = json.loads(data.joinpath("corrections.json").read_text(encoding="utf-8"))
+
+    ghosts: list[str] = []
+    for system in ("eng", "vul"):
+        loaded = json.loads(data.joinpath(f"{system}.json").read_text(encoding="utf-8"))
+        dropped = {
+            key for entry in corrections["drop_mapped"].get(system, []) for key in entry["keys"]
+        }
+        added = corrections["add_mapped"].get(system, {})
+        mappings = {k: v for k, v in loaded["mappedVerses"].items() if k not in dropped}
+        mappings.update({k: spec["to"] for k, spec in added.items()})
+
+        for key, target in mappings.items():
+            for one in target if isinstance(target, list) else [target]:
+                match = pattern.match(str(one).strip())
+                if not match:
+                    continue
+                book, chapter, first, last = match.groups()
+                rows = org.get(book)
+                if not rows or int(chapter) > len(rows):
+                    continue
+                top = int(rows[int(chapter) - 1])
+                if int(last or first) > top:
+                    ghosts.append(f"{system}: {key} -> {one}, but org {book} {chapter} has {top}")
+
+    assert ghosts == []
+
+
 def test_no_mapping_names_a_verse_its_own_system_lacks() -> None:
     """The invariant the Jonah fault broke, and the cheapest way to catch its whole class.
 

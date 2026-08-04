@@ -93,9 +93,18 @@ def test_song_of_the_three_is_a_separate_book_in_the_hebrew_frame(vrs: Versifica
 
 
 def test_susanna_and_bel_are_daniel_13_and_14_in_the_vulgate(vrs: Versification) -> None:
+    """Bel opens at 13:65, not 14:1, and that is not a quirk of this data.
+
+    The Clementine prints 'Et rex Astyages appositus est ad patres suos' -- the Greek's
+    Bel 1:1 -- as a sixty-fifth verse of Susanna, and begins its chapter 14 at the Greek's
+    second verse. An earlier reading of this repository took the two upstream entries for
+    alternative printings of one verse and preferred 14:1, which displaced the whole book
+    by one; the Douay-Rheims settles it, matching Bel 1:n+1 on 41 of 42 verses.
+    """
     assert convert(vrs, "Dan 13:1-64", "vul", "org") == "SUS 1:1-64"
     assert convert(vrs, "Sus 1:1", "org", "vul") == "DAN 13:1"
-    assert convert(vrs, "Bel 1:1", "org", "vul") == "DAN 14:1"
+    assert convert(vrs, "Bel 1:1", "org", "vul") == "DAN 13:65"
+    assert convert(vrs, "Bel 1:2", "org", "vul") == "DAN 14:1"
 
 
 def test_a_range_that_straddles_an_addition_comes_back_in_pieces(vrs: Versification) -> None:
@@ -129,8 +138,20 @@ def test_vulgate_daniel_is_preferred_over_greek_daniel(vrs: Versification) -> No
 
 
 def test_letter_of_jeremiah_is_baruch_6(vrs: Versification) -> None:
+    """The English counts the letter's heading as a verse and the Latin does not, so the
+    English runs one ahead: its 6:2 is the letter's first verse, and its 6:73 the last.
+
+    The heading and the first verse therefore both answer to org's LJE 1:1, which is why
+    converting back gives a two-verse span rather than one. That is the honest answer --
+    org does not number the heading separately, so there is nowhere else to put it.
+    """
     assert convert(vrs, "Bar 6:1", "eng", "org") == "LJE 1:1"
-    assert convert(vrs, "LJE 1:1", "org", "eng") == "BAR 6:1"
+    assert convert(vrs, "Bar 6:2", "eng", "org") == "LJE 1:1"
+    assert convert(vrs, "Bar 6:73", "eng", "org") == "LJE 1:72"
+    assert convert(vrs, "LJE 1:1", "org", "eng") == "BAR 6:1-2"
+    # The Latin, which does not number the heading, lines up one for one throughout.
+    assert convert(vrs, "Bar 6:1", "vul", "org") == "LJE 1:1"
+    assert convert(vrs, "Bar 6:72", "vul", "org") == "LJE 1:72"
 
 
 # --------------------------------------------------------------------------------------
@@ -275,9 +296,11 @@ def test_every_reverse_mapping_agrees_with_its_forward_mapping(vrs: Versificatio
 def test_every_verse_survives_a_round_trip_through_the_pivot(vrs: Versification) -> None:
     """For each system, every verse converts to org and back to something covering it.
 
-    Exceptions are principled and few: a book the system prints inside another (Susanna
-    as Daniel 13) comes back under the host book, and one documented editorial choice
-    picks Daniel 14:1 over 13:65 for the opening of Bel.
+    There are now no exceptions at all. There used to be one -- the Bel and the Dragon
+    preference, where 13:65 converted out to Bel 1:1 and came back as 14:1 -- and it was
+    documented here as principled. It was not: it was the symptom of a mapping that had
+    the whole book one verse out. Correcting that closed the last hole, so this asserts an
+    empty list rather than a curated exception.
     """
     unexplained: list[str] = []
     for name in ("eng", "lxx", "vul"):
@@ -298,10 +321,7 @@ def test_every_verse_survives_a_round_trip_through_the_pivot(vrs: Versification)
                         continue
                     unexplained.append(f"{name}: {ref} -> {back}")
 
-    # The single expected residual is the documented Bel and the Dragon preference.
-    assert unexplained == [
-        "vul: DAN 13:65 -> [VerseRef(book='DAN', chapter=14, verse=1, subverse='', vrs='vul')]"
-    ], unexplained
+    assert unexplained == [], unexplained
 
 
 def test_loading_validates_the_corrections_still_apply(vrs: Versification) -> None:
