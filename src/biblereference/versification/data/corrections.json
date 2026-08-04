@@ -459,6 +459,16 @@
         "vul"
       ],
       "reason": "The Vulgate's Esther cannot be lined up with the original-language numbering verse by verse. Chapters 1:1-10:3 correspond straightforwardly, but 10:4-16:24 are the six Greek additions, which the Septuagint interleaves through the book rather than appending -- Addition B sits inside chapter 3, Addition C inside chapter 4, Addition D inside chapter 5 -- and the upstream data for that interleaving is the self-contradictory ESG material rejected above. The correspondence that can be established, and is, is between Vulgate numbering and the A-F letter chapters; see esther_additions.json. Cite Esther's additions in Vulgate or letter numbering and quote them from the Douay-Rheims."
+    },
+    {
+      "books": [
+        "JDT",
+        "TOB"
+      ],
+      "systems": [
+        "vul"
+      ],
+      "reason": "Jerome translated Judith and Tobit from Aramaic recensions differing from the Greek by whole clauses, and the automatic guard only refuses a chapter whose verse count differs from the pivot's -- so the handful whose counts coincide converted by identity and returned a plausible verse containing different words. Two of Judith's sixteen chapters did that and one of Tobit's fourteen, which is the worst of both: most of the book refuses and a few chapters quietly lie. Judith 6 is the proof that the coincidence means nothing -- both number the chapter at 21 verses, and the Douay's 6:9 'they tied Achior to a tree' is the Greek's 6:13 'bound Achior, cast him down, left him at the foot of the hill', four verses apart. Measured before deciding: aligning the Douay against the World English Bible across the whole of Judith scores 0.289, barely over the floor where an ordinary book runs 0.6 to 0.8; 72 of some 345 verses have no counterpart on the other side at all; and the offsets scatter *within* almost every chapter -- seven distinct ones across the 21 matched verses of chapter 7, eight across the 24 of chapter 13. That is a different text rather than a differently numbered one, and no mapping can express it. Confined to vul deliberately. The Nova Vulgata went back to the Greek for Judith and its verse counts are identical to org's, so eng, lxx, org and nvl line up with each other and only Jerome's own numbering stands apart. Sirach is left out for the opposite reason: it is partly mappable, and Sirach 6 is now mapped."
     }
   ]
 }

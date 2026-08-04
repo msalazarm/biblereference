@@ -539,10 +539,22 @@ def _unmappable_chapters(system: _System, pivot: _System) -> frozenset[tuple[str
 
 
 def _gap_message(book: str, vrs: str) -> str:
+    """Why a whole book refuses, and what to do about it.
+
+    Two different things end up here and the message has to be true of both: upstream data
+    that contradicts itself (the Septuagint's interleaved Esther), and a book the two
+    traditions do not share a text for at all (Jerome translated Judith and Tobit from
+    Aramaic recensions differing from the Greek by whole clauses). Blaming the data was
+    wrong for the second and unhelpful for both, since it told a reader nothing they could
+    act on.
+    """
     return (
-        f"{book_title(book)} cannot be resolved in the {vrs!r} versification: the "
-        f"upstream mapping data for this book is missing or internally inconsistent. "
-        f"See biblereference/versification/data/corrections.json for the details."
+        f"{book_title(book)} cannot be converted to or from the {vrs!r} versification: the "
+        f"two traditions do not divide this book the same way, and the mapping data does "
+        f"not say how the verses correspond -- either because it is missing or because the "
+        f"editions translate different source texts. Quote it from a {vrs!r} text directly, "
+        f"or cite the passage in {vrs!r} numbering. See "
+        f"biblereference/versification/data/corrections.json for which applies here."
     )
 
 

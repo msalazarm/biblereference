@@ -252,6 +252,14 @@ def test_vulgate_sirach_tobit_and_judith_refuse_conversion(vrs: Versification) -
         with pytest.raises(VersificationGapError, match="does not say how"):
             vrs.convert_range(parse_reference(text), "vul")
 
+    # And every chapter of Judith and Tobit, not merely the ones whose verse counts happen
+    # to differ. Judith 6 and 12 and Tobit 12 used to convert by identity because their
+    # counts coincide, which is the worst of both: most of the book refuses and a few
+    # chapters quietly return a plausible verse containing different words.
+    for text in ("Jdt 6:13", "Jdt 12:1", "Tob 12:1"):
+        with pytest.raises(VersificationGapError):
+            vrs.convert_range(parse_reference(text), "vul")
+
 
 def test_transposed_sirach_chapters_refuse_but_the_rest_of_sirach_works(
     vrs: Versification,
@@ -270,8 +278,8 @@ def test_the_refusal_says_what_to_do_instead(vrs: Versification) -> None:
     with pytest.raises(VersificationGapError) as excinfo:
         vrs.convert_range(parse_reference("Tob 5:1"), "vul")
     message = str(excinfo.value)
-    assert "Tobit chapter 5" in message
-    assert "divided differently" in message
+    assert "Tobit" in message
+    assert "do not divide this book the same way" in message
     assert "cite the passage" in message
 
 
@@ -453,3 +461,46 @@ def test_the_fingerprint_is_not_merely_the_version() -> None:
     from biblereference import __version__
 
     assert fingerprint() != __version__
+
+
+def test_jeromes_judith_is_a_different_text_rather_than_a_renumbering(
+    vrs: Versification,
+) -> None:
+    """Measured before it was declared unmappable, aligning the Douay-Rheims against the
+    World English Bible across the whole book: quality 0.289 where an ordinary book runs 0.6
+    to 0.8, 72 verses of some 345 with no counterpart at all, and the offsets scattering
+    *within* chapters -- seven distinct ones across the 21 matched verses of chapter 7.
+
+    Judith 6 is the case that proves a coinciding verse count means nothing. Both number the
+    chapter at 21, and the Douay's 6:9 "they tied Achior to a tree" is the Greek's 6:13
+    "bound Achior, cast him down, left him at the foot of the hill".
+    """
+    for chapter in range(1, 17):
+        with pytest.raises(VersificationGapError):
+            vrs.convert_range(parse_reference(f"Jdt {chapter}:1"), "vul")
+
+
+def test_only_the_vulgates_own_judith_stands_apart(vrs: Versification) -> None:
+    """Confined to `vul` deliberately. The Nova Vulgata went back to the Greek for Judith
+    and its verse counts are identical to org's, so eng, lxx, org and nvl line up with one
+    another and only Jerome's numbering is unreachable."""
+    assert convert(vrs, "JDT 6:1", "eng", "org") == "JDT 6:1"
+    assert convert(vrs, "JDT 6:1", "eng", "nvl") == "JDT 6:1"
+    assert convert(vrs, "JDT 16:1", "eng", "nvl") == "JDT 16:1"
+
+
+def test_wisdom_and_baruch_are_not_swept_up_with_them(vrs: Versification) -> None:
+    """The Vulgate follows the Greek for these, so they convert throughout and must keep
+    doing so. Marking a book unreliable is a book-wide refusal and the temptation is to
+    reach for it too readily."""
+    assert convert(vrs, "WIS 3:1", "eng", "vul") == "WIS 3:1"
+    assert convert(vrs, "BAR 1:1", "eng", "vul") == "BAR 1:1"
+
+
+def test_sirach_is_left_mappable_because_it_partly_is(vrs: Versification) -> None:
+    """The opposite call from Judith, and the reason the two are treated differently:
+    Sirach 6 has a verified mapping, so a book-wide refusal would throw away a fix. Its
+    unmapped chapters still refuse through the per-chapter guard."""
+    assert convert(vrs, "SIR 6:23", "eng", "vul") == "SIR 6:24"
+    with pytest.raises(VersificationGapError):
+        vrs.convert_range(parse_reference("Sir 24:1"), "vul")
