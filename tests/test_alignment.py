@@ -397,3 +397,23 @@ def test_the_septuagint_omits_the_daughters_plea_in_numbers_27(vrs: Versificatio
     assert convert(vrs, "NUM 27:4", "lxx", "org") == "NUM 27:5"
     assert convert(vrs, "NUM 27:6", "lxx", "org") == "NUM 27:7"
     assert convert(vrs, "NUM 27:9", "lxx", "org") == "NUM 27:9"
+
+
+def test_the_vulgates_daniel_is_not_dragged_into_greek_daniel_either(
+    vrs: Versification,
+) -> None:
+    """The same absorption bug, and it predated the English Greek Daniel work entirely.
+
+    vul.json maps Greek Daniel onto org's DAN and carries no explicit mapping for ordinary
+    Daniel, so org's DAN counted as absorbed into DAG and its identity was suppressed: every
+    citation of Daniel converted to the Vulgate came back in Greek Daniel's numbering, which
+    no Douay-Rheims corpus can render. `deprioritize_books` was added for exactly this and
+    could not reach it, because ranking happens after the identity has been dropped.
+
+    It was worth 250 of the 286 disagreements on org->vul.
+    """
+    assert convert(vrs, "DAN 1:1", "org", "vul") == "DAN 1:1"
+    assert convert(vrs, "DAN 9:24", "org", "vul") == "DAN 9:24"
+    # Susanna and Bel still reach the Vulgate's Daniel 13 and 14, which is where it puts them.
+    assert convert(vrs, "SUS 1:1", "org", "vul") == "DAN 13:1"
+    assert convert(vrs, "BEL 1:2", "org", "vul") == "DAN 14:1"

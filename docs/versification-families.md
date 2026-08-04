@@ -287,3 +287,33 @@ may be reporting that those corrections went too far or not far enough.
 books where the Septuagint reorders bodily, which monotonic alignment cannot represent — the
 data is right and the derivation is the thing that is wrong. `PSA 13` likewise: 0–2 vendored,
 a superscription the instrument cannot express.
+
+## What the fixes changed, measured
+
+The derivation was re-run against the corrected mappings. Same instrument, same witnesses,
+same faithful-chapter domains — only the mapping data differs:
+
+| pair | before | after | |
+|---|---|---|---|
+| `org`→`vul` | 286 | **36** | −250 |
+| `eng`→`vul` | 355 | **87** | −268 |
+| `eng`→`lxx` | 267 | **157** | −110 |
+| `lxx`→`vul` | 279 | **185** | −94 |
+| `org`→`lxx` | 239 | **157** | −82 |
+| `org`→`eng` | 2 | **2** | — |
+| `vul`→`nvl` | 77 | 90 | +13 |
+| **total** | **1,505** | **714** | **−52.6%** |
+
+The largest single gain was not one of the seven mapping fixes. It was a bug those fixes
+exposed: a book counts as *absorbed* when the other system carries it only under a different
+name, and org's `DAN` counted as absorbed into `DAG` — so its identity was suppressed and
+every citation of Daniel converted to the Vulgate came back in Greek Daniel's numbering,
+which no Douay-Rheims corpus can render. `deprioritize_books` existed for exactly this case
+and could not reach it, because ranking happens after the identity has already been dropped
+from the pool. **That was pre-existing**, unrelated to any work here, and worth 250 of the
+286 disagreements on `org`→`vul` alone.
+
+`vul`→`nvl` rose by 13 and is the one place to look next. The rest of the residue is
+concentrated in books where the Septuagint reorders bodily — 3 Kingdoms, Jeremiah, the
+Greek Exodus — which monotonic alignment cannot describe and which are textual facts rather
+than mapping faults.
