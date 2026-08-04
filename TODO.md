@@ -46,6 +46,19 @@ Re-run the derivation with:
 
 ## Open work, in the order I would take it
 
+### ~~1. Judith~~ — DONE
+
+Measured rather than assumed: alignment quality 0.289 where an ordinary book runs 0.6–0.8,
+72 of ~345 verses with no counterpart, offsets scattering *within* almost every chapter.
+A different text, not a differently numbered one. `JDT` and `TOB` are now `unreliable` for
+`vul` only — the Nova Vulgata went back to the Greek and its counts match `org`.
+
+It also unlocked what was item 4: `SIR 14` was listed as unjudgeable for want of an org
+witness, but `eng ≡ lxx ≡ org` for Sirach was already established, so `eng` stands in.
+SIR 14 is mapped; SIR 18 refuses via a new chapter-level `unreliable` entry.
+
+<details><summary>original entry</summary>
+
 ### 1. Judith — the largest single block left
 
 `vul`→`nvl` residue is JDT 21, and Judith shows up in `eng`→`vul` and `lxx`→`vul` too. It
@@ -70,6 +83,22 @@ in chapter 6. Verified by hand. Whether that offset holds across the book is not
 whether the correspondence is a small number of clean segments or genuinely unmappable. If
 segments, write them; if not, mark the book `unreliable` for `vul` and stop pretending.
 
+</details>
+
+### ~~2. `lxx`→`vul`~~ — TRIAGED, nothing left to fix
+
+Now 160. Every run accounted for, and none of it is a mapping fault:
+
+| cause | runs | disposition |
+|---|---|---|
+| genuine Greek reordering (`EXO 36`, `JER 25/27/35`) | 7 | chapter-crossing offsets; monotonic alignment cannot describe them and the data is right |
+| alignment artifacts in repetitive text (`NUM 26`, `NUM 15`, `LEV 15`) | 4 | all three systems verified identity to `org`; the census and the purity laws are where the aligner slips |
+| psalm-superscription convention (`PSA 12`) | 1 | see `_psalm_title_note`; upstream convention, not correctable here |
+| `EXO 39` | 1 | declined earlier — the Douay condenses rather than displaces |
+| already fixed (`NUM 27`, `EZK 7`) | 2 | verified end to end through `vul` |
+
+<details><summary>original entry</summary>
+
 ### 2. `lxx`→`vul` at 185 — the worst remaining pair
 
 Most of it is the Septuagint reordering 3 Kingdoms and the tabernacle account **bodily**,
@@ -81,6 +110,8 @@ alone, and consider recording them as `unreliable` so the library refuses rather
 guesses); single consistent offsets within a chapter are candidates. `triage.py` already
 does exactly this classification — extend its candidate list rather than writing anything
 new.
+
+</details>
 
 ### 3. `lxx` and `vul` have no faithful witness — the deepest problem
 
@@ -104,11 +135,16 @@ chapters it excludes.
 - Find a corpus that genuinely follows the shipped systems. Probably does not exist; these
   are Paratext-derived schemes rather than descriptions of one printed edition.
 
-### 4. Three passages that cannot be judged at all
+### 4. One passage that cannot be judged at all
 
-`SIR 14`, `BAR 6` and `JDT 6` have strong model evidence (6–0, 3–0) and **no org witness**:
-`ojb` carries no deuterocanon, `wlc` is Hebrew Bible only. Nothing in the corpus can say
-which side deviates.
+**`SIR 14` and `JDT 6` are resolved** — see item 1. The claim that they could not be judged
+was wrong: `ojb` carries no deuterocanon, but `eng` was triangulated as equal to `org` for
+Sirach, so it stands in. Judith needed no witness in the end, being unmappable outright.
+
+`BAR 6` remains. It has model evidence (6–0) and no org witness, and unlike Sirach there is
+no triangulation available: `eng` carries the Letter of Jeremiah as Baruch 6 and `org` as a
+standalone `LJE`, so the two are not comparable verse for verse without assuming the very
+mapping in question.
 
 **Proposed approach.** Either acquire a deuterocanon-carrying corpus that is exact to `org`
 (none of the 55 held here is), or triangulate through `nvl`, which is exact to `nvl` and

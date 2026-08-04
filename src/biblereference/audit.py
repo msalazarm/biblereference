@@ -504,6 +504,18 @@ def faithful_chapters(
     between an audit that covers 99% of the text and one that cannot start.
 
     Verse 0 is a superscription rather than a verse and is excluded from both sides.
+
+    **Which leaves one blind spot, in the Psalms.** The exclusion clamps the system's first
+    verse to 1, so a corpus that numbers a psalm's title as verse 1 -- where its system
+    numbers it 0 -- looks faithful and is off by one all the way down the psalm. Brenton
+    does exactly that, and 137 of the 138 titled psalms count as faithful for it.
+
+    Left as it is on purpose. The Copenhagen data models a superscription as verse 0 in the
+    mappings while ``org``'s own verse counts number it 1 -- the Leningrad Codex's Psalm
+    13:1 is the title and org gives the psalm six verses -- so the two conventions disagree
+    upstream and no rule here can reconcile them. Measured over the whole derivation it
+    costs seven flagged rows, all in the Psalms, which is a smaller error than any repair
+    attempted from this side would be.
     """
     connection = sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)
     try:
