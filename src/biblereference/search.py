@@ -245,7 +245,7 @@ def build_index(
         for corpus, language in wanted:
             count = _index_corpus(connection, corpus, language, report)
             done.append((corpus, count))
-        _recount_df(connection, report)
+        recount_df(connection, report)
         texts = int(connection.execute("SELECT COUNT(*) FROM search_text").fetchone()[0])
     return IndexResult(tuple(done), texts)
 
@@ -307,7 +307,7 @@ def _text_id(connection: sqlite3.Connection, digest: bytes, folded: str) -> int:
     return text_id
 
 
-def _recount_df(connection: sqlite3.Connection, report: Reporter) -> None:
+def recount_df(connection: sqlite3.Connection, report: Reporter = _silent) -> None:
     """Recount how many distinct texts each word appears in.
 
     Counted over whole texts rather than whole verses on purpose: a sentence carried

@@ -8,6 +8,8 @@ import csv
 import json
 import sys
 
+from biblereference.corpora.ebible import PORTIONS
+
 # Already fetched under their own source ids; not duplicated in the bulk set.
 ALREADY = {"eng-web-c": "webc", "engDRA": "dra"}
 
@@ -66,6 +68,11 @@ def main(path: str, out: str) -> None:
         if tid in ALREADY:
             continue
         cid = corpus_id(tid)
+        # Scripture portions, excluded by measurement rather than by catalogue -- see
+        # PORTIONS in biblereference.corpora.ebible for why the declared counts cannot
+        # identify them. Dropped here so a refresh does not reintroduce them.
+        if cid in PORTIONS:
+            continue
         if cid in seen:
             raise SystemExit(f"id collision: {tid} and {seen[cid]} both -> {cid}")
         seen[cid] = tid

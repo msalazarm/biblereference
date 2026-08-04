@@ -58,14 +58,21 @@ def test_the_catholic_canon_is_covered_by_the_registered_sources() -> None:
 
 
 def test_the_bulk_english_corpus_is_registered() -> None:
-    """Fifty more English translations, held so that the search can tell one rendering
-    from another. They must not collide with the named sources."""
+    """Forty-six more English translations, held so that the search can tell one rendering
+    from another. They must not collide with the named sources.
+
+    Fifty until the four Scripture portions came out -- see ``PORTIONS`` in
+    :mod:`biblereference.corpora.ebible`, and the test alongside it in ``test_store``.
+    """
+    from biblereference.corpora.ebible import PORTIONS
+
     registered = set(all_sources())
     english = {source.id for source in ENGLISH}
 
-    assert len(english) == 50
+    assert len(english) == 46
     assert english <= registered
     assert not english & {"webc", "dra", "latvuc", "oshb", "swete", "nestle1904"}
+    assert not english & set(PORTIONS)
     assert {"asv", "kjv", "bsb", "net", "ylt"} <= english
 
 

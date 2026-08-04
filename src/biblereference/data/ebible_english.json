@@ -338,32 +338,6 @@
     }
   },
   {
-    "id": "pev",
-    "ebible_id": "engPEV",
-    "label": "Plain English Version",
-    "title": "Plain English Version",
-    "copyright": "Copyright © 2026 Wycliffe Bible Translators Australia",
-    "public_domain": false,
-    "versification": "eng",
-    "declared": {
-      "OT": {
-        "books": 6,
-        "chapters": 100,
-        "verses": 2201
-      },
-      "NT": {
-        "books": 24,
-        "chapters": 199,
-        "verses": 5173
-      },
-      "DC": {
-        "books": 0,
-        "chapters": 0,
-        "verses": 0
-      }
-    }
-  },
-  {
     "id": "ulb",
     "ebible_id": "engULB",
     "label": "Unlocked Literal Bible",
@@ -416,32 +390,6 @@
     }
   },
   {
-    "id": "aoi",
-    "ebible_id": "engaoi",
-    "label": "Anindilyakwa English Bible",
-    "title": "Anindilyakwa English Bible",
-    "copyright": "Copyright © 2021 Bible Society Australia",
-    "public_domain": false,
-    "versification": "eng",
-    "declared": {
-      "OT": {
-        "books": 2,
-        "chapters": 54,
-        "verses": 1485
-      },
-      "NT": {
-        "books": 4,
-        "chapters": 41,
-        "verses": 1472
-      },
-      "DC": {
-        "books": 0,
-        "chapters": 0,
-        "verses": 0
-      }
-    }
-  },
-  {
     "id": "asvbt",
     "ebible_id": "engasvbt",
     "label": "American Standard Version Byzantine Text",
@@ -464,32 +412,6 @@
         "books": 18,
         "chapters": 216,
         "verses": 6744
-      }
-    }
-  },
-  {
-    "id": "barkly",
-    "ebible_id": "engbarkly",
-    "label": "Barkly Bible Portions",
-    "title": "Barkly Bible Portions",
-    "copyright": "Copyright © 2024 Bible Society of Australia",
-    "public_domain": false,
-    "versification": "eng",
-    "declared": {
-      "OT": {
-        "books": 3,
-        "chapters": 64,
-        "verses": 1559
-      },
-      "NT": {
-        "books": 1,
-        "chapters": 16,
-        "verses": 586
-      },
-      "DC": {
-        "books": 0,
-        "chapters": 0,
-        "verses": 0
       }
     }
   },
@@ -823,32 +745,6 @@
         "books": 27,
         "chapters": 260,
         "verses": 7957
-      },
-      "DC": {
-        "books": 0,
-        "chapters": 0,
-        "verses": 0
-      }
-    }
-  },
-  {
-    "id": "nna",
-    "ebible_id": "engnna",
-    "label": "Nyangumarta English Bible",
-    "title": "Nyangumarta English Bible",
-    "copyright": "Copyright © 1980-2010 Wycliffe Bible Translators, Inc.",
-    "public_domain": false,
-    "versification": "eng",
-    "declared": {
-      "OT": {
-        "books": 8,
-        "chapters": 49,
-        "verses": 756
-      },
-      "NT": {
-        "books": 18,
-        "chapters": 55,
-        "verses": 622
       },
       "DC": {
         "books": 0,

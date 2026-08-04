@@ -189,3 +189,90 @@ def test_attribution_is_emitted_for_texts_that_require_it(home: DataHome) -> Non
     out, report = renderer.render_text('[passage="Ps 23:1" original="lxx"]')
     assert "Demo attribution line." in out
     assert report.attributions == ["Demo attribution line."]
+
+
+# --------------------------------------------------------------------------------------
+# Dropping a corpus
+# --------------------------------------------------------------------------------------
+
+
+SHARED = SourceMeta(
+    corpus="twin",
+    label="Shares a verse with the demo",
+    language="grc",
+    versification="lxx",
+    license="Public domain.",
+)
+
+
+def test_dropping_a_corpus_takes_its_verses_and_its_index(home: DataHome) -> None:
+    from biblereference.search import build_index
+    from biblereference.store import drop_corpora, open_store
+
+    write_corpus(home, META, VERSES)
+    build_index(home)
+    assert drop_corpora(home, ["demo"]) == {"demo": 3}
+
+    with open_store(home) as connection:
+        for table in ("verse", "source_meta", "search_ref", "search_state"):
+            rows = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            assert rows == 0, f"{table} still holds rows for a dropped corpus"
+        # The index must not outlive the text: a hit here would resolve to a corpus the
+        # store can no longer render.
+        assert connection.execute("SELECT COUNT(*) FROM search_text").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM search_fts").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM search_df").fetchone()[0] == 0
+
+
+def test_dropping_keeps_text_another_corpus_still_shares(home: DataHome) -> None:
+    """``search_text`` is deduplicated by hash across corpora. A verse two translations
+    render identically has one row, and dropping either must not take it -- the survivor
+    still points at it, and a dangling ``text_id`` would make its verse unfindable."""
+    from biblereference.search import build_index
+    from biblereference.store import drop_corpora, open_store
+
+    write_corpus(home, META, VERSES)
+    write_corpus(home, SHARED, VERSES[:1])  # same text as demo's first verse
+    build_index(home)
+
+    with open_store(home) as connection:
+        before = connection.execute("SELECT COUNT(*) FROM search_text").fetchone()[0]
+    assert before == 3, "identical texts should share one row"
+
+    drop_corpora(home, ["demo"])
+
+    with open_store(home) as connection:
+        rows = connection.execute("SELECT text_id FROM search_ref WHERE corpus = 'twin'").fetchall()
+        assert len(rows) == 1
+        kept = connection.execute(
+            "SELECT COUNT(*) FROM search_text WHERE id = ?", (rows[0][0],)
+        ).fetchone()[0]
+        assert kept == 1, "dropped a text the surviving corpus still points at"
+
+
+def test_dropping_something_absent_is_not_an_error(home: DataHome) -> None:
+    from biblereference.store import drop_corpora
+
+    write_corpus(home, META, VERSES)
+    assert drop_corpora(home, ["never-fetched"]) == {"never-fetched": 0}
+
+
+def test_scripture_portions_are_not_offered_as_translations() -> None:
+    """Four eBible entries are selections rather than Bibles -- they print some verses of a
+    chapter and not others. A partial chapter is worse than none here: a search hit resolves
+    to a verse the edition never claimed to translate, and the structural checks read the
+    excerpting as a versification fault.
+
+    The catalogue cannot identify them. "Barkly Bible Portions" declares 26.8 verses per
+    chapter, squarely among the complete Bibles, because its chapters are whole and merely
+    few. Only the measured share of complete chapters separates them, which is why this is
+    a fixed list rather than a rule.
+    """
+    from biblereference.corpora.ebible import ENGLISH, PORTIONS, english_table
+
+    assert set(PORTIONS) == {"nna", "barkly", "pev", "aoi"}
+    ids = {row["id"] for row in english_table()}
+    assert ids.isdisjoint(PORTIONS)
+    assert {source.id for source in ENGLISH}.isdisjoint(PORTIONS)
+    # Small but complete editions stay: Jonah alone, four books, and the Pentateuch.
+    assert {"e2t", "glw", "oke"} <= ids

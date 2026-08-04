@@ -299,15 +299,41 @@ LATVUC: Final = Source(
 # -- the bulk English corpus -----------------------------------------------------------
 
 
+#: Scripture *portions* rather than Bibles: editions that print selected passages for a
+#: community rather than continuous text. They are excluded from the corpus because a
+#: partial chapter is worse than no chapter here -- a search hit resolves to a verse the
+#: edition never claimed to translate, and the structural checks in ``tests/test_witnesses``
+#: read their excerpting as a versification fault.
+#:
+#: Membership is *measured*, not inferred from the catalogue, because eBible's declared
+#: counts cannot tell a portion from a short complete text: "Barkly Bible Portions" averages
+#: 26.8 verses per chapter, squarely among the complete Bibles, since its chapters are whole
+#: and merely few. The tell is the share of chapters held complete -- verses 1..n with no
+#: gaps -- where these four score 12%, 19%, 29% and 39% against 86% or better for every
+#: other English edition.
+#:
+#: Note what is *not* here. ``e2t`` (Jonah alone), ``glw`` (four books) and ``oke`` (the
+#: Pentateuch) are complete in every chapter they carry; they are small, not abridged, and
+#: remain valid witnesses for the chapters they hold.
+PORTIONS: Final[frozenset[str]] = frozenset(
+    {
+        "nna",  # Nyangumarta English Bible -- 12% of chapters complete, 46% of verses
+        "barkly",  # Barkly Bible Portions -- 19%
+        "pev",  # Plain English Version -- 29%, 80% of verses
+        "aoi",  # Anindilyakwa English Bible -- 39%
+    }
+)
+
+
 def english_table() -> list[dict[str, Any]]:
-    """The vendored list of redistributable English translations.
+    """The vendored list of redistributable English translations, less the portions.
 
     Generated from eBible's ``translations.csv`` by ``tools/gen_ebible_english.py`` and
     committed, so that the sources exist without a network round trip on import.
     """
     data = resources.files("biblereference").joinpath("data", "ebible_english.json")
     loaded: list[dict[str, Any]] = json.loads(data.read_text(encoding="utf-8"))
-    return loaded
+    return [row for row in loaded if row["id"] not in PORTIONS]
 
 
 def _english_builder(entry: Mapping[str, Any]) -> Any:

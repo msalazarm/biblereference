@@ -327,6 +327,56 @@ def write_corpus(home: DataHome, meta: SourceMeta, verses: Iterable[tuple[VerseR
     return len(rows)
 
 
+def drop_corpora(home: DataHome, corpora: Sequence[str]) -> dict[str, int]:
+    """Remove corpora from the store completely, index and all.
+
+    Deleting the verses by hand is not enough and is worse than doing nothing: the search
+    index would keep pointing at them, so a hit would resolve to a corpus the store can no
+    longer render, and the document frequencies behind every relevance score would still be
+    counting texts that are gone.
+
+    Two subtleties, both of which a plain ``DELETE`` gets wrong:
+
+    * ``search_text`` is deduplicated by hash across corpora, so a text may be shared. Only
+      rows nothing points at any more may go -- and their FTS rows with them, keyed on the
+      same id.
+    * ``search_df`` counts distinct texts per word and has to be recounted afterwards, not
+      decremented, because a word's count changes only for the texts that actually vanished.
+
+    :returns: verses removed, by corpus. Ids absent from the store are ignored rather than
+        raising: dropping something already gone is the state the caller asked for.
+    """
+    from .search import recount_df  # deferred: search builds on this module
+
+    removed: dict[str, int] = {}
+    if not corpora:
+        return removed
+
+    with open_store(home) as connection:
+        marks = ", ".join("?" * len(corpora))
+        for corpus in corpora:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM verse WHERE corpus = ?", (corpus,)
+            ).fetchone()
+            removed[corpus] = int(row[0])
+
+        for table in ("verse", "source_meta", "chapter_state", "search_ref", "search_state"):
+            connection.execute(f"DELETE FROM {table} WHERE corpus IN ({marks})", tuple(corpora))
+
+        orphans = [
+            int(row[0])
+            for row in connection.execute(
+                "SELECT id FROM search_text WHERE id NOT IN (SELECT text_id FROM search_ref)"
+            )
+        ]
+        connection.executemany("DELETE FROM search_text WHERE id = ?", [(i,) for i in orphans])
+        connection.executemany("DELETE FROM search_fts WHERE rowid = ?", [(i,) for i in orphans])
+
+        recount_df(connection)
+
+    return removed
+
+
 def add_chapter(
     home: DataHome,
     meta: SourceMeta,

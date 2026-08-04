@@ -11,9 +11,13 @@ system's declared `maxVerses`. A corpus that follows a system agrees with it eve
 
 > Completeness matters. An earlier pass used each chapter's *highest printed verse*, which
 > for an abridged corpus measures its excerpting rather than its versification — it scored
-> the `nna` selection at 42% and read as a catastrophic misfile. `nna` holds 1,366 verses
-> across 26 books and has only 12 complete chapters. It is a reader's selection, not a
-> Bible, and it cannot be judged this way at all.
+> the `nna` selection at 42% and read as a catastrophic misfile. `nna` held 1,366 verses
+> across 26 books and only 12 complete chapters. It is a reader's selection, not a Bible,
+> and it could not be judged this way at all.
+>
+> The four such editions have since been dropped from the corpus entirely — see
+> `PORTIONS` in `biblereference.corpora.ebible`. What follows describes the corpus as it
+> now stands.
 
 ## The rule that came out of it
 
@@ -70,8 +74,34 @@ Trustworthy as witnesses, having been checked rather than assumed:
 `wlc` (929), `novavulgata` (1300), `lsv` (1189), `jps` (929), `lee` (928), `ulb` (1170),
 `oebcw`/`oebus` (548), `ourb` (540).
 
+## Scripture portions, removed
+
+Four eBible editions printed selected passages rather than continuous text, and are no
+longer fetched or indexed:
+
+| corpus | edition | chapters held complete | verses held |
+|---|---|---|---|
+| `nna` | Nyangumarta English Bible | 12% | 46% |
+| `barkly` | Barkly Bible Portions | 19% | 87% |
+| `pev` | Plain English Version | 29% | 80% |
+| `aoi` | Anindilyakwa English Bible | 39% | 95% |
+
+Every other English edition holds 86% or more of its chapters complete. The gap is wide
+enough that the boundary is not a judgement call.
+
+The catalogue cannot find them: eBible's declared counts put "Barkly Bible Portions" at
+26.8 verses per chapter, squarely among the complete Bibles, because its chapters *are*
+whole and merely few. Only the measured completeness separates a portion from a short
+complete text, which is why `PORTIONS` is a fixed measured list rather than a rule applied
+to the catalogue.
+
+Dropping them removed 13,842 verses and 13,799 indexed texts — the 43-text difference
+being verses rendered identically by a surviving translation, which the deduplicated index
+correctly kept.
+
 ## Corpora that cannot be judged
 
-`nna`, `e2t`, `barkly`, `aoi`, `glw`, `niv`, `swete-daniel` — fewer than 50 complete
-chapters each. `n1904` is New Testament only, so it matches `org`, `lxx` and `nvl` equally
-well and its declared family is unfalsifiable by this method.
+`e2t` (Jonah alone), `glw` (four books), `niv` (an on-demand cache) and `swete-daniel` hold
+too few chapters to place, though each is complete in what it carries. `n1904` is New
+Testament only, so it matches `org`, `lxx` and `nvl` equally well and its declared family is
+unfalsifiable by this method.
