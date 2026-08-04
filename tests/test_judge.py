@@ -156,11 +156,27 @@ def test_the_inverse_framing_can_only_confirm_a_rejection() -> None:
     that counts against a mapping.
     """
     ref = VerseRef("GEN", 1, 1, vrs="org")
-    # positive: NO, NO  ->  rejected. inverse: NO, NO -> refuses to confirm the rejection.
-    with recording(["NO", "NO", "NO", "NO"]):
-        result = Judge(["http://x"]).judge(ref, ref, "a", "b", "c")
 
+    # The sign of this is worth pinning, because getting it backwards silently inverts the
+    # whole escalation and nothing crashes. The inverse question is "are these DIFFERENT
+    # verses?", so YES confirms the rejection and NO withdraws it.
+    judge = Judge(["http://x"])
+    with recording(["YES", "YES"]):
+        assert judge.confirms_rejection("a", "b") is True
+    with recording(["NO", "NO"]):
+        assert judge.confirms_rejection("a", "b") is False
+
+    # Positive prompt rejects; inverse framing declines to confirm. Uninformative, never a
+    # contradiction -- a contradiction is the only verdict that counts against a mapping.
+    with recording(["NO", "NO", "NO", "NO", "YES", "YES"]):
+        result = judge.judge(ref, ref, "a", "b", "c")
     assert result.verdict == Verdict.UNINFORMATIVE
+
+    # Positive rejects, inverse confirms it, and the control verse is accepted instead.
+    # That is the one shape that is evidence against a mapping.
+    with recording(["NO", "NO", "YES", "YES", "YES", "YES"]):
+        result = judge.judge(ref, ref, "a", "b", "c")
+    assert result.verdict == Verdict.CONTRADICTED
 
 
 def test_work_is_shared_between_servers_by_a_counter() -> None:

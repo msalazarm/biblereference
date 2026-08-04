@@ -292,10 +292,14 @@ class Judge:
         Alone this question is worth little -- 36% to 78% against labelled pairs, barely
         better than guessing. In agreement with the positive framing it is worth a great
         deal, 98.4% and up. So it is wired as a veto and cannot raise a flag by itself.
+
+        No inversion here, and the sign is worth being careful about because getting it
+        backwards silently inverts the whole escalation. The question asked is "are these
+        DIFFERENT verses?", so a YES *is* the confirmation that the rejection stands. Only
+        callers wanting the answer expressed as sameness need :meth:`best_of_three`'s
+        ``invert``.
         """
-        return self.best_of_three(
-            left, right, system=_INVERSE_SYSTEM, question=_INVERSE_QUESTION, invert=True
-        )
+        return self.best_of_three(left, right, system=_INVERSE_SYSTEM, question=_INVERSE_QUESTION)
 
     def judge(
         self,
