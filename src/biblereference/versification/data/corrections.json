@@ -17,6 +17,7 @@
   "_psalm_title_note": "Examined and deliberately not corrected. lxx maps 135 of its 138 titled psalms as a single straight range from verse 0 -- 'PSA 12:0-6 -> PSA 13:0-6' -- while vul curates a handful of the same psalms by hand, and comparing the two suggests lxx is one out. It is not, or not in a way this file can fix. The Copenhagen data models a superscription as verse 0 on both sides of a mapping, while org's own maxVerses counts it as verse 1: the Leningrad Codex's Psalm 13:1 is 'lamnatzeach mizmor ledavid', the title, and org gives the psalm six verses. Those two conventions disagree upstream, so a mapping that looks off by one against the verse counts is consistent with the convention the mappings themselves use. Where vul departs from the straight range it is for a real reason and those entries stand: the Latin merges Psalm 12's title with its first line into one verse and splits the Hebrew's 13:3 in two, which is why it needs 12:2 and 12:3 both mapping to 13:3. Rewriting 135 lxx psalms on a convention this project does not control would risk far more than it fixes, and the measured cost of leaving them is seven flagged rows across the whole derivation. See audit.faithful_chapters, which cannot see this either.",
   "_letter_of_jeremiah_note": "The Letter of Jeremiah is org's standalone LJE and English's Baruch 6, and the two number it differently in three places rather than one. The English tradition counts the letter's heading -- 'A copy of a letter that Jeremy sent to those who were to be led captives into Babylon' -- as 6:1, which the Latin does not, so English opens one ahead. It then merges two verses at 6:43, where every English witness reads 'The women also with cords about them sit in the ways, burning bran for incense: but if any of them, drawn by some that pass by, lie with him, she reproacheth her neighbour' and the Latin keeps 'Mulieres autem circumdatae funibus in viis sedent' at 42 and 'cum autem aliqua ex ipsis, attracta ab aliquo transeunte, dormierit cum eo' at 43 -- which cancels the offset, and 6:44 to 6:50 agree exactly. It then splits the Latin's 6:50 in two, and the offset resumes to the end. This was originally written as one straight range and the middle seven verses were wrong: 'Whatsoever is done among them is false' resolved to 'when any one of them lieth with him', a different sentence entirely. Read against all eight English witnesses that carry the book (asvbt, kjv, kjvcpb, rv, web, webbe, webc, webu, unanimous at 73 verses) and all three Latin ones (dra, latvuc, novavulgata, unanimous at 72). One consequence is stated rather than hidden. Because the data model maps each source verse to exactly one target, the merged English 6:43 can name only one of the two Latin verses it carries, and it names the first -- so nothing maps forward onto LJE 1:43. Converting that verse back into English therefore falls through to the identity and answers LJE 1:43, in the standalone naming rather than as BAR 6:43. That answer is textually right, since the English verse 43 does contain the material, and it is the reason 6:43 maps to 42 rather than to 43: the mirror-image arrangement would leave LJE 1:42 to fall through to English 1:42, which reads 'Yet they cannot perceive this themselves' and is the wrong verse. Before this correction LJE 1:43 answered BAR 6:44, 'Whatsoever is done among them is false' -- a different sentence entirely.",
   "_merged_verse_note": "A system verse that carries two org verses can name only one of them, because the forward direction is one-to-one. Which one is not a matter of taste, and getting it wrong is how five faults in this file were introduced and then found. The reverse direction fills gaps with the identity, so the rule is: name the org verse the identity will NOT reach, and both become reachable. In practice that means looking at which side of the merge the offset changes on. Where the system is in step with org before the merge and one behind after it -- vul at MAT 17:14, ACT 7:55, ACT 14:6, NEH 3:30, REV 20:7, JOS 21:36 -- name the SECOND, because the identity still covers the first. Where the system is one ahead before the merge and in step after it -- eng at BAR 6:43, vul at MIC 5:11 -- name the FIRST, because the identity covers the second. Naming by 'whichever the verse opens with' looks principled and is wrong half the time: it leaves the other org verse resolving to a system verse a full position away, which reads as a confident answer about a different sentence. Where neither choice works, because the merge sits inside a longer re-division, one org verse is simply unreachable in that system and the file says so rather than guessing -- org LJE 1:43 in eng, org 1MA 1:49 in vul.",
+  "_covers_note": "A verse of one edition can carry the text of two verses of another, and the mapping model answers that question twice. `add_mapped` and the rest of this file record the *exact* correspondence -- which single verse this one is -- because that is what a citation, an index or a rendering means by conversion, and it is one-to-one by construction. This section records the *covering* correspondence: every org verse whose text the source verse holds any part of, so that nothing is dropped. Reach it with `covering=True`. The two differ only where an edition merges what another divides, which is exactly where `_merged_verse_note` describes having to choose; covering is the mode where the choice does not arise, and it is what makes org LJE 1:43 and org 1MA 1:49 reachable at all. Nothing here is derived. It would have been easy to derive and it would have been wrong -- see the docstring of `_resolve_covers` for the 921 verses that a symmetric closure would have claimed, and for the Greek Exodus verse that shows why they are not evidence. Every entry below was read against the text.",
   "drop_mapped": {
     "eng": [
       {
@@ -736,5 +737,96 @@
       ],
       "reason": "Sirach 18 is unmappable and both traditions number it at 33 verses, so the automatic guard cannot see it and it converted by identity. Read against the Greek, the Vulgate merges, expands, omits and splits inside fourteen verses: its 18:1 runs org's 18:1 and 18:2 together ('He that liveth for ever created all things together. God only shall be justified'), its 18:2 and 18:3 expand org's single 18:4, it has no counterpart to org 18:10 'As a drop of water from the sea, and a pebble from the sand', and its 18:10-11 and 18:12-13 each split one verse of org's. Five structural differences in both directions, which is the signature that made Jerome's Judith unmappable, in miniature. Chapters 6 and 14 of the same book are mapped, which is why this is a chapter rather than the book: the Vulgate's Sirach follows the Greek in most places and departs from it in a few, and refusing the whole book would throw away two verified fixes."
     }
-  ]
+  ],
+  "covers": {
+    "eng": {
+      "BAR 6:43": {
+        "to": "LJE 1:42-43",
+        "reason": "'The women also with cords about them sit in the ways, burning bran for incense' is org LJE 1:42 and 'but if any of them, drawn by some that pass by, lie with him, she reproacheth her neighbour' is LJE 1:43. The English carries both as one verse. This is the case the whole covering mode exists for: LJE 1:43 has no English verse of its own, so the exact map cannot name it and converting it into English used to fall through to the identity."
+      },
+      "LJE 1:43": {
+        "to": "LJE 1:42-43",
+        "reason": "eng records this book twice, as Baruch 6 and as a standalone LJE, and the two must say the same thing. Same verse as the BAR 6:43 entry."
+      },
+      "BAR 3:34": {
+        "to": "BAR 3:34-35",
+        "reason": "'The stars shone in their watches, and were glad' is org 3:34 and 'When he called them, they said, Here we are' is 3:35; the English merges them, which is why it gives Baruch 3 thirty-seven verses where every other system gives thirty-eight."
+      },
+      "1CH 12:4": {
+        "to": "1CH 12:4-5",
+        "reason": "'Ishmaiah the Gibeonite, a mighty man among the thirty and a leader of the thirty' is org 12:4 and 'Jeremiah, Jahaziel, Johanan, Jozabad the Gederathite' is 12:5. The English runs them together, which is why it gives the chapter forty verses to org's forty-one."
+      },
+      "1SA 20:42": {
+        "to": [
+          "1SA 20:42",
+          "1SA 21:1"
+        ],
+        "reason": "'Go in peace, because we have both sworn in the name of the LORD' is org 20:42 and 'and he arose and departed, and Jonathan went into the city' is org 21:1 -- the Hebrew opens a chapter where the English does not. The only entry in this file whose cover crosses a chapter boundary, which is why the list form exists: a range cannot express it."
+      }
+    },
+    "vul": {
+      "MAT 17:14": {
+        "to": "MAT 17:14-15",
+        "reason": "'And when he was come to the multitude, there came to him a man falling down on his knees before him' is org 17:14 and 'Lord, have mercy on my son, for he is a lunatic' is 17:15. The Douay carries both as one verse."
+      },
+      "REV 20:7": {
+        "to": "REV 20:7-8",
+        "reason": "'Et cum consummati fuerint mille anni, solvetur Satanas de carcere suo' is org 20:7 and 'et exibit, et seducet gentes, quae sunt super quatuor angulos terrae' is 20:8. The Clementine carries both; the Nova Vulgata and the Greek divide them."
+      },
+      "REV 20:9": {
+        "to": "REV 20:9-10",
+        "reason": "The Clementine divides this passage where neither the Greek nor the Nova Vulgata does: its 20:9 ends 'missus est in stagnum ignis, et sulphuris, ubi et bestia', so it holds the tail of org 20:9 and the head of org 20:10. Covering names both, because naming either alone would drop half the verse."
+      },
+      "MIC 5:11": {
+        "to": "MIC 5:10-11",
+        "reason": "'And I will destroy the cities of thy land, and will throw down all thy strong holds' is org 5:10 and 'and I will take away sorceries out of thy hand' is 5:11. The Douay carries both as one verse."
+      },
+      "JOS 21:36": {
+        "to": "JOS 21:36-37",
+        "reason": "'Of the tribe of Ruben beyond the Jordan, Bosor in the wilderness' is org 21:36 and 'and Jethson and Mephaath, four cities with their suburbs' is 21:37. The Douay gives this chapter forty-three verses to org's forty-five, and this is one of the two merges that account for the difference."
+      },
+      "JOS 21:37": {
+        "to": "JOS 21:38-39",
+        "reason": "The other merge: 'Of the tribe of Gad, Ramoth in Galaad' is org 21:38 and 'and Hesebon and Jaser, four cities with their suburbs' is 21:39."
+      },
+      "NUM 15:15": {
+        "to": "NUM 15:15-16",
+        "reason": "'There shall be one statute for you and for the stranger, a statute for ever throughout your generations' is org 15:15 and 'one law and one ordinance shall be for you and for the stranger' is 15:16. The Douay condenses them into 'There shall be all one law and judgment both for you and for them who are strangers in the land'."
+      },
+      "1MA 1:36": {
+        "to": "1MA 1:34-35",
+        "reason": "'And they placed there a sinful nation, wicked men, and they fortified themselves therein' is org 1:34; the verse then runs on into 'and they stored up armour, and victuals', which is the head of org 1:35. Covering names both, because the exact map can only name where the verse begins."
+      },
+      "1MA 1:51": {
+        "to": "1MA 1:48-49",
+        "reason": "'And that they should leave their children uncircumcised, and let their souls be defiled with all uncleannesses' is org 1:48 and 'to the end that they should forget the law' is 1:49. This is the second verse the exact map cannot reach -- org 1:49 has no Clementine verse of its own."
+      },
+      "ACT 7:55": {
+        "to": "ACT 7:55-56",
+        "reason": "'Cum autem esset plenus Spiritu Sancto, intendens in caelum, vidit gloriam Dei' is org 7:55 and 'et ait: Ecce video caelos apertos' is 7:56. The Clementine carries both, which is why it gives Acts 7 fifty-nine verses to the Greek's sixty."
+      },
+      "ACT 14:6": {
+        "to": "ACT 14:6-7",
+        "reason": "'intelligentes confugerunt ad civitates Lycaoniae Lystram et Derben' is org 14:6 and 'et ibi evangelizantes erant' is 14:7. The Clementine carries both."
+      },
+      "NEH 3:30": {
+        "to": "NEH 3:30-31",
+        "reason": "'Post eum aedificavit Hanania filius Selemiae, et Hanun filius Seleph sextus, mensuram secundam' is org 3:30 and 'Post eum Melchias filius aurificis' is 3:31. The Clementine carries both."
+      },
+      "EXO 40:13": {
+        "to": "EXO 40:13-15",
+        "reason": "Three into one, the only such entry here. 'Thou shalt put on them the holy vestments, that they may minister to me, and that the unction may profit them' condenses org 40:13 (vesting Aaron), 40:14 (bringing his sons) and 40:15 (anointing them), which is why the Douay gives the chapter thirty-six verses to org's thirty-eight."
+      },
+      "1CH 12:4": {
+        "to": "1CH 12:4-5",
+        "reason": "The same merge as eng's entry of the same name, and the Douay makes it at the same point: 'Samaias of Gabaon, the stoutest amongst the thirty and over the thirty' is org 12:4 and 'Jeremias, and Jeheziel, and Johanan, and Jezabad of Gaderoth' is 12:5."
+      }
+    },
+    "lxx": {
+      "NUM 21:19": {
+        "to": "NUM 21:19-20",
+        "reason": "'and from Manthanain to Naaliel, and from Naaliel to Bamoth' is org 21:19 and 'and from Bamoth to Janen, which is in the plain of Moab' is 21:20. The Greek carries both as one verse, and splits org 21:22 in two to compensate, so both chapters still end at thirty-five."
+      }
+    }
+  }
 }

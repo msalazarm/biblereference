@@ -92,10 +92,12 @@ def _words(text: str) -> list[str]:
     return _WORD_RE.findall(fold(text, "la"))
 
 
-def _text(corpus: Corpus, versification: Versification, ref: VerseRef) -> str | None:
+def _text(
+    corpus: Corpus, versification: Versification, ref: VerseRef, covering: bool = False
+) -> str | None:
     """One verse of a corpus, in the corpus's own numbering, or ``None`` if absent."""
     try:
-        segments = versification.convert_all(ref, corpus.versification)
+        segments = versification.convert_all(ref, corpus.versification, covering=covering)
     except VersificationError:
         return None
     parts: list[str] = []
@@ -113,6 +115,7 @@ def compare_corpora(
     versification: Versification,
     *,
     books: list[str] | None = None,
+    covering: bool = False,
 ) -> Iterator[BookComparison]:
     """Compare two corpora book by book, in reading order.
 
@@ -134,7 +137,8 @@ def compare_corpora(
                 versification.max_verse("org", book, chapter) + 1,
             ):
                 ref = VerseRef(book, chapter, verse, vrs="org")
-                a, b = _text(left, versification, ref), _text(right, versification, ref)
+                a = _text(left, versification, ref, covering)
+                b = _text(right, versification, ref, covering)
                 if a is None and b is None:
                     continue
                 if a is None:

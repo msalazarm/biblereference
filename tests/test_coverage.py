@@ -16,6 +16,7 @@ Two tests, and they are deliberately different in kind:
 
 from __future__ import annotations
 
+import itertools
 from pathlib import Path
 
 import pytest
@@ -192,3 +193,135 @@ def test_a_run_is_only_reported_when_it_is_consecutive() -> None:
     # Out of order, interleaved with noise, and with 5 and 7 appearing twice -- none of
     # which is a gap, and none of which may break the run.
     assert runs_of(scattered + run, 4) == [("eng", "GEN", 1, 4, 7)]
+
+
+# --------------------------------------------------------------------------------------
+# Covering conversion, over every conversion there is
+# --------------------------------------------------------------------------------------
+
+
+def _every_verse(vrs: Versification, system: str):  # type: ignore[no-untyped-def]
+    from biblereference.canon import CANONICAL_ORDER
+    from biblereference.refs import VerseRef
+    from biblereference.versification import VersificationError
+
+    for book in CANONICAL_ORDER:
+        if not vrs.has_book(system, book):
+            continue
+        for chapter in range(1, vrs.chapter_count(system, book) + 1):
+            try:
+                low = vrs.first_verse(system, book, chapter)
+                high = vrs.max_verse(system, book, chapter)
+            except VersificationError:
+                continue
+            for verse in range(max(low, 0), high + 1):
+                yield VerseRef(book, chapter, verse, vrs=system)
+
+
+def test_covering_never_costs_you_an_answer(vrs: Versification) -> None:
+    """The contract, over all 798,132 conversions between all twenty ordered system pairs.
+
+    Covering is a looser question than the exact map answers, so it must never come back
+    with *less*. Two ways it could, and neither is allowed:
+
+    * it drops a verse the exact map named. Permitted in exactly one circumstance -- where
+      the exact answer was the identity fall-through and the data itself contradicts it,
+      because a verse that maps elsewhere cannot also be standing in for this one. The
+      Douay's Exodus 40:14 is "Moses did all that the Lord commanded", not the bringing of
+      Aaron's sons, and covering replacing that is a correction rather than a loss.
+    * it refuses where the exact map answered. Never permitted: a guarantee that costs you
+      answers is not worth having.
+    """
+    from biblereference.versification import DEFAULT_SYSTEMS, VersificationError
+
+    def convert(ref, target, covering):  # type: ignore[no-untyped-def]
+        try:
+            return {
+                (r.book, int(r.chapter), r.verse, r.subverse)
+                for r in vrs.convert_all(ref, target, covering=covering)
+            }
+        except VersificationError:
+            return None
+
+    losses: list[tuple[str, str, str, object]] = []
+    refusals = 0
+    grew = 0
+    for source, target in itertools.permutations(DEFAULT_SYSTEMS, 2):
+        contradicted = vrs._system(target).to_org
+        for ref in _every_verse(vrs, source):
+            exact = convert(ref, target, False)
+            if exact is None:
+                continue
+            covering = convert(ref, target, True)
+            if covering is None:
+                refusals += 1
+                continue
+            grew += covering > exact
+            losses.extend(
+                (source, target, str(ref), dropped)
+                for dropped in exact - covering
+                if contradicted.get(dropped, dropped) == dropped
+            )
+
+    assert losses == []
+    assert refusals == 0
+    assert grew > 0, "no conversion differs, so nothing here is being tested"
+
+
+def test_the_round_trip_holds_where_a_cover_is_recorded(vrs: Versification) -> None:
+    """Convert a verse into another system and back, and you must land on the text you
+    started from. Measured through the pivot rather than by coordinates, because a book
+    with two names is not a lost verse: English Greek Daniel 1:1 comes home as Daniel 1:1,
+    which is the same words under the name English Bibles print.
+
+    This does not pass everywhere and is not asserted to. 2,848 verses still fail it, and
+    they are the honest work queue for this data -- Greek 2 Esdras and Esther, which are
+    differently built books rather than differently numbered ones; the psalm
+    superscriptions; and the Greek reorderings of Exodus and Jeremiah. What is asserted is
+    that covering is *better* than the exact map here and that the recorded covers hold.
+    """
+    from biblereference.refs import VerseRef
+    from biblereference.versification import DEFAULT_SYSTEMS, PIVOT, VersificationError
+
+    def to_pivot(ref, covering):  # type: ignore[no-untyped-def]
+        if ref.vrs == PIVOT:
+            return {(ref.book, int(ref.chapter), ref.verse, ref.subverse)}
+        try:
+            return {
+                (r.book, int(r.chapter), r.verse, r.subverse)
+                for r in vrs.convert_all(ref, PIVOT, covering=covering)
+            }
+        except VersificationError:
+            return None
+
+    failures = {False: 0, True: 0}
+    for source, target in itertools.permutations(DEFAULT_SYSTEMS, 2):
+        for ref in _every_verse(vrs, source):
+            for covering in (False, True):
+                start = to_pivot(ref, covering)
+                try:
+                    out = vrs.convert_all(ref, target, covering=covering)
+                except VersificationError:
+                    continue
+                if start is None:
+                    continue
+                home: set[tuple[str, int, int, str]] = set()
+                for landed in out:
+                    back = to_pivot(landed, covering)
+                    if back:
+                        home |= back
+                failures[covering] += not start <= home
+
+    assert failures[True] < failures[False], "covering must improve the round trip"
+    assert failures[True] < 3000, f"round-trip failures climbed to {failures[True]}"
+
+    # And the recorded covers themselves hold, which is the part that is claimed.
+    for ref, target in (
+        (VerseRef("LJE", 1, 43, vrs="org"), "eng"),
+        (VerseRef("1MA", 1, 49, vrs="org"), "vul"),
+        (VerseRef("MAT", 17, 14, vrs="vul"), "org"),
+        (VerseRef("BAR", 6, 43, vrs="eng"), "vul"),
+    ):
+        landed = vrs.convert_all(ref, target, covering=True)
+        home = {c for r in landed for c in (to_pivot(r, True) or set())}
+        assert to_pivot(ref, True) <= home, (ref, target, landed)

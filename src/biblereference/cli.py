@@ -28,6 +28,19 @@ from .versification import Versification
 __all__ = ["main"]
 
 
+#: Wording shared by every --covering flag, so the commands cannot drift apart about what
+#: it means.
+_COVERING_HELP: Final = (
+    "answer with every verse the mapping covers, not only the one it names -- the two "
+    "differ where an edition merges what another divides, and this is the mode that "
+    "cannot drop half a verse"
+)
+
+
+def _covering(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--covering", action="store_true", help=_COVERING_HELP)
+
+
 def _home(args: argparse.Namespace) -> DataHome:
     return DataHome(Path(args.data_home).expanduser()) if args.data_home else DataHome()
 
@@ -38,6 +51,7 @@ def _renderer(args: argparse.Namespace) -> Renderer:
         default_english=args.english,
         strict=getattr(args, "strict", False),
         template=getattr(args, "template", None) or "blockquote",
+        covering=getattr(args, "covering", False),
         appendix=getattr(args, "appendix", False),
         notices=not getattr(args, "no_notices", False),
         naming=NamingScheme(args.naming),
@@ -358,7 +372,9 @@ def cmd_coverage(args: argparse.Namespace) -> int:
 
     home = _home(args)
     vrs = Versification.load()
-    coverage, ghosts, contradicted = verify_every_verse(home, vrs, COVERAGE_WITNESSES)
+    coverage, ghosts, contradicted = verify_every_verse(
+        home, vrs, COVERAGE_WITNESSES, covering=args.covering
+    )
 
     for row in coverage:
         print(row.describe())
@@ -408,7 +424,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
     home = _home(args)
     books = [resolve_book(args.book)] if args.book else None
-    results = audit_all(home, books=books)
+    results = audit_all(home, books=books, covering=args.covering)
 
     total_runs = 0
     for result in results:
@@ -556,7 +572,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
     versification = Versification.load()
     books = [resolve_book(args.book)] if args.book else None
 
-    results = list(compare_corpora(left, right, versification, books=books))
+    results = list(compare_corpora(left, right, versification, books=books, covering=args.covering))
     if args.book and results and args.verbose:
         _print_verse_differences(results[0])
         return 0
@@ -823,6 +839,7 @@ def build_parser() -> argparse.ArgumentParser:
         )
         command.add_argument("--vrs", default="eng", help="versification references are written in")
         command.add_argument("--strict", action="store_true", help="treat warnings as errors")
+        _covering(command)
         command.set_defaults(func=function)
 
     compare = subparsers.add_parser(
@@ -831,6 +848,7 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("left", help="corpus id, e.g. latvuc")
     compare.add_argument("right", help="corpus id, e.g. novavulgata")
     compare.add_argument("--book", help="just this book; with -v, print the verses")
+    _covering(compare)
     compare.set_defaults(func=cmd_compare)
 
     audit = subparsers.add_parser(
@@ -842,6 +860,7 @@ def build_parser() -> argparse.ArgumentParser:
         "resolved one verse late.",
     )
     audit.add_argument("--book", help="just this book, e.g. JON")
+    _covering(audit)
     audit.add_argument(
         "--min-run",
         type=int,
@@ -882,6 +901,7 @@ def build_parser() -> argparse.ArgumentParser:
     coverage.add_argument(
         "--limit", type=int, default=40, metavar="N", help="ghosts to print (default 40)"
     )
+    _covering(coverage)
     coverage.set_defaults(func=cmd_coverage)
 
     doctor = subparsers.add_parser("doctor", help="report what is cached and built")

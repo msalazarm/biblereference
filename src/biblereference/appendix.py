@@ -236,6 +236,10 @@ def cross_scheme_references(versification: Versification, span: VerseRange) -> t
         if system == span.vrs:
             continue
         try:
+            # Deliberately the exact mapping, not the covering one. This register answers
+            # "what would you call this passage in that tradition", which is a question
+            # about citation; covering answers "what must you read to get all of it", and
+            # printing a two-verse span where a reader expects a reference would mislead.
             segments = versification.convert_range(span, system)
         except VersificationError:
             continue

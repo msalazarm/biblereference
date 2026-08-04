@@ -28,7 +28,7 @@ from functools import cache
 from importlib import resources
 from typing import Final
 
-from ..canon import book_title
+from ..canon import book_title, canonical_order
 from ..refs import VerseRange, VerseRef
 
 __all__ = [
@@ -121,6 +121,12 @@ def _parse_entry(text: str) -> list[_Coord]:
     return [(book, chapter, v, "") for v in range(start, end + 1)]
 
 
+def _reading_order(coord: _Coord) -> tuple[int, int, int, str]:
+    """Sort key putting verse coordinates in the order a reader meets them."""
+    book, chapter, verse, sub = coord
+    return (canonical_order(book), chapter, verse, sub)
+
+
 @dataclass(frozen=True, slots=True)
 class _System:
     """One versification system's data, already validated and expanded."""
@@ -129,6 +135,27 @@ class _System:
     max_verses: Mapping[str, tuple[int, ...]]
     to_org: Mapping[_Coord, _Coord]
     from_org: Mapping[_Coord, tuple[_Coord, ...]]
+    covers: Mapping[_Coord, tuple[_Coord, ...]]
+    """Every pivot verse this verse holds any part of, in reading order.
+
+    ``to_org`` answers "which verse *is* this one" and can name only one, because a
+    mapping file is a function in that direction. But a verse can carry the text of two:
+    the Douay's Matthew 17:14 is both "there came to him a man falling down on his knees"
+    and "Lord, have mercy on my son". Naming one of those leaves the other unreachable,
+    and choosing which to name is the whole subject of ``_merged_verse_note``.
+
+    This is the relation instead of the function, so the question does not arise. It holds
+    only the verses where the two differ and someone has read the text to establish it --
+    see :func:`_resolve_covers` for why it is not derived -- so a verse absent from it is
+    one whose exact answer is already complete.
+    """
+    covered_by: Mapping[_Coord, tuple[_Coord, ...]]
+    """The transpose of :attr:`covers`, in reading order and within a single book.
+
+    ``from_org`` picks the book where it has an opinion, so covering never contradicts the
+    exact answer about which of two names a verse goes by -- English carries the Letter of
+    Jeremiah under both LJE and BAR 6, and answering with both would quote it twice.
+    """
     unreliable_books: frozenset[str]
     unreliable_chapters: frozenset[tuple[str, int]]
     """Chapters declared unmappable by hand, because counting cannot find them."""
@@ -285,15 +312,15 @@ class Versification:
 
     # -- conversion --------------------------------------------------------------------
 
-    def convert(self, ref: VerseRef, target: str) -> VerseRef:
+    def convert(self, ref: VerseRef, target: str, *, covering: bool = False) -> VerseRef:
         """Convert a single reference into ``target``'s numbering.
 
         Where the target splits the verse in two, this returns where its text begins;
         use :meth:`convert_all` to get every part.
         """
-        return self.convert_all(ref, target)[0]
+        return self.convert_all(ref, target, covering=covering)[0]
 
-    def convert_all(self, ref: VerseRef, target: str) -> list[VerseRef]:
+    def convert_all(self, ref: VerseRef, target: str, *, covering: bool = False) -> list[VerseRef]:
         """Every verse of ``target`` that this reference covers, in text order.
 
         Usually one. Two when the target system splits the verse -- Hebrew Isaiah 63:19
@@ -302,6 +329,15 @@ class Versification:
         A reference with no explicit mapping keeps its coordinates and is simply
         relabelled: most verses agree across systems, and the mapping files list only the
         ones that don't.
+
+        :param covering: Answer with every verse needed to carry *all* of this one's text,
+            rather than with the single verse it most corresponds to. The two differ only
+            where an edition merges what another divides -- the Douay's Matthew 17:14 is
+            org's 17:14 and 17:15 together -- and there the default names one of them and
+            this names both. Use it when you are quoting or comparing text and must not
+            lose a clause; leave it off when you want the one verse that answers to this
+            one, which is what citation, indexing and rendering normally mean. The result
+            is always a superset of the default's, and never refuses where it would not.
         """
         if ref.is_letter_chapter:
             ref = self.resolve_letter_chapter(ref)
@@ -326,14 +362,39 @@ class Versification:
                 )
 
         coord: _Coord = (ref.book, ref.chapter, ref.verse, ref.subverse)
-        pivot = self._system(ref.vrs).to_org.get(coord, coord)
-        finals = self._system(target).from_org.get(pivot, (pivot,))
+        source, into = self._system(ref.vrs), self._system(target)
+        exact = source.to_org.get(coord, coord)
+        pivots = source.covers.get(coord, (exact,)) if covering else (exact,)
+
+        finals: list[_Coord] = []
+        for pivot in pivots:
+            reached = into.from_org.get(pivot, (pivot,))
+            if covering:
+                reached = into.covered_by.get(pivot, reached)
+            finals.extend(f for f in reached if f not in finals)
 
         out = [
             VerseRef(book=b, chapter=c, verse=v, subverse=s, vrs=target) for b, c, v, s in finals
         ]
+        if covering:
+            # A covered pivot the target simply does not have is dropped rather than
+            # allowed to turn a good answer into a refusal: covering must never refuse
+            # where the default succeeds, or the guarantee it offers would cost more than
+            # it is worth. Only an empty result is a real gap, and _must_exist says so.
+            kept = [v for v in out if self._exists(v)]
+            if kept:
+                return kept
         self._must_exist(ref, out, target)
         return out
+
+    def _exists(self, ref: VerseRef) -> bool:
+        """Whether the reference names a verse its own system actually declares."""
+        system = self._systems.get(ref.vrs)
+        if system is None or ref.is_letter_chapter or ref.book not in system.max_verses:
+            return True
+        chapters = system.max_verses[ref.book]
+        chapter = int(ref.chapter)
+        return 1 <= chapter <= len(chapters) and ref.verse <= chapters[chapter - 1]
 
     def _must_exist(self, ref: VerseRef, out: list[VerseRef], target: str) -> None:
         """Refuse rather than return a reference the target system does not have.
@@ -369,13 +430,18 @@ class Versification:
             f"quote the passage from a {ref.vrs!r} text directly."
         )
 
-    def convert_range(self, span: VerseRange, target: str) -> list[VerseRange]:
+    def convert_range(
+        self, span: VerseRange, target: str, *, covering: bool = False
+    ) -> list[VerseRange]:
         """Convert a range, returning one segment per contiguous run.
 
         A range can fall apart under conversion. Vulgate ``Daniel 3:1-100`` becomes three
         pieces in the Hebrew frame -- Daniel 3:1-23, the Song of the Three as its own
         book, then Daniel 3:24-33 -- so this returns a list rather than pretending the
         result is still one span.
+
+        :param covering: See :meth:`convert_all`. A covering range can only grow, and
+            often grows into its neighbour and coalesces, so the segment count may fall.
         """
         if span.start.is_letter_chapter:
             # A letter chapter names a Vulgate verse whatever numbering the rest of the
@@ -386,7 +452,11 @@ class Versification:
             )
         if span.vrs == target:
             return [span]
-        converted = [out for ref in self.expand(span) for out in self.convert_all(ref, target)]
+        converted = [
+            out
+            for ref in self.expand(span)
+            for out in self.convert_all(ref, target, covering=covering)
+        ]
         return _coalesce(converted)
 
     def merge(self, spans: Iterable[VerseRange]) -> list[VerseRange]:
@@ -744,6 +814,78 @@ def _resolve_reverse(
     return resolved
 
 
+def _resolve_covers(
+    name: str,
+    to_org: dict[_Coord, _Coord],
+    from_org: dict[_Coord, tuple[_Coord, ...]],
+    corrections: dict[str, object],
+) -> tuple[dict[_Coord, tuple[_Coord, ...]], dict[_Coord, tuple[_Coord, ...]]]:
+    """Which pivot verses each verse's text covers, and the transpose.
+
+    Every entry here is read against the text, and that is not a stylistic preference. It
+    would be easy to derive this instead: for 921 verses the library already answers an org
+    reference with a system verse whose own forward answer is a *different* org verse, and
+    treating that as a covering relation would have cost nothing. It would also have been
+    wrong. Those 921 are the identity fall-through -- what conversion returns when nothing
+    maps to an org verse and it keeps its coordinates -- and the fall-through is a guess.
+    Greek Exodus 36:9 is "he made the ephod of gold", part of the tabernacle account the
+    Septuagint moves bodily, and org's 36:9 is "the length of each curtain was twenty-eight
+    cubits". Deriving would have declared that one contains the other.
+
+    So a covering claim is only ever as good as the reading behind it, and this file records
+    the readings. Where there is no entry, covering answers exactly what the default does.
+    """
+    explicit: dict[_Coord, list[_Coord]] = {}
+    entries = _sub(corrections, "covers").get(name, {})
+    assert isinstance(entries, dict)
+    for key, spec in entries.items():
+        raw = spec["to"]
+        targets: list[_Coord] = []
+        # A list, because one case crosses a chapter boundary and a range cannot: the
+        # English 1 Samuel 20:42 carries both org 20:42 and org 21:1.
+        for piece in raw if isinstance(raw, list) else [raw]:
+            targets.extend(_parse_entry(piece))
+        for source in _parse_entry(key):
+            explicit.setdefault(source, []).extend(targets)
+
+    covers: dict[_Coord, tuple[_Coord, ...]] = {}
+    for source, targets in explicit.items():
+        exact = to_org.get(source, source)
+        whole = set(targets) | {exact}
+        if whole == {exact}:
+            raise VersificationDataError(
+                f"correction for {name!r} says {source} covers {sorted(whole)}, which is "
+                f"only what it already maps to -- the correction can be removed"
+            )
+        covers[source] = tuple(sorted(whole, key=_reading_order))
+
+    transposed: dict[_Coord, set[_Coord]] = {}
+    for source, covered in covers.items():
+        for target in covered:
+            transposed.setdefault(target, set()).add(source)
+
+    covered_by: dict[_Coord, tuple[_Coord, ...]] = {}
+    for target, extra in transposed.items():
+        lead = from_org.get(target, ())
+        # The verse of the same number, where nothing sends it elsewhere. Conversion falls
+        # through to it anyway when from_org is silent, and it is often a genuine part of
+        # the answer rather than a stand-in: the Clementine's Revelation 20:10 really does
+        # hold the tail of org 20:10, while its 20:9 holds the head, and dropping either
+        # would lose half the verse. Where to_org *does* send it elsewhere the fall-through
+        # is simply wrong, and covering is right to replace it.
+        identity = {target} if to_org.get(target, target) == target else set()
+        pool = sorted({*lead, *extra, *identity}, key=_reading_order)
+        # One book only, exactly as _resolve_reverse insists: same-book answers are the
+        # parts of one divided verse, but a different book is an alias for the same words,
+        # and English holds the Letter of Jeremiah under both LJE and BAR 6. Emitting both
+        # would quote the passage twice. The book ``from_org`` chose wins where it has
+        # one, so covering never contradicts the exact answer about where a verse lives.
+        book = lead[0][0] if lead else pool[0][0]
+        covered_by[target] = tuple(c for c in pool if c[0] == book)
+
+    return covers, covered_by
+
+
 def _sub(corrections: dict[str, object], key: str) -> dict[str, object]:
     value = corrections.get(key, {})
     assert isinstance(value, dict)
@@ -877,12 +1019,15 @@ def _build_system(name: str, corrections: dict[str, object]) -> _System:
             candidates.setdefault(target, []).append(source)
 
     from_org = _resolve_reverse(name, candidates, to_org, max_verses, corrections)
+    covers, covered_by = _resolve_covers(name, to_org, from_org, corrections)
 
     return _System(
         name=name,
         max_verses=max_verses,
         to_org=to_org,
         from_org=from_org,
+        covers=covers,
+        covered_by=covered_by,
         unreliable_books=_unreliable_books(corrections, name),
         unreliable_chapters=_unreliable_chapters(corrections, name),
         titled=frozenset((book, chapter) for book, chapter, verse, _ in to_org if verse == 0),

@@ -103,6 +103,10 @@ class Config:
     :param strict: Turn warnings -- an unverified quotation, a missing original -- into
         errors.
     :param template_dir: Directory of your own templates, searched before the built-ins.
+    :param covering: Quote every verse the citation covers rather than only the one it
+        answers to. The two differ where an edition merges what another divides -- the
+        Douay's Matthew 17:14 carries both halves of what the Greek numbers 17:14 and
+        17:15 -- and off by default because a citation names a verse, not a span.
     :param appendix: Append the passage register.
     :param notices: Append the copyright notices and permissions check.
     """
@@ -125,6 +129,7 @@ class Config:
     strict: bool = False
     data_home: Path | None = None
     template_dir: Path | None = None
+    covering: bool = False
     appendix: bool = False
     """Append the passage register -- every passage the work cites, merged and printed in
     full. Off while drafting; a deliberate act for a finished piece."""
@@ -613,14 +618,18 @@ class Renderer:
         different event entirely.
         """
         try:
-            segments = self.versification.convert_range(span, corpus.versification)
+            segments = self.versification.convert_range(
+                span, corpus.versification, covering=self.config.covering
+            )
         except VersificationError:
             return False
         return all(corpus.has_book(segment.book) for segment in segments)
 
     def _fetch(self, corpus: Corpus, span: VerseRange) -> Rendition:
         """Convert a passage into a corpus's numbering and read it."""
-        segments = self.versification.convert_range(span, corpus.versification)
+        segments = self.versification.convert_range(
+            span, corpus.versification, covering=self.config.covering
+        )
         verses: list[VerseText] = []
         for segment in segments:
             # Check after converting, not before: Susanna is Daniel 13 in a Vulgate text,

@@ -444,3 +444,70 @@ The measures that did move in one direction are the structural one — 0 ghosts,
 the textual confirmation rate, 98.62% to 98.63% on 80,000 checkable conversions, with
 `vul LEV 15` dropping out of the runs of four. That last is what a real fault looks like
 when it is fixed.
+
+## Two questions, two answers: covering conversion
+
+The mapping model is a function one way and a relation the other. `to_org` gives exactly one
+answer; `from_org` gives as many as it needs. That asymmetry is behind most of the hard cases
+above. When a verse carries the text of *two* org verses — the Douay's `MAT 17:14` is both
+"there came to him a man falling down on his knees" and "Lord, have mercy on my son" — the
+forward map can name only one, so the other becomes unreachable. `_merged_verse_note` is the
+rule for choosing, and five of the faults listed above were that choice made wrongly before
+the rule existed.
+
+So conversion now answers two questions, and you pick which:
+
+```python
+vrs.convert_all(ref, "org")  # which verse *is* this one
+vrs.convert_all(ref, "org", covering=True)  # every verse needed to carry all of its text
+```
+
+```bash
+biblereference render --covering  # and verify, compare, audit, coverage
+```
+
+The default is unchanged, byte for byte. Covering is a superset: it never loses an answer,
+never refuses where the default succeeds, and always comes back in reading order within a
+single book. It makes `org LJE 1:43` and `org 1MA 1:49` reachable, which nothing could
+before — English carries the first inside Baruch 6:43 and the Douay carries the second
+inside 1 Maccabees 1:51.
+
+**Nothing in it is derived, and that was not the original plan.** Deriving looked free: for
+921 verses the library already answers an org reference with a system verse whose own forward
+answer is a *different* org verse, and treating that as a covering relation would have cost
+nothing to implement. It would also have been wrong. Those 921 are the identity fall-through
+— what conversion returns when nothing maps to an org verse and it simply keeps its
+coordinates — and a fall-through is a guess, not a reading. Greek Exodus 36:9 is "he made the
+ephod of gold", part of the tabernacle account the Septuagint moves bodily; org's 36:9 is
+"the length of each curtain was twenty-eight cubits". Deriving would have declared that one
+contains the other, in 921 places, with no evidence at all.
+
+So `covers` in `corrections.json` holds twenty entries, each read against the text and each
+citing the two verses' opening words. Where there is no entry, covering answers exactly what
+the default does. A covering claim is worth precisely the reading behind it.
+
+### What it is worth measuring with
+
+Two things move, and one does not.
+
+**The derivation falls from 517 to 502.** Every one of those fifteen was a false flag: a
+merged verse always read as a disagreement, because the aligner matches by bulk and lands on
+whichever half is longer, which need not be the half the exact map names. `vul`→`nvl` alone
+goes from 38 to 25. This is what stops correcting a mapping from *raising* the count, as
+Matthew 5 and Malachi 3 did.
+
+**The round trip is now a checkable claim.** Convert every verse into another system and
+back, measured through the pivot so that a book with two names does not count as a loss, and
+you must land on the text you started from. Over all 798,132 conversions between all twenty
+ordered pairs: 2,919 failures under the exact map, 2,848 under covering.
+
+That remaining 2,848 is the honest work queue, and it is dominated by places where the
+question is not really about numbering at all — Greek 2 Esdras (1,702) and Greek Esther (501)
+are differently *built* books, not differently numbered ones; then the psalm superscriptions
+(~313) and the Greek reorderings of Exodus and Jeremiah (~200). `tests/test_coverage.py`
+pins the count so it cannot climb quietly.
+
+**The exhaustive walk barely moves**, because it scores each conversion at its first target
+and covering only ever adds a second. That is worth saying plainly rather than leaving as an
+implication: covering improves the *derivation* and the *round trip*, not the textual
+confirmation rate.

@@ -51,8 +51,10 @@ def test_all_systems_load_together() -> None:
     assert loaded.system_names == tuple(AVAILABLE_SYSTEMS)
 
 
-def convert(vrs: Versification, text: str, source: str, target: str) -> str:
-    spans = vrs.convert_range(parse_reference(text, vrs=source), target)
+def convert(
+    vrs: Versification, text: str, source: str, target: str, *, covering: bool = False
+) -> str:
+    spans = vrs.convert_range(parse_reference(text, vrs=source), target, covering=covering)
     return ", ".join(str(s) for s in spans)
 
 
@@ -668,3 +670,78 @@ def test_a_merge_and_a_split_that_cancel(vrs: Versification) -> None:
     assert convert(vrs, "Num 15:15", "vul", "org") == "NUM 15:16"
     assert convert(vrs, "Num 15:19", "vul", "org") == "NUM 15:19"
     assert vrs.max_verse("vul", "NUM", 15) == vrs.max_verse("org", "NUM", 15) == 41
+
+
+# --------------------------------------------------------------------------------------
+# Covering conversion
+# --------------------------------------------------------------------------------------
+
+
+def test_covering_is_off_unless_asked_for(vrs: Versification) -> None:
+    """The default answers the question citation and rendering ask -- which single verse
+    *is* this one -- and must not change because a second question now has an answer."""
+    ref = VerseRef("MAT", 17, 14, vrs="vul")
+    assert convert(vrs, "Matt 17:14", "vul", "org") == "MAT 17:15"
+    assert vrs.convert(ref, "org") == VerseRef("MAT", 17, 15, vrs="org")
+    assert vrs.convert(ref, "org", covering=True) == VerseRef("MAT", 17, 14, vrs="org")
+
+
+def test_covering_names_every_verse_a_merged_one_holds(vrs: Versification) -> None:
+    """The Douay's Matthew 17:14 is two org verses: "there came to him a man falling down
+    on his knees" is 17:14 and "Lord, have mercy on my son" is 17:15. The exact map can
+    name only one and `_merged_verse_note` is the rule for choosing; covering names both,
+    so the choice does not arise and no clause is dropped."""
+    ref = VerseRef("MAT", 17, 14, vrs="vul")
+    assert vrs.convert_all(ref, "org") == [VerseRef("MAT", 17, 15, vrs="org")]
+    assert vrs.convert_all(ref, "org", covering=True) == [
+        VerseRef("MAT", 17, 14, vrs="org"),
+        VerseRef("MAT", 17, 15, vrs="org"),
+    ]
+    # Three into one, which the Douay does once: it condenses the vesting of Aaron, the
+    # bringing of his sons and their anointing into a single Exodus 40:13.
+    assert len(vrs.convert_all(VerseRef("EXO", 40, 13, vrs="vul"), "org", covering=True)) == 3
+
+
+def test_covering_reaches_the_two_verses_the_exact_map_cannot(vrs: Versification) -> None:
+    """These are the reason for the mode.
+
+    org `LJE 1:43` has no English verse of its own, because English carries the Letter of
+    Jeremiah as Baruch 6 and merges it into 6:43; org `1MA 1:49` has no Clementine verse,
+    because the Douay runs it into its 1:51. Under the exact map both fall through to the
+    identity -- the verse of the same number, which in the Vulgate is a different sentence
+    entirely.
+    """
+    assert convert(vrs, "LJE 1:43", "org", "eng") == "LJE 1:43"
+    assert convert(vrs, "LJE 1:43", "org", "eng", covering=True) == "BAR 6:43"
+
+    assert convert(vrs, "1Macc 1:49", "org", "vul") == "1MA 1:49"
+    assert convert(vrs, "1Macc 1:49", "org", "vul", covering=True) == "1MA 1:51"
+
+
+def test_a_cover_may_cross_a_chapter_boundary(vrs: Versification) -> None:
+    """English 1 Samuel 20:42 is org 20:42 *and* org 21:1 -- "go in peace, because we have
+    both sworn" and "and he arose and departed" -- because the Hebrew opens a chapter where
+    the English does not. The only entry whose cover spans two chapters, and the reason the
+    corrections format takes a list there: a range cannot say it."""
+    assert convert(vrs, "1Sam 20:42", "eng", "org") == "1SA 21:1"
+    assert convert(vrs, "1Sam 20:42", "eng", "org", covering=True) == "1SA 20:42, 1SA 21:1"
+
+
+def test_covering_answers_in_one_book(vrs: Versification) -> None:
+    """English holds the Letter of Jeremiah under two names, and the same words must not
+    come back twice. `from_org` picks the book where it has an opinion, so covering never
+    contradicts the exact answer about where a verse lives."""
+    for target in ("eng", "vul", "nvl"):
+        answer = vrs.convert_all(VerseRef("LJE", 1, 43, vrs="org"), target, covering=True)
+        assert len({ref.book for ref in answer}) == 1, (target, answer)
+
+
+def test_a_cover_that_says_nothing_new_is_rejected(vrs: Versification) -> None:
+    """The stale-correction guard the rest of `corrections.json` already uses. An entry
+    naming only what the mapping already implies is one upstream has caught up with, and it
+    should be deleted rather than left to look like evidence."""
+    from biblereference.versification import VersificationDataError, _build_system
+
+    corrections = {"covers": {"eng": {"GEN 1:1": {"to": "GEN 1:1", "reason": "x"}}}}
+    with pytest.raises(VersificationDataError, match="only what it already maps to"):
+        _build_system("eng", corrections)

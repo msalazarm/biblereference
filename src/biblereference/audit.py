@@ -259,12 +259,20 @@ def audit_pair(
     *,
     books: Sequence[str] | None = None,
     texts: _Texts | None = None,
+    covering: bool = False,
 ) -> PairResult:
     """Check every mapping between two families against the text of their witnesses.
 
     Walks the whole of the source system rather than only its declared mappings, because
     a verse with no mapping is asserting that none is needed, and that assertion can be
     wrong in exactly the same way.
+
+    :param covering: Judge the mapping against every verse it covers rather than only the
+        one it names. Where an edition merges two verses the aligner lands on whichever
+        half carries more text, which need not be the half the exact mapping names -- so
+        a correct mapping reads as a disagreement, and correcting one can *raise* the
+        count. Matthew 5 and Malachi 3 both did that. This measures the claim the data is
+        actually making.
     """
     own = texts is None
     store = texts or _Texts(home)
@@ -277,7 +285,7 @@ def audit_pair(
                 result.missing += 1
                 continue
             try:
-                targets = vrs.convert_all(source, right.family)
+                targets = vrs.convert_all(source, right.family, covering=covering)
             except VersificationError:
                 result.unmapped += 1
                 continue
@@ -285,8 +293,17 @@ def audit_pair(
                 result.unmapped += 1
                 continue
 
+            # Where the mapping covers more than one verse, any of them agreeing settles
+            # it: the text is spread across all of them, and asking the aligner to have
+            # picked a particular half is asking it to do something it cannot.
             mapped = targets[0]
             alignment = _score(store, right, source, mapped, source_text)
+            for other in targets[1:]:
+                if alignment is not None and alignment.agrees:
+                    break
+                alternative = _score(store, right, source, other, source_text)
+                if alternative is not None and alternative.agrees:
+                    mapped, alignment = other, alternative
             if alignment is None:
                 result.missing += 1
                 continue
@@ -337,13 +354,14 @@ def audit_all(
     books: Sequence[str] | None = None,
     pairs: Sequence[tuple[Witness, Witness]] | None = None,
     report: object = None,
+    covering: bool = False,
 ) -> list[PairResult]:
     """Audit every family pair that has a same-language witness on both sides."""
     vrs = Versification.load()
     texts = _Texts(home)
     try:
         return [
-            audit_pair(home, vrs, left, right, books=books, texts=texts)
+            audit_pair(home, vrs, left, right, books=books, texts=texts, covering=covering)
             for left, right in (pairs if pairs is not None else witness_pairs())
         ]
     finally:
@@ -735,6 +753,7 @@ def verify_every_verse(
     witnesses: Mapping[str, Sequence[tuple[str, str]]],
     *,
     systems: Sequence[str] | None = None,
+    covering: bool = False,
 ) -> tuple[list[Coverage], list[str], list[tuple[str, VerseRef, VerseRef]]]:
     """Convert every verse of every system and account for the result.
 
@@ -745,6 +764,8 @@ def verify_every_verse(
     :param witnesses: system -> [(corpus, language)], best first. A comparison is only made
         where a faithful witness exists on both sides *in the same language*; anything else
         is unwitnessed rather than assumed.
+    :param covering: Convert against every verse the mapping covers rather than only the
+        one it names. See :func:`audit_pair` for why that changes the count.
     :returns: per-system coverage, ghost descriptions, and contradicted verses.
     """
     faithful = {
@@ -776,7 +797,7 @@ def verify_every_verse(
                 ("total", "refused", "ghost", "confirmed", "contradicted", "weak", "unwitnessed"),
                 0,
             )
-            for ref, target in _each_conversion(vrs, system, counts, ghosts):
+            for ref, target in _each_conversion(vrs, system, counts, ghosts, covering):
                 source = witness_for(system, ref.book, int(ref.chapter))
                 if source is None:
                     counts["unwitnessed"] += 1
@@ -818,7 +839,11 @@ def verify_every_verse(
 
 
 def _each_conversion(
-    vrs: Versification, system: str, counts: dict[str, int], ghosts: list[str]
+    vrs: Versification,
+    system: str,
+    counts: dict[str, int],
+    ghosts: list[str],
+    covering: bool = False,
 ) -> Iterator[tuple[VerseRef, VerseRef]]:
     """Every verse of ``system`` that converts into the pivot without inventing a verse.
 
@@ -828,7 +853,7 @@ def _each_conversion(
     for ref in _verses_of(vrs, system, None):
         counts["total"] += 1
         try:
-            targets = vrs.convert_all(ref, PIVOT)
+            targets = vrs.convert_all(ref, PIVOT, covering=covering)
         except VersificationError:
             counts["refused"] += 1
             continue
