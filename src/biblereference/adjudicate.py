@@ -89,17 +89,41 @@ class Task:
 #: language and so a witness that would be useless to the deterministic check is useful
 #: here.
 #:
-#: ``ojb`` is last for ``org`` on purpose. Its transliteration -- *achim*, *nogesim*,
-#: *Melech Mitzrayim* -- reads to this model as a foreign language, and it answered NO to
-#: two thirds of a sample of verses that were unquestionably right. It is kept because for
-#: some chapters nothing else is faithful, but anything else is preferred.
+#: **The order for ``org`` is the whole soundness of the run, and getting it wrong cost a
+#: night.** An earlier version put ``web`` first, for the good reason that this model reads
+#: plain English better than it reads ``ojb``'s transliteration. But ``web`` is an
+#: *English-tradition* corpus: wherever ``eng`` and ``org`` number differently it speaks
+#: for the wrong system, and :func:`~biblereference.audit.faithful_chapters` cannot catch
+#: it, because that compares verse *counts* and a swap leaves counts identical. English
+#: Matthew 23 has the two woes in the opposite order from the Greek, so latvuc 23:13 --
+#: which agrees with ``n1904`` exactly -- was flagged as wrong. 82 of 87 surviving flags in
+#: that run rested on ``web`` speaking for ``org``.
+#:
+#: So: corpora that follow org's own numbering first. ``wlc`` is the Masoretic text, which
+#: *is* org for the Hebrew canon; ``n1904`` is the Greek New Testament frame; ``ojb``
+#: follows Hebrew numbering throughout and carries a New Testament, and is preferred over
+#: ``web`` despite the transliteration because being hard to read is a lesser fault than
+#: being the wrong numbering. ``web`` remains last because org's deuterocanon has no
+#: witness here that follows it, and a hard-to-verify answer beats no answer -- but which
+#: witness was used is recorded, so a finding that rests only on the fallback can be told
+#: apart from one that does not.
 WITNESSES: Mapping[str, Sequence[tuple[str, str]]] = {
-    "org": (("web", "en"), ("wlc", "hbo"), ("n1904", "grc"), ("brenton", "en"), ("ojb", "en")),
+    "org": (("wlc", "hbo"), ("n1904", "grc"), ("ojb", "en"), ("web", "en")),
     "eng": (("web", "en"), ("kjv", "en"), ("asv", "en")),
     "lxx": (("brenton", "en"), ("swete", "grc")),
     "vul": (("dra", "en"), ("latvuc", "la")),
     "nvl": (("novavulgata", "la"),),
 }
+
+#: Corpora that follow the numbering of the system they speak for, as a matter of textual
+#: tradition rather than of counting. A flag raised against anything else is provisional.
+PRIMARY: frozenset[str] = frozenset(
+    {"wlc", "n1904", "ojb", "brenton", "swete", "latvuc", "dra", "novavulgata", "web", "kjv", "asv"}
+)
+
+#: ...except where the witness is standing in for a *different* system. ``web`` speaks for
+#: ``eng`` natively and for ``org`` only as a fallback.
+FALLBACK_FOR_ORG: frozenset[str] = frozenset({"web", "webc", "kjv", "asv", "brenton"})
 
 
 class Witnesses:
@@ -118,21 +142,29 @@ class Witnesses:
             for corpus, _ in pairs
         }
 
-    def for_chapter(self, system: str, book: str, chapter: int) -> tuple[str, str] | None:
+    def for_chapter(self, system: str, book: str, chapter: int) -> Iterator[tuple[str, str]]:
+        """Every usable witness for this chapter, best first."""
         for corpus, language in WITNESSES.get(system, ()):
             if (book, chapter) in self._faithful[(corpus, system)]:
-                return corpus, language
-        return None
+                yield corpus, language
 
 
 def witness_for(
     witnesses: Witnesses, texts: _Texts, system: str, ref: VerseRef
 ) -> tuple[str, str] | None:
-    """A corpus faithful to ``system`` here that actually holds this verse."""
-    found = witnesses.for_chapter(system, ref.book, int(ref.chapter))
-    if found is None or not texts.verse(found[0], ref):
-        return None
-    return found
+    """A corpus faithful to ``system`` here that actually holds this verse.
+
+    Every candidate is tried rather than only the best one. The two are not the same: a
+    witness can number a chapter exactly as its system does and still not hold one verse of
+    it -- a psalm superscription the edition prints unnumbered, a verse omitted as a later
+    addition -- and stopping at the first would then answer "unreachable" for a verse three
+    other witnesses carry. It matters more since ``wlc`` came first, that being a Hebrew
+    text with no New Testament and no deuterocanon.
+    """
+    for corpus, language in witnesses.for_chapter(system, ref.book, int(ref.chapter)):
+        if texts.verse(corpus, ref):
+            return corpus, language
+    return None
 
 
 # --------------------------------------------------------------------------------------
@@ -178,6 +210,32 @@ CALIBRATION: Sequence[tuple[str, str, str, str]] = (
     ("eng", "BAR 6:44", "LJE 1:44", "LJE 1:43"),
     ("eng", "NEH 7:69", "NEH 7:68", "NEH 7:70"),
     ("eng", "1SA 20:42", "1SA 21:1", "1SA 21:2"),
+    # More of the Hebrew and Greek pairs, which the reordering makes dominant. Thin
+    # calibration on the pair a run actually uses is the same failure as no calibration.
+    ("vul", "GEN 22:2", "GEN 22:2", "GEN 22:3"),
+    ("vul", "EXO 3:14", "EXO 3:14", "EXO 3:15"),
+    ("vul", "DEU 6:4", "DEU 6:4", "DEU 6:5"),
+    ("vul", "1SA 17:4", "1SA 17:4", "1SA 17:5"),
+    ("vul", "JOB 1:21", "JOB 1:21", "JOB 1:22"),
+    ("vul", "PRO 3:5", "PRO 3:5", "PRO 3:6"),
+    ("vul", "JHN 1:1", "JHN 1:1", "JHN 1:2"),
+    ("vul", "ROM 8:28", "ROM 8:28", "ROM 8:29"),
+    ("nvl", "GEN 22:2", "GEN 22:2", "GEN 22:3"),
+    ("nvl", "DEU 6:4", "DEU 6:4", "DEU 6:5"),
+    ("nvl", "JOB 1:21", "JOB 1:21", "JOB 1:22"),
+    ("nvl", "PRO 3:5", "PRO 3:5", "PRO 3:6"),
+    ("nvl", "ACT 2:38", "ACT 2:38", "ACT 2:39"),
+    ("nvl", "HEB 11:1", "HEB 11:1", "HEB 11:2"),
+    ("eng", "GEN 22:2", "GEN 22:2", "GEN 22:3"),
+    ("eng", "DEU 6:4", "DEU 6:4", "DEU 6:5"),
+    ("eng", "JOB 1:21", "JOB 1:21", "JOB 1:22"),
+    ("eng", "ACT 2:38", "ACT 2:38", "ACT 2:39"),
+    ("eng", "MAT 5:9", "MAT 5:9", "MAT 5:10"),
+    ("lxx", "GEN 22:2", "GEN 22:2", "GEN 22:3"),
+    ("lxx", "DEU 6:4", "DEU 6:4", "DEU 6:5"),
+    ("lxx", "JOB 1:21", "JOB 1:21", "JOB 1:22"),
+    ("lxx", "PRO 3:5", "PRO 3:5", "PRO 3:6"),
+    ("lxx", "ACT 2:38", "ACT 2:38", "ACT 2:39"),
     # lxx -> org
     ("lxx", "PSA 22:1", "PSA 23:1", "PSA 23:2"),
     ("lxx", "GEN 1:1", "GEN 1:1", "GEN 1:2"),
@@ -377,6 +435,7 @@ def run_tasks(
             task, judged = outcome
             counts[judged.verdict] += 1
             record(connection, task.source.vrs, f"{PIVOT}:{phase}", judged)
+            _record_evidence(connection, phase, task)
             connection.commit()
 
     elapsed = time.time() - started
@@ -386,6 +445,48 @@ def run_tasks(
         + ", ".join(f"{name} {count:,}" for name, count in sorted(counts.items()))
     )
     return counts
+
+
+_EVIDENCE = """
+CREATE TABLE IF NOT EXISTS evidence (
+    phase    TEXT NOT NULL,
+    system   TEXT NOT NULL,
+    book     TEXT NOT NULL,
+    chapter  INTEGER NOT NULL,
+    verse    INTEGER NOT NULL,
+    source_corpus TEXT NOT NULL,
+    target_corpus TEXT NOT NULL,
+    languages     TEXT NOT NULL,
+    rival    INTEGER NOT NULL,
+    fallback INTEGER NOT NULL,
+    PRIMARY KEY (phase, system, book, chapter, verse)
+) WITHOUT ROWID;
+"""
+
+
+def _record_evidence(connection: sqlite3.Connection, phase: str, task: Task) -> None:
+    """Which corpora backed this answer, so a finding can be weighed rather than counted.
+
+    A flag raised where ``org`` was spoken for by an English-tradition corpus is worth less
+    than one raised against the Masoretic text, and the only way to tell them apart later
+    is to write it down at the time.
+    """
+    connection.execute(_EVIDENCE)
+    connection.execute(
+        "INSERT OR REPLACE INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            phase,
+            task.source.vrs,
+            task.source.book,
+            int(task.source.chapter),
+            task.source.verse,
+            task.source_corpus,
+            task.target_corpus,
+            task.languages,
+            int(task.rival),
+            int(task.target_corpus in FALLBACK_FOR_ORG),
+        ),
+    )
 
 
 class _Progress:

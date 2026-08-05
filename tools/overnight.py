@@ -43,9 +43,9 @@ from biblereference.judge import Judge, Verdict, open_judgements
 from biblereference.store import DataHome
 from biblereference.versification import PIVOT, Versification
 
+#: The remote box only. The local GPU is reserved for another project, and a judge that
+#: quietly borrowed it would be taking something it was not offered.
 SERVERS = (
-    "http://127.0.0.1:8080",
-    "http://127.0.0.1:8081",
     "http://100.98.85.58:8080",
     "http://100.98.85.58:8090",
 )
@@ -87,6 +87,7 @@ def phase_tally(connection, phase: str) -> collections.Counter[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workers", type=int, default=16)
+    parser.add_argument("--database", default="judgement2.sqlite")
     parser.add_argument("--phases", default="suspicions,gap,confirmed")
     parser.add_argument("--skip-reruns", action="store_true")
     parser.add_argument(
@@ -103,7 +104,11 @@ def main() -> int:
     REPORT.write_text("", encoding="utf-8")
     vrs = Versification.load()
     judge = Judge(SERVERS, timeout=180.0)
-    connection = open_judgements(AUDIT / "judgement.sqlite")
+    # A new database rather than the first run's. That run's witness for `org` was an
+    # English-tradition corpus, so its answers rest on a different and weaker basis;
+    # resuming into it would blend the two and lose the ability to ask which flags were
+    # the witness rather than the mapping.
+    connection = open_judgements(AUDIT / args.database)
 
     note(f"# Overnight adjudication — written {time.strftime('%Y-%m-%d %H:%M')}\n")
     if args.report_only:
