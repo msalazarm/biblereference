@@ -241,6 +241,90 @@ Every such refusal, and every correction applied to the upstream versification d
 recorded with its reasoning in
 `src/biblereference/versification/data/corrections.json`.
 
+## Running it as a server
+
+`tools/serve.py` puts the whole library behind HTTP, so the corpus and the slow work can
+live on one machine and be used from another. Standard library only — no framework, no
+extra dependency.
+
+### Setting it up on a fresh Ubuntu box
+
+```bash
+sudo apt update && sudo apt install -y python3-venv git
+git clone <your-remote> biblereference && cd biblereference
+python3 -m venv venv && venv/bin/pip install -e .
+
+venv/bin/biblereference sync         # ~160 MB down, ~600 MB built, once
+venv/bin/python tools/serve.py --host 0.0.0.0 --token "$(openssl rand -hex 24)"
+```
+
+`sync` is the long step and the only one that needs the network. If you already have the
+corpus on another machine, copy `$data_home/sources/` across and run `biblereference build`
+instead — it rebuilds an identical database offline, and `doctor --verify` re-hashes every
+file against the manifest so a truncated copy is caught.
+
+To keep it running after you log out:
+
+```bash
+sudo tee /etc/systemd/system/biblereference.service >/dev/null <<EOF
+[Unit]
+Description=biblereference server
+After=network.target
+
+[Service]
+User=$USER
+WorkingDirectory=$PWD
+Environment=BIBLEREFERENCE_TOKEN=$(openssl rand -hex 24)
+ExecStart=$PWD/venv/bin/python tools/serve.py --host 0.0.0.0
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl enable --now biblereference
+systemctl status biblereference          # the token is in the unit file
+```
+
+**It binds to `127.0.0.1` unless you say otherwise, and it warns if you open it to the
+network without a token.** There is no user model and no rate limiting: anyone who can
+reach the port can run jobs on that machine. Put it on a trusted network or behind a
+tunnel, not on the open internet.
+
+### Using it
+
+```bash
+export BR=http://bigbox.local:8000 TOKEN=...
+curl -H "Authorization: Bearer $TOKEN" "$BR/api/health"
+```
+
+`GET /` is the browsing page: type a reference, say which numbering you wrote it in, and
+see how every system numbers it — exact beside covering, differences highlighted — then
+the text of every corpus that carries it.
+
+| | |
+|---|---|
+| `GET /api/health` | corpora count, versification fingerprint, cores, jobs running |
+| `GET /api/corpora` | every built corpus, with language and versification |
+| `GET /api/convert` | `?ref=Matt+17:14&from=vul&covering=1` — that reference in every system |
+| `GET /api/passage` | `?ref=&vrs=eng&covering=1` — the text in every corpus, or `&corpus=dra` for one |
+| `POST /api/search` | body is the quotation; returns the passage and which translation it came from |
+
+The whole-corpus walks take minutes and would time out on a held-open socket, so they are
+submitted as jobs and polled. They run in separate processes, which is what the extra cores
+buy you: several at once, and none of them sharing a SQLite connection with the server.
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" "$BR/api/jobs?task=coverage"
+# {"id": "coverage-1", "state": "running", ...}
+
+curl -H "Authorization: Bearer $TOKEN" "$BR/api/jobs/coverage-1"
+# {"state": "done", "seconds": 71.5, "result": {...}}
+```
+
+`task=coverage` walks all 155,578 conversions; `task=audit` checks every family pair
+against its witnesses (`&book=JON` for one book); `task=compare` diffs two editions
+(`&left=latvuc&right=novavulgata`). All take `&covering=1`. `GET /api/jobs` lists
+everything submitted since the server started.
+
 ## Data home
 
 Everything fetched is archived under `$data_home` (default: platform data dir), raw bytes
