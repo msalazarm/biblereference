@@ -366,6 +366,17 @@ fetched again, and one that has gone bad on disk is replaced. It will also adopt
 `sources/` directory you copied by other means — rsync, a USB disk — recognising the files
 by hash and recording them rather than transferring them again.
 
+Transfers are keyed on content rather than on where a file sits. Archive paths carry the
+date a file was fetched, so two machines that synced on different days hold *everything*
+under a different path while almost all of the bytes are identical — mirroring by path
+alone moved 155 MB to change two files the first time this ran. Anything already held
+under any path is copied from disk instead, which took the same job to 4.1 MB and half a
+second.
+
+Disk is what it does spend. The archive is append-only, so a mirror landing on new dates
+adds a second copy rather than replacing the first; the old files stay, which is what
+keeps any earlier build reproducible.
+
 Only `sources/` crosses the wire. The database is derived, so rebuilding locally is both
 quicker than moving 600 MB and a stronger check: if the same bytes build into a different
 database, that is worth knowing rather than papering over.

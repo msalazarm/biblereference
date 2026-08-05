@@ -136,6 +136,31 @@ def test_bytes_that_do_not_match_their_checksum_are_refused(home: DataHome) -> N
     assert home.entries() == [], "and nothing is recorded as held that is not held"
 
 
+def test_the_same_bytes_under_another_path_are_not_fetched_again(home: DataHome) -> None:
+    """Archive paths carry the date the file was fetched, so two machines that synced on
+    different days hold every file under a different path while almost all of the bytes
+    are identical. Keyed on path alone, the first real mirror between two machines here
+    moved 155 MB to change two files."""
+    from dataclasses import replace
+
+    mine = _entry()
+    home.sources.joinpath(mine.path).parent.mkdir(parents=True, exist_ok=True)
+    home.sources.joinpath(mine.path).write_bytes(PAYLOAD)
+    home.record(mine)
+
+    theirs = replace(mine, path="asv/2026-08-05/eng-asv_usfm.zip")
+    server = _Stub([theirs], PAYLOAD)
+    try:
+        result = mirror_archive(home, server.url)
+    finally:
+        server.close()
+
+    assert (result.copied, result.reused) == (0, 1)
+    assert server.served == 0, "the bytes were already here"
+    assert home.sources.joinpath(theirs.path).read_bytes() == PAYLOAD
+    assert home.entries() == [mine, theirs], "and both paths are recorded, as both exist"
+
+
 def test_bytes_already_on_disk_are_adopted(home: DataHome, stub: _Stub) -> None:
     """A hand-copied `sources/` directory -- rsync, a USB disk -- has the files but no
     manifest. Hashing what is there lets the mirror recognise them and record them rather
@@ -149,3 +174,28 @@ def test_bytes_already_on_disk_are_adopted(home: DataHome, stub: _Stub) -> None:
     assert (result.copied, result.already_held) == (0, 1)
     assert stub.served == 0
     assert home.entries() == [_entry()]
+
+
+def test_a_local_copy_is_verified_before_it_is_trusted(home: DataHome) -> None:
+    """Reusing local bytes must not become a way to launder a rotted file into a new path.
+
+    The candidate is hashed, not taken on the manifest's word -- and when it fails, the
+    mirror falls back to fetching rather than quietly skipping.
+    """
+    from dataclasses import replace
+
+    mine = _entry()
+    home.sources.joinpath(mine.path).parent.mkdir(parents=True, exist_ok=True)
+    home.sources.joinpath(mine.path).write_bytes(b"rotted on disk")
+    home.record(mine)  # the manifest still claims the good checksum
+
+    theirs = replace(mine, path="asv/2026-08-05/eng-asv_usfm.zip")
+    server = _Stub([theirs], PAYLOAD)
+    try:
+        result = mirror_archive(home, server.url)
+    finally:
+        server.close()
+
+    assert (result.copied, result.reused) == (1, 0), "the rotted copy must not be reused"
+    assert server.served == 1
+    assert home.sources.joinpath(theirs.path).read_bytes() == PAYLOAD

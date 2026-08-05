@@ -10,6 +10,7 @@ only the parsed result.
 from __future__ import annotations
 
 import hashlib
+import shutil
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -187,6 +188,9 @@ class MirrorResult:
     copied: int
     bytes: int
     already_held: int
+    reused: int
+    """Files the other machine had under a path this one does not, but whose bytes were
+    already here under another. Copied from disk rather than fetched."""
     corrupt: int
     """Files whose bytes did not match the checksum the other machine recorded. Refused
     rather than written, because a mirror that can introduce a wrong verse is worse than
@@ -218,6 +222,16 @@ def mirror_archive(
     written, so a truncated transfer is refused rather than archived. The manifest line is
     then copied verbatim: it says where the bytes originally came from and when, which is
     the honest record, and it is what makes the two machines' digests agree.
+
+    Downloads are keyed on content, not on where they sit. Archive paths carry the date
+    they were fetched, so two machines that synced on different days hold every file under
+    a different path while almost all of the bytes are identical -- mirroring by path alone
+    moved 155 MB to change two files the first time this was run. Anything already held
+    under any path is copied from disk instead.
+
+    Disk is the one thing this does spend. The archive is append-only by design, so a
+    mirror that lands on new dates adds a second copy of everything rather than replacing
+    it; the old files stay, which is what makes any earlier build reproducible.
     """
     base = base_url.rstrip("/")
     headers = {"User-Agent": _USER_AGENT}
@@ -226,7 +240,10 @@ def mirror_archive(
 
     home.prepare()
     held = {(entry.source, entry.path, entry.sha256) for entry in home.entries()}
-    copied = skipped = corrupt = moved = 0
+    elsewhere: dict[str, list[str]] = {}
+    for entry in home.entries():
+        elsewhere.setdefault(entry.sha256, []).append(entry.path)
+    copied = skipped = reused = corrupt = moved = 0
 
     with httpx.Client(follow_redirects=True, timeout=timeout, headers=headers) as client:
         response = client.get(f"{base}/api/manifest")
@@ -245,6 +262,28 @@ def mirror_archive(
                     held.add((entry.source, entry.path, entry.sha256))
                 continue
 
+            # The same bytes under another path -- almost always the same file fetched on
+            # another date. Hashed before being trusted, because a local file can rot too,
+            # but a disk read still beats a transfer by orders of magnitude.
+            local = next(
+                (
+                    candidate
+                    for path in elsewhere.get(entry.sha256, ())
+                    if (candidate := home.sources / path).is_file()
+                    and _sha256(candidate) == entry.sha256
+                ),
+                None,
+            )
+            if local is not None:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(local, target)
+                if (entry.source, entry.path, entry.sha256) not in held:
+                    home.record(entry)
+                    held.add((entry.source, entry.path, entry.sha256))
+                elsewhere.setdefault(entry.sha256, []).append(entry.path)
+                reused += 1
+                continue
+
             report(f"[{index}/{len(entries)}] {entry.path} ({entry.bytes / 1e6:.1f} MB)")
             payload = client.get(f"{base}/api/archive", params={"path": entry.path}).content
             if hashlib.sha256(payload).hexdigest() != entry.sha256:
@@ -253,6 +292,7 @@ def mirror_archive(
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(payload)
+            elsewhere.setdefault(entry.sha256, []).append(entry.path)
             if (entry.source, entry.path, entry.sha256) not in held:
                 home.record(entry)
                 held.add((entry.source, entry.path, entry.sha256))
@@ -260,10 +300,11 @@ def mirror_archive(
             moved += len(payload)
 
     report(
-        f"{copied} file(s) copied, {moved / 1e6:.1f} MB; {skipped} already held"
+        f"{copied} file(s) fetched, {moved / 1e6:.1f} MB; {reused} already here under "
+        f"another path; {skipped} already held"
         + (f"; {corrupt} REFUSED as corrupt" if corrupt else "")
     )
-    return MirrorResult(copied, moved, skipped, corrupt)
+    return MirrorResult(copied, moved, skipped, reused, corrupt)
 
 
 def _sha256(path: Path) -> str:
