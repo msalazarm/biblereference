@@ -43,7 +43,10 @@ from biblereference.judge import Judge, Verdict, open_judgements
 from biblereference.store import DataHome
 from biblereference.versification import PIVOT, Versification
 
-#: The two remote servers, and exactly one of the two local ones.
+#: One server on each machine. The other two are reserved for another project, and the one
+#: left on this machine is deliberately the capable one: ``127.0.0.1:8080`` has four slots,
+#: a 128k context and the vision model loaded, which is what you want for anything
+#: interactive, while this run wants only two verses in and four tokens out.
 #:
 #: ``127.0.0.1:8080`` is left alone: it has four slots, a 128k context and the vision model
 #: loaded, and it is the one worth having for anything interactive. Measured, taking it
@@ -53,7 +56,6 @@ from biblereference.versification import PIVOT, Versification
 #: little.
 SERVERS = (
     "http://100.98.85.58:8080",
-    "http://100.98.85.58:8090",
     "http://127.0.0.1:8081",
 )
 
