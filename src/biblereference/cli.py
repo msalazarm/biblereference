@@ -22,7 +22,7 @@ from .fetch import build_source, fetch_source, iter_sources
 from .refs import ReferenceParseError, parse_reference
 from .render import Config, Renderer
 from .search import DEFAULT_BUDGET, Match, Resolver, Searcher, Witness, build_index
-from .store import DataHome, SqliteCorpus, read_meta, stored_chapters
+from .store import DataHome, SqliteCorpus, library_digest, read_meta, stored_chapters
 from .versification import Versification
 
 __all__ = ["main"]
@@ -661,6 +661,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         if blocked:
             books = sorted({book for book, _ in blocked})
             _say(f"  {name}: {len(blocked)} chapter(s) not convertible, in {', '.join(books)}")
+
+    _say("\nlibrary digest -- run this on both machines and compare the last line:")
+    _say(library_digest(home).describe())
     return 0
 
 

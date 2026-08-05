@@ -345,6 +345,32 @@ manifest so a truncated copy is caught before it becomes a wrong verse.
 Point `$BIBLEREFERENCE_HOME` at a synced or backed-up directory to carry the corpus
 between machines.
 
+### Are two machines holding the same library?
+
+`biblereference doctor` ends with a digest. Run it on both and compare the last line:
+
+```
+library digest -- run this on both machines and compare the last line:
+  sources        ab853964752816f7  57 source(s), newest fetch of each
+  texts          edac3672be0ff8bb  1,396,953 verses
+  versification  5c51d940ca700cbc  vendored data and corrections
+  code           0.1.0
+= library        d376bf27ac111b586cbc5c3d79e8b92ed6001872399bce7178a467070e2c8cc3
+```
+
+Four parts, because when two machines disagree the useful question is immediately *which*
+part disagrees. `sources` is a hash of the checksums the manifest already recorded, so
+nothing is re-read from disk. `texts` walks the verse table — about three seconds for a
+full sync, and it catches what the sources cannot: a half-finished build, a corrupted
+page, and the chapters `resolve` fetches one at a time from BibleGateway, which are real
+content and appear in no manifest.
+
+Two things it deliberately ignores, because otherwise identical machines would disagree:
+when a source was fetched, and how many times. The manifest records a dated path and a
+timestamp per download; only the newest checksum per source is hashed.
+
+Over the API: `GET /api/digest`.
+
 ## License
 
 MIT for the code. The texts carry their own terms — see `source_meta` in the built

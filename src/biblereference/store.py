@@ -39,11 +39,13 @@ from .refs import VerseRef
 __all__ = [
     "ENV_VAR",
     "DataHome",
+    "LibraryDigest",
     "ManifestEntry",
     "SourceMeta",
     "SqliteCorpus",
     "add_chapter",
     "default_data_home",
+    "library_digest",
     "open_store",
     "read_chapter",
     "stored_chapters",
@@ -455,6 +457,96 @@ def read_chapter(home: DataHome, corpus: str, book: str, chapter: int) -> dict[i
             (corpus, book, chapter),
         ).fetchall()
     return {verse: text for verse, text in rows}
+
+
+@dataclass(frozen=True, slots=True)
+class LibraryDigest:
+    """A fingerprint of everything a machine holds, for comparing two of them.
+
+    Four parts, because when two machines disagree the useful question is immediately
+    *which* part disagrees, and one combined hash cannot say.
+    """
+
+    sources: str
+    """Over the newest fetch of each archived source. This is the "hash of the hashes":
+    the manifest already records a sha256 per file, so nothing is re-read from disk."""
+    texts: str
+    """Over every verse actually in the database -- corpus, reference and words. What the
+    sources digest cannot see: a half-finished build, a corrupted page, and above all the
+    chapters `resolve` fetches one at a time from BibleGateway, which are real content and
+    appear in no manifest."""
+    versification: str
+    """The vendored mapping data and its corrections, from `versification.fingerprint`."""
+    code: str
+    """The library version. Same bytes in, different code, different database out."""
+    library: str
+    """Over the other four. The one line to compare."""
+    source_count: int
+    verse_count: int
+
+    def describe(self) -> str:
+        return (
+            f"  sources        {self.sources[:16]}  {self.source_count} source(s), "
+            f"newest fetch of each\n"
+            f"  texts          {self.texts[:16]}  {self.verse_count:,} verses\n"
+            f"  versification  {self.versification[:16]}  vendored data and corrections\n"
+            f"  code           {self.code}\n"
+            f"= library        {self.library}"
+        )
+
+
+def library_digest(home: DataHome) -> LibraryDigest:
+    """Fingerprint what this machine holds, so another machine can be compared with it.
+
+    Every part is deterministic across machines, which takes some care. The manifest
+    records a *dated* path and a fetch timestamp per file, and both differ between two
+    machines that synced on different days while holding identical bytes -- so neither is
+    hashed. Only the source id and its checksum are, and only for the newest fetch of each
+    source, because a machine that has fetched something twice is not thereby different
+    from one that fetched it once.
+
+    The texts digest walks the whole verse table in reference order. That sounds expensive
+    and is not: about three seconds for the 1.4 million verses of a full sync, which is
+    cheap enough that there is no reason to offer a version that skips it and no reason to
+    trust the sources alone.
+    """
+    from .versification import fingerprint
+
+    newest: dict[str, str] = {}
+    for entry in home.entries():  # newest last, so later writes win
+        newest[entry.source] = entry.sha256
+    sources = hashlib.sha256(
+        "".join(f"{source}\x1f{digest}\x1e" for source, digest in sorted(newest.items())).encode()
+    ).hexdigest()
+
+    texts = hashlib.sha256()
+    verses = 0
+    if home.database.exists():
+        with closing(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)) as connection:
+            try:
+                rows = connection.execute(
+                    "SELECT corpus, book, chapter, verse, subverse, text FROM verse "
+                    "ORDER BY corpus, book, chapter, verse, subverse"
+                )
+            except sqlite3.OperationalError:
+                rows = iter(())  # type: ignore[assignment]
+            for row in rows:
+                texts.update("\x1f".join(str(field) for field in row).encode("utf-8"))
+                texts.update(b"\x1e")
+                verses += 1
+
+    from . import __version__
+
+    parts = (sources, texts.hexdigest(), fingerprint(), __version__)
+    return LibraryDigest(
+        sources=parts[0],
+        texts=parts[1],
+        versification=parts[2],
+        code=parts[3],
+        library=hashlib.sha256("\x1e".join(parts).encode()).hexdigest(),
+        source_count=len(newest),
+        verse_count=verses,
+    )
 
 
 def stored_chapters(home: DataHome, corpus: str) -> list[tuple[str, int, int]]:

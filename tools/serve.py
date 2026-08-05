@@ -53,7 +53,7 @@ from urllib.parse import parse_qs, urlparse
 
 from biblereference.corpora.base import VerseUnavailable
 from biblereference.refs import VerseRange, parse_reference
-from biblereference.store import DataHome, SqliteCorpus
+from biblereference.store import DataHome, SqliteCorpus, library_digest
 from biblereference.versification import (
     AVAILABLE_SYSTEMS,
     DEFAULT_SYSTEMS,
@@ -366,6 +366,13 @@ def api_health() -> Any:
     }
 
 
+def api_digest() -> Any:
+    """A fingerprint of everything this machine holds, for comparing with another."""
+    from dataclasses import asdict
+
+    return asdict(library_digest(HOME))
+
+
 def api_corpora() -> Any:
     return {
         "corpora": [
@@ -646,6 +653,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, api_health())
         elif path == "/api/corpora":
             self._json(200, api_corpora())
+        elif path == "/api/digest":
+            self._json(200, api_digest())
         elif path == "/api/convert":
             self._json(200, api_convert(params))
         elif path == "/api/passage":
@@ -669,6 +678,7 @@ ROUTES = {
     "GET  /": "the browsing page",
     "GET  /api/health": "corpora count, fingerprint, cores, jobs running",
     "GET  /api/corpora": "every built corpus",
+    "GET  /api/digest": "fingerprint of this machine's library, for comparing with another",
     "GET  /api/convert": "?ref=&from=eng&to=vul&covering=1 (repeat to=, or omit for all)",
     "GET  /api/passage": "?ref=&vrs=eng&covering=1 -- the text in every corpus",
     "POST /api/search": "body is the quotation; ?limit=5",

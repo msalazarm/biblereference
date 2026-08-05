@@ -9,9 +9,11 @@ from biblereference.refs import VerseRef
 from biblereference.render import Config, Renderer
 from biblereference.store import (
     DataHome,
+    ManifestEntry,
     SourceMeta,
     SqliteCorpus,
     default_data_home,
+    library_digest,
     read_meta,
     write_corpus,
 )
@@ -276,3 +278,80 @@ def test_scripture_portions_are_not_offered_as_translations() -> None:
     assert {source.id for source in ENGLISH}.isdisjoint(PORTIONS)
     # Small but complete editions stay: Jonah alone, four books, and the Pentateuch.
     assert {"e2t", "glw", "oke"} <= ids
+
+
+# --------------------------------------------------------------------------------------
+# The library digest
+# --------------------------------------------------------------------------------------
+
+
+def test_the_digest_is_stable_and_says_what_it_covers(home: DataHome) -> None:
+    """Two runs over one library must agree, or comparing two machines means nothing."""
+    write_corpus(home, META, VERSES)
+    first, second = library_digest(home), library_digest(home)
+
+    assert first == second
+    assert first.verse_count == len(VERSES)
+    assert first.library in first.describe()
+
+
+def test_the_digest_notices_a_changed_verse(home: DataHome) -> None:
+    """The point of hashing the text and not only the downloads.
+
+    Identical sources can still yield different databases -- a half-finished build, a
+    corrupted page, or the chapters `resolve` fetches one at a time from BibleGateway,
+    which are real content and appear in no manifest. So the sources digest holds and the
+    texts digest moves, which is also how you tell those cases apart.
+    """
+    write_corpus(home, META, VERSES)
+    before = library_digest(home)
+
+    altered = [(VERSES[0][0], "something else entirely"), *VERSES[1:]]
+    write_corpus(home, META, altered)
+    after = library_digest(home)
+
+    assert after.texts != before.texts
+    assert after.library != before.library
+    assert after.sources == before.sources, "nothing was fetched, so the archive is the same"
+    assert after.verse_count == before.verse_count
+
+
+def test_the_digest_ignores_when_a_source_was_fetched(home: DataHome) -> None:
+    """Two machines that synced on different days hold the same library.
+
+    The manifest records a dated path and a timestamp per download, and both differ
+    between machines holding byte-identical archives -- so neither is hashed. Only the
+    newest fetch of each source counts, because fetching something twice does not make a
+    machine different from one that fetched it once.
+    """
+    entry = ManifestEntry(
+        source="demo",
+        url="https://example.invalid/demo.zip",
+        path="demo/2026-01-01/demo.zip",
+        sha256="abc123",
+        bytes=10,
+        fetched_at="2026-01-01T00:00:00+00:00",
+    )
+    home.record(entry)
+    first = library_digest(home)
+
+    # The same bytes, fetched again on another day, into another dated directory.
+    from dataclasses import replace
+
+    home.record(
+        replace(entry, path="demo/2026-06-06/demo.zip", fetched_at="2026-06-06T00:00:00+00:00")
+    )
+    assert library_digest(home).sources == first.sources
+    assert library_digest(home).source_count == 1
+
+    # Different bytes is a different library, which is the whole point.
+    home.record(replace(entry, sha256="def456", fetched_at="2026-07-07T00:00:00+00:00"))
+    assert library_digest(home).sources != first.sources
+
+
+def test_an_empty_data_home_still_answers(tmp_path: Path) -> None:
+    """`doctor` runs before anything is fetched, so this cannot raise."""
+    digest = library_digest(DataHome(tmp_path / "nothing"))
+    assert digest.verse_count == 0
+    assert digest.source_count == 0
+    assert len(digest.library) == 64
