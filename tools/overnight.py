@@ -95,7 +95,9 @@ def phase_tally(connection, phase: str) -> collections.Counter[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--workers", type=int, default=16)
+    # Five slots across the two servers this run may use, so sixteen workers only queued
+    # requests inside llama.cpp where they could not be timed out or retried.
+    parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--database", default="judgement2.sqlite")
     parser.add_argument("--phases", default="suspicions,gap,confirmed")
     parser.add_argument("--skip-reruns", action="store_true")
@@ -112,7 +114,10 @@ def main() -> int:
     # half-written report and not one judged verse.
     REPORT.write_text("", encoding="utf-8")
     vrs = Versification.load()
-    judge = Judge(SERVERS, timeout=180.0)
+    # 60s, not 180. A request this model answers in under two seconds is not going to be
+    # rescued by a three-minute wait, and a long timeout only holds a worker against a
+    # server that has stopped talking. The verse is left unjudged and a later run takes it.
+    judge = Judge(SERVERS, timeout=60.0)
     # A new database rather than the first run's. That run's witness for `org` was an
     # English-tradition corpus, so its answers rest on a different and weaker basis;
     # resuming into it would blend the two and lose the ability to ask which flags were

@@ -28,12 +28,13 @@ Nothing here writes to the versification data. It produces evidence for a person
 
 from __future__ import annotations
 
+import itertools
 import random
 import sqlite3
 import time
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 
 from .audit import _Texts, faithful_chapters
@@ -426,17 +427,35 @@ def run_tasks(
             return None
         return task, judged
 
+    # as_completed, not pool.map. map yields in submission order, so one request that
+    # hangs stops every commit behind it however many workers are still finishing -- a run
+    # went eight minutes without writing a row while its threads worked, because a single
+    # early answer never came back. Committing as answers arrive means a stuck request
+    # costs that verse and nothing else.
+    #
+    # Submitted in bounded waves rather than all at once, so forty-five thousand futures
+    # are not built up front.
     with ThreadPoolExecutor(workers) as pool:
-        for outcome in pool.map(judge_one, pending):
-            lock.tick()
-            if outcome is None:
-                counts["failed"] += 1
-                continue
-            task, judged = outcome
-            counts[judged.verdict] += 1
-            record(connection, task.source.vrs, f"{PIVOT}:{phase}", judged)
-            _record_evidence(connection, phase, task)
-            connection.commit()
+        queue = iter(pending)
+        pending_futures = {
+            pool.submit(judge_one, task) for task in itertools.islice(queue, workers * 4)
+        }
+        while pending_futures:
+            settled, pending_futures = wait(pending_futures, return_when=FIRST_COMPLETED)
+            for future in settled:
+                lock.tick()
+                outcome = future.result()
+                if outcome is None:
+                    counts["failed"] += 1
+                    continue
+                task, judged = outcome
+                counts[judged.verdict] += 1
+                record(connection, task.source.vrs, f"{PIVOT}:{phase}", judged)
+                _record_evidence(connection, phase, task)
+                connection.commit()
+            pending_futures |= {
+                pool.submit(judge_one, task) for task in itertools.islice(queue, len(settled))
+            }
 
     elapsed = time.time() - started
     report(
