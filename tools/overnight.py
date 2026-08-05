@@ -43,11 +43,18 @@ from biblereference.judge import Judge, Verdict, open_judgements
 from biblereference.store import DataHome
 from biblereference.versification import PIVOT, Versification
 
-#: The remote box only. The local GPU is reserved for another project, and a judge that
-#: quietly borrowed it would be taking something it was not offered.
+#: The two remote servers, and exactly one of the two local ones.
+#:
+#: ``127.0.0.1:8080`` is left alone: it has four slots, a 128k context and the vision model
+#: loaded, and it is the one worth having for anything interactive. Measured, taking it
+#: instead of ``:8081`` would buy 6.1 judgements a second against 5.8 -- five percent, for
+#: the machine's only capable local server. The bottleneck is the round-robin share each
+#: server gets, not any one server's slots, which is why the one-slot server costs so
+#: little.
 SERVERS = (
     "http://100.98.85.58:8080",
     "http://100.98.85.58:8090",
+    "http://127.0.0.1:8081",
 )
 
 HOME = DataHome()
