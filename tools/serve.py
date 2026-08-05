@@ -398,6 +398,13 @@ def api_sources() -> Any:
     }
 
 
+def api_manifest() -> Any:
+    """Every line of the archive manifest, so another machine can mirror this one."""
+    from dataclasses import asdict
+
+    return {"entries": [asdict(entry) for entry in HOME.entries()]}
+
+
 def api_corpora() -> Any:
     return {
         "corpora": [
@@ -673,6 +680,20 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             self._json(500, {"error": traceback.format_exc()})
 
+    def _archive(self, wanted: str) -> None:
+        """One archived file, by its manifest path.
+
+        The path comes from a client, so it is resolved and checked to be *inside* the
+        archive rather than merely starting with its name -- `..` segments and symlinks
+        both resolve away, and neither should be able to read this machine's disk.
+        """
+        root = HOME.sources.resolve()
+        target = (root / wanted).resolve()
+        if not wanted or root not in target.parents or not target.is_file():
+            self._json(404, {"error": f"not in the archive: {wanted!r}"})
+            return
+        self._send(200, target.read_bytes(), "application/octet-stream")
+
     def _api(self, path: str, params: dict[str, list[str]], body: str) -> None:
         if path == "/api/health":
             self._json(200, api_health())
@@ -682,6 +703,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, api_digest())
         elif path == "/api/sources":
             self._json(200, api_sources())
+        elif path == "/api/manifest":
+            self._json(200, api_manifest())
+        elif path == "/api/archive":
+            self._archive((params.get("path") or [""])[0])
         elif path == "/api/convert":
             self._json(200, api_convert(params))
         elif path == "/api/passage":
@@ -707,6 +732,8 @@ ROUTES = {
     "GET  /api/corpora": "every built corpus",
     "GET  /api/digest": "fingerprint of this machine's library, for comparing with another",
     "GET  /api/sources": "per-source checksums, for running a mismatched digest to ground",
+    "GET  /api/manifest": "every archive manifest line, for mirroring this machine",
+    "GET  /api/archive": "?path=<manifest path> -- one archived file, raw",
     "GET  /api/convert": "?ref=&from=eng&to=vul&covering=1 (repeat to=, or omit for all)",
     "GET  /api/passage": "?ref=&vrs=eng&covering=1 -- the text in every corpus",
     "POST /api/search": "body is the quotation; ?limit=5",

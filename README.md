@@ -345,6 +345,31 @@ manifest so a truncated copy is caught before it becomes a wrong verse.
 Point `$BIBLEREFERENCE_HOME` at a synced or backed-up directory to carry the corpus
 between machines.
 
+### Making a second machine identical to the first
+
+```bash
+biblereference mirror http://bigbox.local:8000        # --token if the server has one
+```
+
+Copies the other machine's whole archive, verifies every file against the checksum *that*
+machine recorded before writing it, then rebuilds and reindexes. 155 MB and about four
+minutes, most of it the rebuild.
+
+Use this rather than `sync` whenever two machines must match. `sync` cannot promise it:
+it downloads from a dozen upstreams and upstream is free to publish something different
+between one machine's run and the other's. That is not hypothetical — two machines here,
+synced two days apart, disagreed about `asvbt` and `tcent` because eBible had republished
+both in between. Mirroring is the only way to be sure.
+
+It is safe to interrupt and re-run: a file already held with the right checksum is never
+fetched again, and one that has gone bad on disk is replaced. It will also adopt a
+`sources/` directory you copied by other means — rsync, a USB disk — recognising the files
+by hash and recording them rather than transferring them again.
+
+Only `sources/` crosses the wire. The database is derived, so rebuilding locally is both
+quicker than moving 600 MB and a stronger check: if the same bytes build into a different
+database, that is worth knowing rather than papering over.
+
 ### Are two machines holding the same library?
 
 `biblereference doctor` ends with a digest. Run it on both and compare the last line:

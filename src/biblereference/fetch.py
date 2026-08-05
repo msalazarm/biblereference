@@ -9,6 +9,7 @@ only the parsed result.
 
 from __future__ import annotations
 
+import hashlib
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -18,9 +19,16 @@ from typing import Final
 import httpx
 
 from .sources import Source, get_source
-from .store import DataHome, SourceMeta, write_corpus
+from .store import DataHome, ManifestEntry, SourceMeta, write_corpus
 
-__all__ = ["BuildResult", "FetchResult", "build_source", "fetch_source"]
+__all__ = [
+    "BuildResult",
+    "FetchResult",
+    "MirrorResult",
+    "build_source",
+    "fetch_source",
+    "mirror_archive",
+]
 
 _USER_AGENT: Final = (
     "biblereference/0.1 (+https://github.com/openscriptures/morphhb; personal research)"
@@ -170,3 +178,97 @@ def iter_sources(only: str | None = None) -> Iterator[Source]:
             yield sources[source_id]
     for source_id in sorted(sources.keys() - set(FETCH_ORDER)):
         yield sources[source_id]
+
+
+@dataclass(frozen=True, slots=True)
+class MirrorResult:
+    """What copying another machine's archive moved."""
+
+    copied: int
+    bytes: int
+    already_held: int
+    corrupt: int
+    """Files whose bytes did not match the checksum the other machine recorded. Refused
+    rather than written, because a mirror that can introduce a wrong verse is worse than
+    no mirror."""
+
+
+def mirror_archive(
+    home: DataHome,
+    base_url: str,
+    *,
+    token: str | None = None,
+    report: Reporter = _silent,
+    timeout: float = 120.0,
+) -> MirrorResult:
+    """Copy another machine's archive into this one, over its HTTP server.
+
+    Point a new machine at an old one and it ends up holding the same bytes, rather than
+    re-downloading 160 MB from a dozen upstreams and getting whatever they publish today.
+    That difference is not hypothetical: two machines synced two days apart here already
+    disagreed about two of eBible's files, because eBible had republished them in between.
+    A mirror is the only way to be *sure* two machines match, since upstream is free to
+    change under both of them.
+
+    Only ``sources/`` is copied. The database is derived, and rebuilding it locally is
+    both faster than transferring 600 MB and a stronger check -- if the same bytes build
+    into a different database, that is worth knowing rather than papering over.
+
+    Every file is verified against the checksum the other machine recorded *before* it is
+    written, so a truncated transfer is refused rather than archived. The manifest line is
+    then copied verbatim: it says where the bytes originally came from and when, which is
+    the honest record, and it is what makes the two machines' digests agree.
+    """
+    base = base_url.rstrip("/")
+    headers = {"User-Agent": _USER_AGENT}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    home.prepare()
+    held = {(entry.source, entry.path, entry.sha256) for entry in home.entries()}
+    copied = skipped = corrupt = moved = 0
+
+    with httpx.Client(follow_redirects=True, timeout=timeout, headers=headers) as client:
+        response = client.get(f"{base}/api/manifest")
+        response.raise_for_status()
+        entries = [ManifestEntry(**row) for row in response.json()["entries"]]
+        report(f"{len(entries)} archived file(s) on {base}")
+
+        for index, entry in enumerate(entries, start=1):
+            target = home.sources / entry.path
+            if target.is_file() and _sha256(target) == entry.sha256:
+                skipped += 1
+                if (entry.source, entry.path, entry.sha256) not in held:
+                    # The bytes are here but this machine never recorded them, which is
+                    # what a hand-copied `sources/` directory looks like.
+                    home.record(entry)
+                    held.add((entry.source, entry.path, entry.sha256))
+                continue
+
+            report(f"[{index}/{len(entries)}] {entry.path} ({entry.bytes / 1e6:.1f} MB)")
+            payload = client.get(f"{base}/api/archive", params={"path": entry.path}).content
+            if hashlib.sha256(payload).hexdigest() != entry.sha256:
+                report(f"  REFUSED: {entry.path} does not match the checksum recorded for it")
+                corrupt += 1
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
+            if (entry.source, entry.path, entry.sha256) not in held:
+                home.record(entry)
+                held.add((entry.source, entry.path, entry.sha256))
+            copied += 1
+            moved += len(payload)
+
+    report(
+        f"{copied} file(s) copied, {moved / 1e6:.1f} MB; {skipped} already held"
+        + (f"; {corrupt} REFUSED as corrupt" if corrupt else "")
+    )
+    return MirrorResult(copied, moved, skipped, corrupt)
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1 << 20):
+            digest.update(chunk)
+    return digest.hexdigest()

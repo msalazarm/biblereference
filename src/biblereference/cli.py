@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -18,7 +19,7 @@ from typing import Final
 
 from .canon import NamingScheme, resolve_book
 from .compare import BookComparison, compare_corpora
-from .fetch import build_source, fetch_source, iter_sources
+from .fetch import build_source, fetch_source, iter_sources, mirror_archive
 from .refs import ReferenceParseError, parse_reference
 from .render import Config, Renderer
 from .search import DEFAULT_BUDGET, Match, Resolver, Searcher, Witness, build_index
@@ -156,6 +157,39 @@ def cmd_sync(args: argparse.Namespace) -> int:
         f"{indexed.verses:,} verses indexed for search as {indexed.texts:,} distinct texts"
     )
     return 1 if failed else 0
+
+
+def cmd_mirror(args: argparse.Namespace) -> int:
+    """Copy another machine's archive here, then rebuild from it.
+
+    The way to make two machines hold the same library. `sync` cannot promise that: it
+    downloads from a dozen upstreams, and upstream is free to publish something different
+    between one machine's sync and the other's -- which is not hypothetical, since eBible
+    republished two files between two syncs two days apart during this command's writing.
+    """
+    home = _home(args)
+    result = mirror_archive(
+        home, args.url, token=args.token or os.environ.get("BIBLEREFERENCE_TOKEN"), report=_say
+    )
+    if result.corrupt:
+        _say(f"\n{result.corrupt} file(s) refused; nothing was built. Try again.")
+        return 1
+    if args.no_build:
+        _say("\nnot building, as asked. Run `biblereference build` then `index` when ready.")
+        return 0
+
+    _say("\nbuilding from the archive...")
+    total = 0
+    for source in iter_sources(None):
+        try:
+            total += build_source(source, home, report=_say).verses
+        except FileNotFoundError as exc:
+            _say(f"skipped: {exc}")
+    indexed = build_index(home, report=_silent)
+    _say(f"\n{total:,} verses built, {indexed.verses:,} indexed for search")
+    _say("\n" + library_digest(home).describe())
+    _say("\nCompare that with the other machine's `doctor`, or its /api/digest.")
+    return 0
 
 
 def cmd_search(args: argparse.Namespace) -> int:
@@ -844,6 +878,22 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--strict", action="store_true", help="treat warnings as errors")
         _covering(command)
         command.set_defaults(func=function)
+
+    mirror = subparsers.add_parser(
+        "mirror",
+        help="copy another machine's archive here, so both hold the same bytes",
+        description="Points this machine at another one running `tools/serve.py` and "
+        "copies its archive, verifying every file against the checksum that machine "
+        "recorded before writing it. Then rebuilds. Use this rather than `sync` when two "
+        "machines must match: `sync` takes whatever upstream publishes today, and upstream "
+        "changes.",
+    )
+    mirror.add_argument("url", help="the other machine, e.g. http://bigbox.local:8000")
+    mirror.add_argument("--token", help="its bearer token; also read from $BIBLEREFERENCE_TOKEN")
+    mirror.add_argument(
+        "--no-build", action="store_true", help="copy the archive but do not rebuild yet"
+    )
+    mirror.set_defaults(func=cmd_mirror)
 
     compare = subparsers.add_parser(
         "compare", help="report how far two editions of one text differ, book by book"
