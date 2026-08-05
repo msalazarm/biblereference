@@ -307,6 +307,37 @@ the text of every corpus that carries it.
 | `GET /api/convert` | `?ref=Matt+17:14&from=vul&covering=1` — that reference in every system |
 | `GET /api/passage` | `?ref=&vrs=eng&covering=1` — the text in every corpus, or `&corpus=dra` for one |
 | `POST /api/search` | body is the quotation; returns the passage and which translation it came from |
+| `POST /api/scan` | body is a *document*; finds the quotations inside it and where each one sits |
+
+`search` must be handed a quotation; `scan` finds them. Its spans are character offsets
+into the body exactly as posted, so a caller can point back at its own text.
+
+Both take `Searcher`'s scoring parameters and filters over the wire — `quotation`,
+`coverage`, `identified`, `min_query`, `min_run`, and `languages` / `corpora` / `families`,
+repeatable or comma-separated:
+
+```bash
+curl -X POST --data-binary @passage.txt \
+  "$BR/api/scan?languages=grc&coverage=0.5&min_run=scaled:4"
+```
+
+`min_run=scaled:4` means `lambda n: max(4, min(6, n // 2))` — proportional with a floor,
+since a callable cannot cross a query string and that is the form worth spelling. A plain
+integer keeps the fixed behaviour.
+
+**A parameter that cannot be honoured is refused, never ignored.** An unknown name, an
+unreadable value, a fraction outside 0–1, a language this machine does not hold: all 400.
+Silently ignoring one is how a caller comes to believe it configured something it did not,
+and the answer looks like a genuine absence of matches with nothing to tell them apart.
+
+Every `search`, `scan` and job response carries the library that produced it:
+
+```json
+"library": {"versification": "5c51d940…", "digest": "17a03466…", "code": "0.1.0"}
+```
+
+A mapping correction is an edit to a JSON file, not a version bump, so a caller recording
+only a version would not notice one.
 
 The whole-corpus walks take minutes and would time out on a held-open socket, so they are
 submitted as jobs and polled. They run in separate processes, which is what the extra cores
@@ -324,6 +355,23 @@ curl -H "Authorization: Bearer $TOKEN" "$BR/api/jobs/coverage-1"
 against its witnesses (`&book=JON` for one book); `task=compare` diffs two editions
 (`&left=latvuc&right=novavulgata`). All take `&covering=1`. `GET /api/jobs` lists
 everything submitted since the server started.
+
+`task=scan` is the one that repays the cores. Post a JSON array of `{"id", "text"}` and it
+is spread across the pool rather than run as one call, with progress in the poll response
+because a job of that size is otherwise a black box:
+
+```bash
+curl -X POST -H "Content-Type: application/json" --data @corpus.json \
+  "$BR/api/jobs?task=scan&languages=grc&coverage=0.5"
+# {"id": "scan-1", "total": 43815}
+# {"state": "running", "done": 8123, "total": 43815}
+# {"state": "done", "result": {"found": {"<id>": [...]}, "failed": {}}}
+```
+
+Results are keyed by the id you gave each document, so a partial failure cannot shift
+them. One unreadable document is named in `failed` and the rest still arrive — forty
+thousand passages is too many to resubmit because one was malformed. Measured on 60
+documents over 12 cores: 159s one at a time, 24s as a batch, byte-identical results.
 
 ## Data home
 

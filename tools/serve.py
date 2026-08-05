@@ -46,9 +46,10 @@ import os
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from concurrent.futures import Future, ProcessPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import Any, Final
 from urllib.parse import parse_qs, urlparse
 
 from biblereference.corpora.base import VerseUnavailable
@@ -343,14 +344,160 @@ def api_passage(params: dict[str, list[str]]) -> Any:
     return {"asked": {"ref": span.pretty(), "covering": covering}, "found": out}
 
 
+#: Everything `Searcher` takes that can survive a query string, with how to read it.
+#: Anything not here is refused rather than ignored -- see :func:`search_options`.
+_SCORES: Final = {"quotation": None, "coverage": None, "identified": None}
+_FILTERS: Final = {"languages", "corpora", "families"}
+_OTHER: Final = {"q", "limit", "token", "min_run", "min_query", "window", "stride"}
+
+
+def _fraction(name: str, raw: str) -> float:
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be a number between 0 and 1, not {raw!r}") from None
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"{name} must be between 0 and 1, not {value}")
+    return value
+
+
+def _min_run(raw: str) -> int | Callable[[int], int]:
+    """A fixed word count, or ``scaled:<floor>`` for one proportional to the query.
+
+    A callable cannot cross a query string, and the proportional form is the one that was
+    measured -- it took short Greek quotations from 9% found to 72% -- so it needs a
+    spelling. ``scaled:4`` means exactly ``lambda n: max(4, min(_MIN_RUN, n // 2))``.
+    """
+    from biblereference.search import _MIN_RUN
+
+    if not raw.startswith("scaled:"):
+        try:
+            fixed = int(raw)
+        except ValueError:
+            raise ValueError(f"min_run must be an integer or scaled:<floor>, not {raw!r}") from None
+        if fixed < 1:
+            raise ValueError(f"min_run must be at least 1, not {fixed}")
+        return fixed
+    try:
+        floor = int(raw.removeprefix("scaled:"))
+    except ValueError:
+        raise ValueError(f"scaled: needs a floor, as in scaled:4, not {raw!r}") from None
+    if floor < 1:
+        raise ValueError(f"a scaled floor must be at least 1, not {floor}")
+    return lambda words: max(floor, min(_MIN_RUN, words // 2))
+
+
+def _listed(params: dict[str, list[str]], name: str) -> list[str] | None:
+    """A repeatable, comma-separated parameter. ``None`` when absent, meaning no filter."""
+    values = [
+        piece.strip() for raw in params.get(name, ()) for piece in raw.split(",") if piece.strip()
+    ]
+    return values or None
+
+
+#: Query parameters the job endpoint owns. Named explicitly rather than folded into the
+#: general allow-list, so that `/api/search?task=scan` is still the error it ought to be.
+JOB_PARAMS: Final = frozenset({"task", "book", "left", "right", "covering"})
+
+
+def search_options(
+    params: dict[str, list[str]], extra: frozenset[str] = frozenset()
+) -> dict[str, Any]:
+    """Turn a query string into `Searcher` keyword arguments, refusing what it cannot.
+
+    Silently ignoring a parameter is how a caller comes to believe it configured something
+    it did not: the answer looks like a genuine absence of matches and there is nothing to
+    tell the two apart. So an unknown name, an unreadable value and an out-of-range one are
+    all 400s, and only the parameters actually applied are accepted.
+    """
+    allowed = set(_SCORES) | _FILTERS | _OTHER | set(extra)
+    unknown = set(params) - allowed
+    if unknown:
+        raise ValueError(
+            f"unknown parameter(s): {', '.join(sorted(unknown))}. "
+            f"Known: {', '.join(sorted(allowed - {'token'}))}"
+        )
+
+    options: dict[str, Any] = {}
+    for name in _SCORES:
+        if params.get(name):
+            options[name] = _fraction(name, params[name][0])
+    if params.get("min_run"):
+        options["min_run"] = _min_run(params["min_run"][0])
+    if params.get("min_query"):
+        raw = params["min_query"][0]
+        try:
+            options["min_query"] = int(raw)
+        except ValueError:
+            raise ValueError(f"min_query must be an integer, not {raw!r}") from None
+
+    known = _known_filters()
+    for name in _FILTERS:
+        chosen = _listed(params, name)
+        if chosen is None:
+            continue
+        strange = [value for value in chosen if value not in known[name]]
+        if strange:
+            # Not an empty result: that would be indistinguishable from nothing matching,
+            # which is the failure this whole function exists to prevent.
+            raise LookupError(
+                f"unknown {name}: {', '.join(strange)}. "
+                f"This machine has: {', '.join(sorted(known[name]))}"
+            )
+        options[name] = chosen
+    return options
+
+
+def _known_filters() -> dict[str, set[str]]:
+    """What this machine actually holds, so a filter naming anything else can be refused."""
+    if not hasattr(_local, "filters"):
+        held = corpora().values()
+        _local.filters = {
+            "corpora": {c.id for c in held},
+            "languages": {c.language for c in held},
+            "families": {c.versification for c in held},
+        }
+    return _local.filters  # type: ignore[no-any-return]
+
+
 def api_search(params: dict[str, list[str]], body: str) -> Any:
     """Which passage a quotation came from, and which translation it was quoted in."""
     from biblereference.search import Searcher
 
     text = body or (params.get("q") or [""])[0]
     limit = int((params.get("limit") or ["5"])[0])
-    with Searcher(HOME) as searcher:
-        return {"matches": [match.to_dict() for match in searcher.search(text, limit=limit)]}
+    with Searcher(HOME, **search_options(params)) as searcher:
+        return {
+            "matches": [match.to_dict() for match in searcher.search(text, limit=limit)],
+            "library": library_stamp(),
+        }
+
+
+def api_scan(params: dict[str, list[str]], body: str) -> Any:
+    """Every quotation in a document, and where in the document each one sits.
+
+    The inverse of `search`, and the one this server was asked for: `search` must be handed
+    a quotation, `scan` finds them. The spans are character offsets into the body exactly as
+    posted, so a caller can point back at its own text -- which is what makes a finding
+    checkable rather than merely plausible.
+    """
+    from biblereference.search import Searcher
+
+    window = int((params.get("window") or ["0"])[0]) or None
+    stride = int((params.get("stride") or ["0"])[0]) or None
+    sweep: dict[str, Any] = {}
+    if window:
+        sweep["window"] = window
+    if stride:
+        sweep["stride"] = stride
+
+    with Searcher(HOME, **search_options(params)) as searcher:
+        matches = searcher.scan(body, **sweep) if body.strip() else []
+    return {
+        "matches": [match.to_dict() for match in matches],
+        "words": len(body.split()),
+        "library": library_stamp(),
+    }
 
 
 def api_health() -> Any:
@@ -364,6 +511,40 @@ def api_health() -> Any:
         "cores": os.cpu_count(),
         "jobs_running": JOBS.running(),
     }
+
+
+_STAMP: dict[str, Any] = {}
+_STAMP_LOCK = threading.Lock()
+
+
+def library_stamp() -> Any:
+    """Which library produced a result, carried on the result itself.
+
+    A mapping correction is an edit to a JSON file, not a version bump, so a caller that
+    only recorded a version would not notice one. Asking `/api/digest` separately and
+    hoping nothing changed in between is the same gap in slower motion.
+
+    Cached against the database's size and mtime, because the full digest walks 1.4 million
+    verses at about three seconds and this rides on every search. A rebuild or a chapter
+    resolved from the web moves both, so the cache cannot go stale without being noticed.
+    """
+    try:
+        stat = HOME.database.stat()
+        key = (stat.st_size, stat.st_mtime_ns)
+    except OSError:
+        key = (0, 0)
+    with _STAMP_LOCK:
+        if _STAMP.get("key") != key:
+            digest = library_digest(HOME)
+            _STAMP.update(
+                key=key,
+                value={
+                    "versification": digest.versification,
+                    "digest": digest.library,
+                    "code": digest.code,
+                },
+            )
+        return _STAMP["value"]
 
 
 def api_digest() -> Any:
@@ -540,7 +721,42 @@ def job_compare(left: str, right: str, book: str | None = None, covering: bool =
     }
 
 
+def job_scan(documents: list[dict[str, Any]], options: dict[str, Any]) -> dict[str, Any]:
+    """Scan a chunk of documents, keyed by the id the caller gave each one.
+
+    One unreadable document must not lose the chunk. Forty-three thousand passages is too
+    many to resubmit because one of them was null, so a document that fails is left out of
+    the result and named in ``failed`` -- the caller can see exactly which, and everything
+    else still arrives.
+    """
+    from biblereference.search import Searcher
+    from biblereference.store import DataHome
+
+    built = dict(options)
+    if isinstance(built.get("min_run"), str):
+        # A callable cannot be pickled into this process, so the spec crosses as text and
+        # the function is rebuilt here. Same spelling the query string uses.
+        built["min_run"] = _min_run(built["min_run"])
+
+    found: dict[str, Any] = {}
+    failed: dict[str, str] = {}
+    with Searcher(DataHome(), **built) as searcher:
+        for document in documents:
+            name = str(document.get("id"))
+            try:
+                text = document["text"]
+                if not isinstance(text, str):
+                    raise TypeError(f"text must be a string, not {type(text).__name__}")
+                found[name] = [m.to_dict() for m in searcher.scan(text)] if text.strip() else []
+            except Exception as exc:
+                failed[name] = f"{type(exc).__name__}: {exc}"
+    return {"found": found, "failed": failed}
+
+
 TASKS = {"coverage": job_coverage, "audit": job_audit, "compare": job_compare}
+
+#: Tasks that take a list of work and are spread over the pool rather than run as one call.
+BATCH_TASKS = {"scan": job_scan}
 
 
 class Jobs:
@@ -552,6 +768,7 @@ class Jobs:
     """
 
     def __init__(self, workers: int) -> None:
+        self._workers = workers
         # Spawn, not fork. A forked child inherits this process's SQLite connections, and
         # two processes using one connection is how a database file gets corrupted.
         self._pool = ProcessPoolExecutor(
@@ -561,22 +778,83 @@ class Jobs:
         self._ids = itertools.count(1)
         self._jobs: dict[str, dict[str, Any]] = {}
 
-    def submit(self, task: str, params: dict[str, Any]) -> dict[str, Any]:
-        if task not in TASKS:
-            raise LookupError(f"unknown task {task!r}; try {', '.join(sorted(TASKS))}")
+    def _open(self, task: str, params: dict[str, Any], total: int | None = None) -> dict[str, Any]:
         job_id = f"{task}-{next(self._ids)}"
-        record = {
+        record: dict[str, Any] = {
             "id": job_id,
             "task": task,
             "params": params,
             "state": "running",
             "submitted": time.time(),
         }
+        if total is not None:
+            record.update(done=0, total=total)
         with self._lock:
             self._jobs[job_id] = record
-        future: Future[Any] = self._pool.submit(TASKS[task], **params)
-        future.add_done_callback(lambda done: self._finish(job_id, done))
         return record
+
+    def submit(self, task: str, params: dict[str, Any]) -> dict[str, Any]:
+        if task not in TASKS:
+            known = sorted(set(TASKS) | set(BATCH_TASKS))
+            raise LookupError(f"unknown task {task!r}; try {', '.join(known)}")
+        record = self._open(task, params)
+        future: Future[Any] = self._pool.submit(TASKS[task], **params)
+        future.add_done_callback(lambda done: self._finish(record["id"], done))
+        return record
+
+    def submit_batch(self, task: str, work: list[Any], options: dict[str, Any]) -> dict[str, Any]:
+        """Spread a list of work across the pool, reporting progress as chunks land.
+
+        Chunked rather than one item per future because forty thousand futures is a lot of
+        pickling for work that takes milliseconds each, and chunked *small* -- several per
+        worker -- because one long document among short ones would otherwise leave most of
+        the machine idle at the end.
+
+        A job of this size is a black box otherwise. The `coverage` task takes seventy
+        seconds; this one takes hours, and "still running" is not a useful answer to give
+        for that long.
+        """
+        if task not in BATCH_TASKS:
+            raise LookupError(f"{task!r} is not a batch task; try {', '.join(BATCH_TASKS)}")
+        record = self._open(task, options, total=len(work))
+        if not work:
+            self._settle(record["id"], {"found": {}, "failed": {}})
+            return record
+
+        size = max(1, min(64, len(work) // (self._workers * 4) or 1))
+        chunks = [work[i : i + size] for i in range(0, len(work), size)]
+        remaining = {"chunks": len(chunks)}
+        merged: dict[str, Any] = {"found": {}, "failed": {}}
+
+        def landed(future: Future[Any]) -> None:
+            with self._lock:
+                job = self._jobs[record["id"]]
+                try:
+                    piece = future.result()
+                    merged["found"].update(piece["found"])
+                    merged["failed"].update(piece["failed"])
+                except Exception as exc:
+                    merged["failed"][f"<chunk {remaining['chunks']}>"] = (
+                        f"{type(exc).__name__}: {exc}"
+                    )
+                job["done"] = len(merged["found"]) + len(merged["failed"])
+                remaining["chunks"] -= 1
+                done = remaining["chunks"] == 0
+            if done:
+                self._settle(record["id"], merged)
+
+        for chunk in chunks:
+            self._pool.submit(BATCH_TASKS[task], chunk, options).add_done_callback(landed)
+        return record
+
+    def _settle(self, job_id: str, result: Any) -> None:
+        with self._lock:
+            record = self._jobs[job_id]
+            record["finished"] = time.time()
+            record["seconds"] = round(record["finished"] - record["submitted"], 1)
+            record["state"] = "done"
+            record["result"] = result
+            record["library"] = library_stamp()
 
     def _finish(self, job_id: str, future: Future[Any]) -> None:
         with self._lock:
@@ -586,6 +864,7 @@ class Jobs:
             error = future.exception()
             if error is None:
                 record["state"], record["result"] = "done", future.result()
+                record["library"] = library_stamp()
             else:
                 record["state"] = "failed"
                 record["error"] = f"{type(error).__name__}: {error}"
@@ -605,6 +884,10 @@ class Jobs:
 
 JOBS: Jobs = None  # type: ignore[assignment]  # built in main(), which knows the worker count
 TOKEN: str | None = None
+
+#: Largest body accepted, in bytes. Patristic passages run to 100,000 words; this is a few
+#: times that, and going over is refused with a 413 rather than silently truncated.
+MAX_BODY: int = 64 * 1024 * 1024
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -648,6 +931,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length") or 0)
+        if length > MAX_BODY:
+            # Said rather than truncated. A document cut short here would read as a father
+            # quoting less than he did, and nothing downstream could tell.
+            self._json(
+                413,
+                {
+                    "error": f"body is {length:,} bytes; the limit is {MAX_BODY:,}. "
+                    f"Split the document, or raise --max-body."
+                },
+            )
+            return
         self._route(self.rfile.read(length).decode("utf-8", "replace") if length else "")
 
     def _route(self, body: str = "") -> None:
@@ -713,10 +1007,16 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, api_passage(params))
         elif path == "/api/search":
             self._json(200, api_search(params, body))
+        elif path == "/api/scan":
+            self._json(200, api_scan(params, body))
         elif path == "/api/jobs":
             if self.command == "POST":
                 task = (params.get("task") or [""])[0]
-                self._json(202, JOBS.submit(task, _job_params(params, body)))
+                if task in BATCH_TASKS:
+                    options = search_options(params, JOB_PARAMS)
+                    self._json(202, JOBS.submit_batch(task, _batch_work(body), options))
+                else:
+                    self._json(202, JOBS.submit(task, _job_params(params, body)))
             else:
                 self._json(200, {"jobs": JOBS.all()})
         elif path.startswith("/api/jobs/"):
@@ -736,11 +1036,30 @@ ROUTES = {
     "GET  /api/archive": "?path=<manifest path> -- one archived file, raw",
     "GET  /api/convert": "?ref=&from=eng&to=vul&covering=1 (repeat to=, or omit for all)",
     "GET  /api/passage": "?ref=&vrs=eng&covering=1 -- the text in every corpus",
-    "POST /api/search": "body is the quotation; ?limit=5",
+    "POST /api/search": "body is the quotation; ?limit=5 and any scoring or filter option",
+    "POST /api/scan": "body is a document; finds the quotations in it and where they sit",
     "POST /api/jobs": "?task=coverage|audit|compare (&book=&left=&right=&covering=1)",
+    "POST /api/jobs?task=scan": "body is [{id, text}, ...]; scans them all across the pool",
     "GET  /api/jobs": "every job, without results",
     "GET  /api/jobs/<id>": "one job, with its result once done",
 }
+
+
+def _batch_work(body: str) -> list[Any]:
+    """The documents of a batch scan: a JSON array of ``{"id": ..., "text": ...}``.
+
+    Ids are the caller's, so results come back matched to them rather than to a position
+    in a list that a partial failure would shift.
+    """
+    if not body.strip():
+        return []
+    parsed = json.loads(body)
+    if not isinstance(parsed, list):
+        raise ValueError("a scan batch must be a JSON array of {id, text} objects")
+    for item in parsed:
+        if not isinstance(item, dict) or "id" not in item:
+            raise ValueError(f"every document needs an id: {item!r}")
+    return parsed
 
 
 def _job_params(params: dict[str, list[str]], body: str) -> dict[str, Any]:
@@ -760,7 +1079,7 @@ def _job_params(params: dict[str, list[str]], body: str) -> dict[str, Any]:
 
 
 def main() -> None:
-    global JOBS, TOKEN
+    global JOBS, TOKEN, MAX_BODY
     parser = argparse.ArgumentParser(description="Serve biblereference over HTTP.")
     parser.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to accept from the network")
     parser.add_argument("--port", type=int, default=8000)
@@ -768,6 +1087,13 @@ def main() -> None:
         "--token",
         default=os.environ.get("BIBLEREFERENCE_TOKEN"),
         help="require this bearer token; also read from $BIBLEREFERENCE_TOKEN",
+    )
+    parser.add_argument(
+        "--max-body",
+        type=int,
+        default=MAX_BODY,
+        metavar="BYTES",
+        help=f"largest request body accepted (default {MAX_BODY // 1024 // 1024} MB)",
     )
     parser.add_argument(
         "--workers",
@@ -778,6 +1104,7 @@ def main() -> None:
     args = parser.parse_args()
 
     TOKEN = args.token or None
+    MAX_BODY = args.max_body
     JOBS = Jobs(args.workers)
 
     print(
