@@ -44,6 +44,20 @@ __all__ = ["KNOWN_VERSIONS", "BibleGatewayCorpus", "parse_chapter", "parse_passa
 
 _BASE: Final = "https://www.biblegateway.com/passage/"
 
+#: Where fetched pages are archived, and the source id their manifest lines carry.
+#:
+#: Not ``"web"``, which this module was originally called after the web it fetches from --
+#: and which is *also* the eBible id of the World English Bible. The two shared one archive
+#: directory and one manifest namespace, so the newest manifest line for "web" was whichever
+#: happened last: an NIV chapter from BibleGateway, or the World English Bible's USFM zip.
+#: That made the newest-entry-per-source rule pick a copyrighted HTML page as the checksum
+#: of a public-domain zip, and gave the built corpus the wrong fetch date. Found by
+#: comparing the library digests of two machines.
+ARCHIVE: Final = "biblegateway"
+
+#: The colliding name, still read so that nothing already fetched is fetched again.
+_LEGACY_ARCHIVE: Final = "web"
+
 #: Seconds between requests. This is not a guess or a courtesy figure: BibleGateway's
 #: robots.txt publishes ``Crawl-delay: 15``, and asking faster than a host has said it
 #: wants is the difference between using a service and abusing it. Fifteen seconds is
@@ -331,14 +345,20 @@ class BibleGatewayCorpus:
         return f"{self._version}/{book}_{chapter}.html"
 
     def _archived(self, book: str, chapter: int) -> str | None:
-        """Look through every dated archive directory, newest first."""
-        base = self._home.sources / "web"
-        if not base.is_dir():
-            return None
-        for dated in sorted((p for p in base.iterdir() if p.is_dir()), reverse=True):
-            path = dated / self._archive_name(book, chapter)
-            if path.is_file():
-                return path.read_text(encoding="utf-8", errors="replace")
+        """Look through every dated archive directory, newest first.
+
+        Both namespaces, because pages fetched before this module stopped calling itself
+        ``web`` are still on disk and a request to a publisher's site is the one cost this
+        whole design exists to pay only once.
+        """
+        for namespace in (ARCHIVE, _LEGACY_ARCHIVE):
+            base = self._home.sources / namespace
+            if not base.is_dir():
+                continue
+            for dated in sorted((p for p in base.iterdir() if p.is_dir()), reverse=True):
+                path = dated / self._archive_name(book, chapter)
+                if path.is_file():
+                    return path.read_text(encoding="utf-8", errors="replace")
         return None
 
     def _download(self, book: str, first: int, last: int) -> None:
@@ -376,7 +396,7 @@ class BibleGatewayCorpus:
         # one of them finds it without knowing how it was originally batched.
         for chapter in chapters:
             self._home.store_file(
-                "web",
+                ARCHIVE,
                 self._archive_name(book, chapter),
                 response.content,
                 url=str(response.url),

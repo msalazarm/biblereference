@@ -543,12 +543,18 @@ def library_digest(home: DataHome) -> LibraryDigest:
     from .fetch import iter_sources
     from .versification import fingerprint
 
-    registered = {source.id for source in iter_sources(None)}
+    # A source's own files, by name. Matching against these rather than trusting the
+    # source id is what stops a stray manifest line standing in for a real download: the
+    # BibleGateway fetcher used to archive under the id "web", which is also the World
+    # English Bible's, so the newest line for "web" was an NIV chapter and the digest took
+    # its checksum for the World English Bible's zip. The fetcher has its own namespace
+    # now, but the old lines are on disk for good, and an archive is never rewritten.
+    declared = {source.id: {file.name for file in source.files} for source in iter_sources(None)}
     newest: dict[str, str] = {}
     archived: set[str] = set()
     for entry in home.entries():  # newest last, so later writes win
         archived.add(entry.source)
-        if entry.source in registered:
+        if entry.path.rsplit("/", 1)[-1] in declared.get(entry.source, ()):
             newest[entry.source] = entry.sha256
     sources = hashlib.sha256(
         "".join(f"{source}\x1f{digest}\x1e" for source, digest in sorted(newest.items())).encode()
@@ -596,7 +602,7 @@ def library_digest(home: DataHome) -> LibraryDigest:
         verse_count=verses,
         online=online.hexdigest(),
         online_verses=online_verses,
-        unregistered=tuple(sorted(archived - registered)),
+        unregistered=tuple(sorted(archived - set(declared))),
     )
 
 

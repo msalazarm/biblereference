@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from biblereference.corpora.base import VerseUnavailable
+from biblereference.fetch import iter_sources
 from biblereference.refs import VerseRef
 from biblereference.render import Config, Renderer
 from biblereference.store import (
@@ -326,9 +327,9 @@ def test_the_digest_ignores_when_a_source_was_fetched(home: DataHome) -> None:
     machine different from one that fetched it once.
     """
     entry = ManifestEntry(
-        source="asv",  # a registered source, because only those are counted
+        source="asv",  # a real source and its real filename: only those are counted
         url="https://example.invalid/demo.zip",
-        path="asv/2026-01-01/demo.zip",
+        path="asv/2026-01-01/eng-asv_usfm.zip",
         sha256="abc123",
         bytes=10,
         fetched_at="2026-01-01T00:00:00+00:00",
@@ -340,7 +341,11 @@ def test_the_digest_ignores_when_a_source_was_fetched(home: DataHome) -> None:
     from dataclasses import replace
 
     home.record(
-        replace(entry, path="asv/2026-06-06/demo.zip", fetched_at="2026-06-06T00:00:00+00:00")
+        replace(
+            entry,
+            path="asv/2026-06-06/eng-asv_usfm.zip",
+            fetched_at="2026-06-06T00:00:00+00:00",
+        )
     )
     assert library_digest(home).sources == first.sources
     assert library_digest(home).source_count == 1
@@ -413,3 +418,55 @@ def test_a_chapter_resolved_from_the_web_is_not_a_difference(home: DataHome) -> 
     assert after.online_verses == 2
     assert after.online != before.online
     assert "resolved from the web" in after.describe()
+
+
+def test_a_stray_manifest_line_cannot_stand_in_for_a_real_download(home: DataHome) -> None:
+    """Found by comparing two machines, and the cause was a name collision.
+
+    The BibleGateway fetcher archived pages under the source id ``web``, which is also the
+    eBible id of the World English Bible. One archive directory, one manifest namespace,
+    and so the newest line for ``web`` was whichever happened last -- an NIV chapter, or
+    the World English Bible's USFM zip. Taking the newest line per source therefore made a
+    copyrighted HTML page stand in for the checksum of a public-domain zip.
+
+    The fetcher has its own namespace now, but an archive is never rewritten, so the old
+    lines are on disk for good. A source's checksum is taken from a file that source
+    actually declares, which fixes it retrospectively and could not be fooled again.
+    """
+    real = ManifestEntry(
+        source="web",
+        url="https://ebible.org/Scriptures/eng-web_usfm.zip",
+        path="web/2026-08-03/eng-web_usfm.zip",
+        sha256="the-real-one",
+        bytes=3_249_017,
+        fetched_at="2026-08-03T20:26:45+00:00",
+    )
+    home.record(real)
+    expected = library_digest(home).sources
+
+    home.record(
+        ManifestEntry(
+            source="web",  # the collision: same id, but not one of the source's files
+            url="https://www.biblegateway.com/passage/?search=Isaiah+53&version=NIV",
+            path="web/2026-08-03/NIV/ISA_53.html",
+            sha256="a-copyrighted-html-page",
+            bytes=183_355,
+            fetched_at="2026-08-03T21:28:45+00:00",
+        )
+    )
+    assert library_digest(home).sources == expected, "a page is not the World English Bible"
+
+
+def test_the_page_fetcher_no_longer_shares_a_namespace_with_a_translation(home: DataHome) -> None:
+    """The collision itself, so it cannot be reintroduced.
+
+    The legacy name is still read, because a request to a publisher's site is the one cost
+    the archive exists to pay only once, and pages fetched before the rename are still on
+    disk.
+    """
+    from biblereference.corpora.web import _LEGACY_ARCHIVE, ARCHIVE
+
+    registered = {source.id for source in iter_sources(None)}
+    assert ARCHIVE not in registered, "the archive namespace must not be a source id"
+    assert _LEGACY_ARCHIVE in registered, "which is exactly why it had to change"
+    assert ARCHIVE != _LEGACY_ARCHIVE
