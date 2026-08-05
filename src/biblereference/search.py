@@ -60,6 +60,7 @@ __all__ = [
     "Match",
     "Resolution",
     "Resolver",
+    "ScaledRun",
     "Searcher",
     "Witness",
     "build_index",
@@ -183,6 +184,34 @@ _SPAN_GAP: Final = 8
 #: this corpus: formulaic sermon language aligns with a longest run of at most five, while
 #: genuine quotations of the same length run nine and fourteen. See :func:`longest_run`.
 _MIN_RUN: Final = 6
+
+
+@dataclass(frozen=True, slots=True)
+class ScaledRun:
+    """A ``min_run`` proportional to the query's length, with a floor.
+
+    Three words out of four is evidence; three out of forty is not. Measured on short
+    Greek quotations, making the gate proportional took the four-to-six word band from 9%
+    found to 72%, so this is the shape worth using rather than a fixed count -- and a
+    *fixed* count is not an approximation of it, being looser than ``ScaledRun(4)`` for
+    every query over eight words.
+
+    A class rather than the ``lambda n: max(4, min(6, n // 2))`` the docstrings show,
+    because a closure cannot be pickled and this has to cross a process boundary: the
+    server's batch scan runs in worker processes, and the calibrated configuration was
+    exactly the one it could not accept.
+    """
+
+    floor: int
+    ceiling: int = _MIN_RUN
+
+    def __post_init__(self) -> None:
+        if self.floor < 1:
+            raise ValueError(f"a run floor must be at least 1, not {self.floor}")
+
+    def __call__(self, words: int) -> int:
+        return max(self.floor, min(self.ceiling, words // 2))
+
 
 #: Words below which a search is refused before scoring happens. At two words everything
 #: matches something. Four is a safe default for English and is a parameter because it is

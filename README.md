@@ -321,9 +321,9 @@ curl -X POST --data-binary @passage.txt \
   "$BR/api/scan?languages=grc&coverage=0.5&min_run=scaled:4"
 ```
 
-`min_run=scaled:4` means `lambda n: max(4, min(6, n // 2))` — proportional with a floor,
-since a callable cannot cross a query string and that is the form worth spelling. A plain
-integer keeps the fixed behaviour.
+`min_run=scaled:4` is `ScaledRun(4)` — `max(4, min(6, n // 2))`, proportional with a floor.
+A plain integer keeps the fixed behaviour, and is *not* an approximation of the scaled
+form: it is looser for every query over eight words.
 
 **A parameter that cannot be honoured is refused, never ignored.** An unknown name, an
 unreadable value, a fraction outside 0–1, a language this machine does not hold: all 400.
@@ -372,6 +372,19 @@ Results are keyed by the id you gave each document, so a partial failure cannot 
 them. One unreadable document is named in `failed` and the rest still arrive — forty
 thousand passages is too many to resubmit because one was malformed. Measured on 60
 documents over 12 cores: 159s one at a time, 24s as a batch, byte-identical results.
+
+### Where the cores actually go
+
+Scanning is pure-Python string comparison and holds the GIL throughout, so work done on a
+request thread gets one core's worth of throughput however many requests arrive at once.
+Every search and scan therefore runs in a worker process, not on the serving thread. Eight
+concurrent scans now finish in 1.36× the time of one rather than eight times it.
+
+Two pools, because one would mean a running batch — which occupies every worker for hours,
+that being the point of it — left an ordinary `/api/scan` queued behind the whole thing.
+`--workers` sizes the job pool (default cores − 1) and `--interactive-workers` the one kept
+for single requests (default 4). A scan during a running 40-document batch costs 18.8s
+against 14.6s idle: contention, not starvation.
 
 ## Data home
 

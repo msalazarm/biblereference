@@ -9,6 +9,7 @@ different way, so each gets its own test.
 
 from __future__ import annotations
 
+import pickle
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from biblereference.search import (
     COVERAGE,
     IDENTIFIED,
     QUOTATION,
+    ScaledRun,
     Searcher,
     _coverage,
     _ratio,
@@ -602,3 +604,21 @@ def test_every_built_corpus_has_a_date() -> None:
     with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
         built = {row[0] for row in connection.execute("SELECT corpus FROM source_meta")}
     assert built - set(TRANSLATED) == set()
+
+
+def test_a_scaled_run_is_the_documented_lambda_and_survives_a_pickle() -> None:
+    """`min_run` may be proportional to the query, and the proportional form is a class
+    rather than the closure the docstrings show, for one reason: it has to cross a process
+    boundary. The server's batch scan runs in worker processes, and a closure defined
+    inside a function cannot be pickled -- so the calibrated configuration was the one
+    setting the batch could not accept, while every setting not worth running at scale
+    worked. A class pickles by reference and cannot fail that way.
+    """
+    scaled = ScaledRun(4)
+
+    assert [scaled(n) for n in range(60)] == [max(4, min(6, n // 2)) for n in range(60)]
+    assert pickle.loads(pickle.dumps(scaled)) == scaled
+    assert ScaledRun(3, ceiling=9)(40) == 9
+
+    with pytest.raises(ValueError, match="at least 1"):
+        ScaledRun(0)

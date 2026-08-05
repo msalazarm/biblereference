@@ -18,7 +18,6 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -155,7 +154,7 @@ def base() -> Iterator[str]:
     os.environ[ENV_VAR] = str(real.root)
 
     serve.JOBS = serve.Jobs(2)
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), serve.Handler)
+    httpd = serve.Server(("127.0.0.1", 0), serve.Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     try:
         yield f"http://127.0.0.1:{httpd.server_address[1]}"
@@ -239,7 +238,23 @@ def test_every_result_names_the_library_that_produced_it(base: str) -> None:
     assert _post(base, "/api/search", SENTENCE)["library"] == stamp
 
 
-def test_a_batch_is_an_optimisation_not_a_different_algorithm(base: str) -> None:
+@pytest.mark.parametrize(
+    "query",
+    [
+        "",
+        "min_run=4",
+        "coverage=0.5",
+        # The regression. Every parameter has to survive being pickled into a worker, and
+        # a closure does not: `scaled:` is the calibrated configuration -- the one the
+        # batch exists to run at scale -- and it was the one setting the batch could not
+        # accept, while the settings not worth running at scale all worked. The earlier
+        # version of this test passed only because it never sent one.
+        "min_run=scaled:4",
+        "min_run=scaled:3&coverage=0.5",
+        "min_run=scaled:6&coverage=0.4&identified=0.9&min_query=3",
+    ],
+)
+def test_a_batch_is_an_optimisation_not_a_different_algorithm(base: str, query: str) -> None:
     """Results keyed by the caller's id, identical to scanning the same documents singly,
     and one unreadable document does not lose the rest -- forty-three thousand passages is
     too many to resubmit because one of them was null.
@@ -249,7 +264,8 @@ def test_a_batch_is_an_optimisation_not_a_different_algorithm(base: str) -> None
         {"id": "prose", "text": "and therefore we must consider what he intended"},
         {"id": "bad", "text": None},
     ]
-    job = _post(base, "/api/jobs?task=scan", json.dumps(documents), "application/json")
+    suffix = f"&{query}" if query else ""
+    job = _post(base, f"/api/jobs?task=scan{suffix}", json.dumps(documents), "application/json")
     assert job["total"] == 3
 
     for _ in range(600):
@@ -261,9 +277,9 @@ def test_a_batch_is_an_optimisation_not_a_different_algorithm(base: str) -> None
     assert state["state"] == "done"
     assert state["done"] == 3
     assert set(state["result"]["found"]) == {"quoted", "prose"}
-    assert "bad" in state["result"]["failed"]
+    assert set(state["result"]["failed"]) == {"bad"}, "a chunk must not fail as a whole"
     assert "library" in state
 
     for document in documents[:2]:
-        singly = _post(base, "/api/scan", document["text"])["matches"]
+        singly = _post(base, f"/api/scan?{query}", document["text"])["matches"]
         assert state["result"]["found"][document["id"]] == singly

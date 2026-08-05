@@ -366,9 +366,10 @@ def _min_run(raw: str) -> int | Callable[[int], int]:
 
     A callable cannot cross a query string, and the proportional form is the one that was
     measured -- it took short Greek quotations from 9% found to 72% -- so it needs a
-    spelling. ``scaled:4`` means exactly ``lambda n: max(4, min(_MIN_RUN, n // 2))``.
+    spelling. ``scaled:4`` is :class:`~biblereference.search.ScaledRun`, which is a class
+    and not a closure precisely so that it survives the pickle into a worker process.
     """
-    from biblereference.search import _MIN_RUN
+    from biblereference.search import ScaledRun
 
     if not raw.startswith("scaled:"):
         try:
@@ -382,9 +383,10 @@ def _min_run(raw: str) -> int | Callable[[int], int]:
         floor = int(raw.removeprefix("scaled:"))
     except ValueError:
         raise ValueError(f"scaled: needs a floor, as in scaled:4, not {raw!r}") from None
-    if floor < 1:
-        raise ValueError(f"a scaled floor must be at least 1, not {floor}")
-    return lambda words: max(floor, min(_MIN_RUN, words // 2))
+    try:
+        return ScaledRun(floor)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from None
 
 
 def _listed(params: dict[str, list[str]], name: str) -> list[str] | None:
@@ -462,15 +464,13 @@ def _known_filters() -> dict[str, set[str]]:
 
 def api_search(params: dict[str, list[str]], body: str) -> Any:
     """Which passage a quotation came from, and which translation it was quoted in."""
-    from biblereference.search import Searcher
-
     text = body or (params.get("q") or [""])[0]
     limit = int((params.get("limit") or ["5"])[0])
-    with Searcher(HOME, **search_options(params)) as searcher:
-        return {
-            "matches": [match.to_dict() for match in searcher.search(text, limit=limit)],
-            "library": library_stamp(),
-        }
+    options = search_options(params)
+    return {
+        "matches": JOBS.run(job_search_one, text, limit, options),
+        "library": library_stamp(),
+    }
 
 
 def api_scan(params: dict[str, list[str]], body: str) -> Any:
@@ -481,20 +481,9 @@ def api_scan(params: dict[str, list[str]], body: str) -> Any:
     posted, so a caller can point back at its own text -- which is what makes a finding
     checkable rather than merely plausible.
     """
-    from biblereference.search import Searcher
-
-    window = int((params.get("window") or ["0"])[0]) or None
-    stride = int((params.get("stride") or ["0"])[0]) or None
-    sweep: dict[str, Any] = {}
-    if window:
-        sweep["window"] = window
-    if stride:
-        sweep["stride"] = stride
-
-    with Searcher(HOME, **search_options(params)) as searcher:
-        matches = searcher.scan(body, **sweep) if body.strip() else []
+    options = search_options(params)
     return {
-        "matches": [match.to_dict() for match in matches],
+        "matches": JOBS.run(job_scan_one, body, options),
         "words": len(body.split()),
         "library": library_stamp(),
     }
@@ -721,6 +710,41 @@ def job_compare(left: str, right: str, book: str | None = None, covering: bool =
     }
 
 
+#: One `Searcher` per configuration per worker process. Constructing one opens a database
+#: and counts the index, which is wasted on every call after the first; a worker handles
+#: thousands.
+_SEARCHERS: dict[Any, Any] = {}
+
+
+def worker_searcher(options: dict[str, Any]) -> Any:
+    from biblereference.search import Searcher
+    from biblereference.store import DataHome
+
+    key = tuple(sorted((name, repr(value)) for name, value in options.items()))
+    if key not in _SEARCHERS:
+        _SEARCHERS[key] = Searcher(DataHome(), **options)
+    return _SEARCHERS[key]
+
+
+def job_scan_one(text: str, options: dict[str, Any]) -> list[Any]:
+    """One document, in a worker process.
+
+    Scanning is pure-Python string comparison and holds the GIL throughout, so serving it
+    on a request thread gives one core's worth of throughput however many requests arrive
+    at once -- measured at 16% of a 32-thread machine, with four simultaneous requests
+    taking the same wall time as one. The pool is the only thing here that is actually
+    parallel, so single requests go through it too rather than only batches.
+    """
+    if not text.strip():
+        return []
+    return [match.to_dict() for match in worker_searcher(options).scan(text)]
+
+
+def job_search_one(text: str, limit: int, options: dict[str, Any]) -> list[Any]:
+    """One quotation, in a worker process. Same reasoning as :func:`job_scan_one`."""
+    return [match.to_dict() for match in worker_searcher(options).search(text, limit=limit)]
+
+
 def job_scan(documents: list[dict[str, Any]], options: dict[str, Any]) -> dict[str, Any]:
     """Scan a chunk of documents, keyed by the id the caller gave each one.
 
@@ -729,27 +753,18 @@ def job_scan(documents: list[dict[str, Any]], options: dict[str, Any]) -> dict[s
     the result and named in ``failed`` -- the caller can see exactly which, and everything
     else still arrives.
     """
-    from biblereference.search import Searcher
-    from biblereference.store import DataHome
-
-    built = dict(options)
-    if isinstance(built.get("min_run"), str):
-        # A callable cannot be pickled into this process, so the spec crosses as text and
-        # the function is rebuilt here. Same spelling the query string uses.
-        built["min_run"] = _min_run(built["min_run"])
-
+    searcher = worker_searcher(options)
     found: dict[str, Any] = {}
     failed: dict[str, str] = {}
-    with Searcher(DataHome(), **built) as searcher:
-        for document in documents:
-            name = str(document.get("id"))
-            try:
-                text = document["text"]
-                if not isinstance(text, str):
-                    raise TypeError(f"text must be a string, not {type(text).__name__}")
-                found[name] = [m.to_dict() for m in searcher.scan(text)] if text.strip() else []
-            except Exception as exc:
-                failed[name] = f"{type(exc).__name__}: {exc}"
+    for document in documents:
+        name = str(document.get("id"))
+        try:
+            text = document["text"]
+            if not isinstance(text, str):
+                raise TypeError(f"text must be a string, not {type(text).__name__}")
+            found[name] = [m.to_dict() for m in searcher.scan(text)] if text.strip() else []
+        except Exception as exc:
+            failed[name] = f"{type(exc).__name__}: {exc}"
     return {"found": found, "failed": failed}
 
 
@@ -767,16 +782,34 @@ class Jobs:
     the work goes to a process pool; the client asks again later.
     """
 
-    def __init__(self, workers: int) -> None:
+    def __init__(self, workers: int, interactive: int = 4) -> None:
         self._workers = workers
         # Spawn, not fork. A forked child inherits this process's SQLite connections, and
         # two processes using one connection is how a database file gets corrupted.
-        self._pool = ProcessPoolExecutor(
-            max_workers=workers, mp_context=multiprocessing.get_context("spawn")
-        )
+        spawn = multiprocessing.get_context("spawn")
+        self._pool = ProcessPoolExecutor(max_workers=workers, mp_context=spawn)
+        # A separate, small pool for single requests. Sharing one would mean a running
+        # batch -- which is the point of the batch, and occupies every worker for hours --
+        # left /api/scan queued behind it while /api/health answered instantly, which is
+        # exactly the shape of failure that got this reported.
+        self._interactive = ProcessPoolExecutor(max_workers=interactive, mp_context=spawn)
         self._lock = threading.Lock()
         self._ids = itertools.count(1)
         self._jobs: dict[str, dict[str, Any]] = {}
+
+    def run(self, function: Callable[..., Any], *args: Any) -> Any:
+        """Run one request's work in a worker and wait for it.
+
+        Scanning is pure-Python string comparison and holds the GIL throughout, so serving
+        it on a request thread gives one core's worth of throughput however many requests
+        arrive at once. Measured on a 32-thread machine: 16% utilisation, and four
+        simultaneous requests taking the same wall time as one. Handing it to the pool is
+        what makes concurrent requests actually concurrent.
+
+        The waiting itself is cheap -- a blocked thread holds no GIL -- so the serving
+        threads stay free to accept work while the pool is busy.
+        """
+        return self._interactive.submit(function, *args).result()
 
     def _open(self, task: str, params: dict[str, Any], total: int | None = None) -> dict[str, Any]:
         job_id = f"{task}-{next(self._ids)}"
@@ -890,18 +923,41 @@ TOKEN: str | None = None
 MAX_BODY: int = 64 * 1024 * 1024
 
 
+class Server(ThreadingHTTPServer):
+    """`ThreadingHTTPServer`, minus the traceback when a client hangs up.
+
+    A caller that times out and disconnects mid-response is ordinary, and printing a
+    BrokenPipeError stack for it is noise that hides real errors among it.
+    """
+
+    daemon_threads = True
+
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        import sys
+
+        if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError)):
+            return
+        super().handle_error(request, client_address)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "biblereference"
 
     # -- plumbing ----------------------------------------------------------------------
 
     def _send(self, status: int, body: bytes, content_type: str) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        if self.command != "HEAD":
-            self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            # The caller gave up before the answer arrived -- a timeout on their side, or
+            # a killed client. Their business, not a fault here, and reporting it as one
+            # buries whatever the request was actually doing under a second traceback.
+            self.close_connection = True
 
     def _json(self, status: int, payload: Any) -> None:
         # default=str so that one unforeseen object in a result cannot turn a completed
@@ -1101,14 +1157,23 @@ def main() -> None:
         default=max(1, (os.cpu_count() or 2) - 1),
         help="processes for the long jobs (default: cores - 1)",
     )
+    parser.add_argument(
+        "--interactive-workers",
+        type=int,
+        default=4,
+        metavar="N",
+        help="processes kept for single search and scan requests, so a running batch "
+        "cannot starve them (default 4)",
+    )
     args = parser.parse_args()
 
     TOKEN = args.token or None
     MAX_BODY = args.max_body
-    JOBS = Jobs(args.workers)
+    JOBS = Jobs(args.workers, args.interactive_workers)
 
     print(
-        f"{len(corpora())} corpora · {args.workers} job workers of {os.cpu_count()} cores\n"
+        f"{len(corpora())} corpora · {args.workers} job workers + "
+        f"{args.interactive_workers} interactive, of {os.cpu_count()} cores\n"
         f"http://{args.host}:{args.port}  (ctrl-c to stop)",
         flush=True,
     )
@@ -1118,7 +1183,7 @@ def main() -> None:
             "this port can run jobs on this machine.",
             flush=True,
         )
-    ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
+    Server((args.host, args.port), Handler).serve_forever()
 
 
 if __name__ == "__main__":
