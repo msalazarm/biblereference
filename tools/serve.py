@@ -373,6 +373,31 @@ def api_digest() -> Any:
     return asdict(library_digest(HOME))
 
 
+def api_sources() -> Any:
+    """The newest checksum of every archived source, so a mismatched digest can be run
+    down to the file that caused it.
+
+    A digest that says two machines differ and cannot say *where* sends you hunting, which
+    is how the first version of it was found wanting.
+    """
+    from biblereference.fetch import iter_sources
+
+    registered = {source.id for source in iter_sources(None)}
+    newest: dict[str, dict[str, Any]] = {}
+    for entry in HOME.entries():  # newest last, so later writes win
+        newest[entry.source] = {
+            "sha256": entry.sha256,
+            "bytes": entry.bytes,
+            "fetched_at": entry.fetched_at,
+            "url": entry.url,
+            "registered": entry.source in registered,
+        }
+    return {
+        "registered": sorted(registered),
+        "sources": dict(sorted(newest.items())),
+    }
+
+
 def api_corpora() -> Any:
     return {
         "corpora": [
@@ -655,6 +680,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, api_corpora())
         elif path == "/api/digest":
             self._json(200, api_digest())
+        elif path == "/api/sources":
+            self._json(200, api_sources())
         elif path == "/api/convert":
             self._json(200, api_convert(params))
         elif path == "/api/passage":
@@ -679,6 +706,7 @@ ROUTES = {
     "GET  /api/health": "corpora count, fingerprint, cores, jobs running",
     "GET  /api/corpora": "every built corpus",
     "GET  /api/digest": "fingerprint of this machine's library, for comparing with another",
+    "GET  /api/sources": "per-source checksums, for running a mismatched digest to ground",
     "GET  /api/convert": "?ref=&from=eng&to=vul&covering=1 (repeat to=, or omit for all)",
     "GET  /api/passage": "?ref=&vrs=eng&covering=1 -- the text in every corpus",
     "POST /api/search": "body is the quotation; ?limit=5",

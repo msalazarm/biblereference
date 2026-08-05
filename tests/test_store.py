@@ -12,6 +12,7 @@ from biblereference.store import (
     ManifestEntry,
     SourceMeta,
     SqliteCorpus,
+    add_chapter,
     default_data_home,
     library_digest,
     read_meta,
@@ -325,9 +326,9 @@ def test_the_digest_ignores_when_a_source_was_fetched(home: DataHome) -> None:
     machine different from one that fetched it once.
     """
     entry = ManifestEntry(
-        source="demo",
+        source="asv",  # a registered source, because only those are counted
         url="https://example.invalid/demo.zip",
-        path="demo/2026-01-01/demo.zip",
+        path="asv/2026-01-01/demo.zip",
         sha256="abc123",
         bytes=10,
         fetched_at="2026-01-01T00:00:00+00:00",
@@ -339,7 +340,7 @@ def test_the_digest_ignores_when_a_source_was_fetched(home: DataHome) -> None:
     from dataclasses import replace
 
     home.record(
-        replace(entry, path="demo/2026-06-06/demo.zip", fetched_at="2026-06-06T00:00:00+00:00")
+        replace(entry, path="asv/2026-06-06/demo.zip", fetched_at="2026-06-06T00:00:00+00:00")
     )
     assert library_digest(home).sources == first.sources
     assert library_digest(home).source_count == 1
@@ -355,3 +356,60 @@ def test_an_empty_data_home_still_answers(tmp_path: Path) -> None:
     assert digest.verse_count == 0
     assert digest.source_count == 0
     assert len(digest.library) == 64
+
+
+def test_a_source_the_code_no_longer_registers_is_not_a_difference(home: DataHome) -> None:
+    """Found by comparing two real machines, where it was a false alarm.
+
+    An archive is never deleted, so a machine that once fetched a source since dropped
+    from the list keeps its files and manifest lines forever -- four abridged translations,
+    in the case that turned this up. Counting them would mean that machine could never
+    again match a fresh install however often either was synced, which is a permanent
+    false alarm rather than a finding. They are reported instead.
+    """
+    fresh = library_digest(home)
+
+    home.record(
+        ManifestEntry(
+            source="an-abridgement-we-dropped",
+            url="https://example.invalid/gone.zip",
+            path="an-abridgement-we-dropped/2026-01-01/gone.zip",
+            sha256="abc123",
+            bytes=10,
+            fetched_at="2026-01-01T00:00:00+00:00",
+        )
+    )
+    after = library_digest(home)
+
+    assert after.library == fresh.library, "a dropped source must not change the digest"
+    assert after.unregistered == ("an-abridgement-we-dropped",)
+    assert "no longer registered" in after.describe()
+
+
+def test_a_chapter_resolved_from_the_web_is_not_a_difference(home: DataHome) -> None:
+    """The other false alarm from the same comparison.
+
+    `resolve` stores chapters one at a time as it attributes quotations, so they are real
+    content that no sync produces and that accumulates wherever the resolving happens to
+    be run. Counting them would make a machine that has ever resolved anything differ from
+    its own freshly-synced twin, so they are hashed separately and reported.
+    """
+    write_corpus(home, META, VERSES)
+    before = library_digest(home)
+
+    add_chapter(
+        home,
+        SourceMeta(
+            corpus="niv", label="New International Version", language="en", versification="eng"
+        ),
+        "ISA",
+        53,
+        {1: "Who has believed our message?", 2: "He grew up before him like a tender shoot."},
+    )
+    after = library_digest(home)
+
+    assert after.library == before.library, "resolving a chapter must not change the digest"
+    assert after.verse_count == before.verse_count
+    assert after.online_verses == 2
+    assert after.online != before.online
+    assert "resolved from the web" in after.describe()

@@ -468,13 +468,11 @@ class LibraryDigest:
     """
 
     sources: str
-    """Over the newest fetch of each archived source. This is the "hash of the hashes":
-    the manifest already records a sha256 per file, so nothing is re-read from disk."""
+    """Over the newest fetch of each *registered* source. This is the "hash of the
+    hashes": the manifest already records a sha256 per file, so nothing is re-read."""
     texts: str
-    """Over every verse actually in the database -- corpus, reference and words. What the
-    sources digest cannot see: a half-finished build, a corrupted page, and above all the
-    chapters `resolve` fetches one at a time from BibleGateway, which are real content and
-    appear in no manifest."""
+    """Over every verse `build` put in the database -- corpus, reference and words. What
+    the sources digest cannot see: a half-finished build, or a corrupted page."""
     versification: str
     """The vendored mapping data and its corrections, from `versification.fingerprint`."""
     code: str
@@ -483,46 +481,92 @@ class LibraryDigest:
     """Over the other four. The one line to compare."""
     source_count: int
     verse_count: int
+    online: str
+    """Over the chapters `resolve` fetched one at a time from a publisher's site. Kept out
+    of :attr:`library` on purpose -- see :func:`library_digest`."""
+    online_verses: int
+    unregistered: tuple[str, ...]
+    """Archived sources the code no longer knows about, also kept out of the digest."""
 
     def describe(self) -> str:
-        return (
-            f"  sources        {self.sources[:16]}  {self.source_count} source(s), "
-            f"newest fetch of each\n"
-            f"  texts          {self.texts[:16]}  {self.verse_count:,} verses\n"
-            f"  versification  {self.versification[:16]}  vendored data and corrections\n"
-            f"  code           {self.code}\n"
-            f"= library        {self.library}"
-        )
+        lines = [
+            f"  sources        {self.sources[:16]}  {self.source_count} registered source(s)",
+            f"  texts          {self.texts[:16]}  {self.verse_count:,} verses built from them",
+            f"  versification  {self.versification[:16]}  vendored data and corrections",
+            f"  code           {self.code}",
+            f"= library        {self.library}",
+        ]
+        # Only shown when there is something to say, so the ordinary case stays four lines.
+        if self.online_verses:
+            lines.append(
+                f"\n  aside: {self.online_verses:,} verse(s) resolved from the web "
+                f"({self.online[:16]}), which no sync produces and which is not counted above"
+            )
+        if self.unregistered:
+            lines.append(
+                f"  aside: archived but no longer registered, so not counted above: "
+                f"{', '.join(self.unregistered)}"
+            )
+        return "\n".join(lines)
 
 
 def library_digest(home: DataHome) -> LibraryDigest:
     """Fingerprint what this machine holds, so another machine can be compared with it.
 
-    Every part is deterministic across machines, which takes some care. The manifest
-    records a *dated* path and a fetch timestamp per file, and both differ between two
-    machines that synced on different days while holding identical bytes -- so neither is
-    hashed. Only the source id and its checksum are, and only for the newest fetch of each
-    source, because a machine that has fetched something twice is not thereby different
+    The question this answers is "did a sync produce the same library on both machines",
+    and getting there means excluding three things that differ between machines which are,
+    for that question, identical.
+
+    **When a source was fetched, and how often.** The manifest records a dated path and a
+    timestamp per download, and both differ between two machines that synced on different
+    days holding byte-identical archives. Only the source id and checksum are hashed, and
+    only the newest per source: fetching something twice does not make a machine different
     from one that fetched it once.
+
+    **Sources the code no longer registers.** An archive is never deleted, so a machine
+    that once fetched a source since dropped from the list keeps the files and the
+    manifest lines forever. Counting those would mean it could never again match a fresh
+    install, which is a permanent false alarm rather than a finding. They are reported in
+    :attr:`LibraryDigest.unregistered` instead, because "you have four archives nothing
+    reads any more" is worth knowing and is not a difference in the library.
+
+    **Chapters fetched from a publisher's site.** ``resolve`` stores them one at a time as
+    it attributes quotations, so they are real content that appears in no manifest -- and
+    they are per-machine by nature, accumulating wherever the resolving happens to be run.
+    Hashed separately as :attr:`LibraryDigest.online`.
 
     The texts digest walks the whole verse table in reference order. That sounds expensive
     and is not: about three seconds for the 1.4 million verses of a full sync, which is
     cheap enough that there is no reason to offer a version that skips it and no reason to
     trust the sources alone.
     """
+    from .fetch import iter_sources
     from .versification import fingerprint
 
+    registered = {source.id for source in iter_sources(None)}
     newest: dict[str, str] = {}
+    archived: set[str] = set()
     for entry in home.entries():  # newest last, so later writes win
-        newest[entry.source] = entry.sha256
+        archived.add(entry.source)
+        if entry.source in registered:
+            newest[entry.source] = entry.sha256
     sources = hashlib.sha256(
         "".join(f"{source}\x1f{digest}\x1e" for source, digest in sorted(newest.items())).encode()
     ).hexdigest()
 
-    texts = hashlib.sha256()
-    verses = 0
+    texts, online = hashlib.sha256(), hashlib.sha256()
+    verses = online_verses = 0
     if home.database.exists():
         with closing(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)) as connection:
+            try:
+                # Small -- one row per chapter ever resolved -- so reading it up front
+                # beats an EXISTS subquery per verse by a wide margin.
+                resolved = {
+                    tuple(row)
+                    for row in connection.execute("SELECT corpus, book, chapter FROM chapter_state")
+                }
+            except sqlite3.OperationalError:
+                resolved = set()
             try:
                 rows = connection.execute(
                     "SELECT corpus, book, chapter, verse, subverse, text FROM verse "
@@ -531,9 +575,13 @@ def library_digest(home: DataHome) -> LibraryDigest:
             except sqlite3.OperationalError:
                 rows = iter(())  # type: ignore[assignment]
             for row in rows:
-                texts.update("\x1f".join(str(field) for field in row).encode("utf-8"))
-                texts.update(b"\x1e")
-                verses += 1
+                line = "\x1f".join(str(field) for field in row).encode("utf-8") + b"\x1e"
+                if row[:3] in resolved:
+                    online.update(line)
+                    online_verses += 1
+                else:
+                    texts.update(line)
+                    verses += 1
 
     from . import __version__
 
@@ -546,6 +594,9 @@ def library_digest(home: DataHome) -> LibraryDigest:
         library=hashlib.sha256("\x1e".join(parts).encode()).hexdigest(),
         source_count=len(newest),
         verse_count=verses,
+        online=online.hexdigest(),
+        online_verses=online_verses,
+        unregistered=tuple(sorted(archived - registered)),
     )
 
 

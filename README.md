@@ -361,15 +361,25 @@ library digest -- run this on both machines and compare the last line:
 Four parts, because when two machines disagree the useful question is immediately *which*
 part disagrees. `sources` is a hash of the checksums the manifest already recorded, so
 nothing is re-read from disk. `texts` walks the verse table — about three seconds for a
-full sync, and it catches what the sources cannot: a half-finished build, a corrupted
-page, and the chapters `resolve` fetches one at a time from BibleGateway, which are real
-content and appear in no manifest.
+full sync — and catches what the sources cannot: a half-finished build or a corrupted
+page.
 
-Two things it deliberately ignores, because otherwise identical machines would disagree:
-when a source was fetched, and how many times. The manifest records a dated path and a
-timestamp per download; only the newest checksum per source is hashed.
+Three things it deliberately ignores, because otherwise machines that are identical *as
+far as syncing goes* would disagree:
 
-Over the API: `GET /api/digest`.
+- **When a source was fetched, and how often.** The manifest records a dated path and a
+  timestamp per download; only the newest checksum per source is hashed.
+- **Sources the code no longer registers.** An archive is never deleted, so a machine that
+  once fetched something since dropped from the list keeps it forever. Counting it would
+  mean that machine could never again match a fresh install.
+- **Chapters `resolve` fetched from a publisher's site.** Real content, in no manifest, and
+  per-machine by nature — it accumulates wherever the resolving is run.
+
+The last two are reported underneath as asides, so you can see them without their moving
+the number.
+
+Over the API: `GET /api/digest`. When two machines *do* disagree, `GET /api/sources` gives
+the per-source checksums, which is how you find the file responsible rather than guessing.
 
 ## License
 
