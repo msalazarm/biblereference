@@ -850,3 +850,40 @@ def test_the_douay_reorders_the_silver_of_the_tabernacle(vrs: Versification) -> 
     # that org 38:25 totals before going on to the count that is org 38:26.
     got = vrs.convert_all(VerseRef("EXO", 38, 25, vrs="vul"), "org", covering=True)
     assert [str(r) for r in got] == ["EXO 38:25", "EXO 38:26"]
+
+
+def test_the_greek_second_census_reorders_the_tribes(vrs: Versification) -> None:
+    """Two blocks move and the chapter is 65 verses either way, so nothing about its shape
+    says so. The Greek Numbers 26 puts Gad sixth where org puts it third, and Asher seventh
+    where org puts it eleventh; everything else keeps its order.
+
+    A reordering is the case a monotonic alignment cannot describe, and this one was carried
+    as identity for that reason. It is expressible after all: every moved block has the same
+    number of verses on both sides, so the nine ranges are a bijection of 26:15-47 onto
+    itself with no merge, no split and nothing left over.
+
+    Brenton and Swete agree block for block -- a translation and the Greek text it was made
+    from -- which is why this is the Septuagint's order rather than one editor's.
+    """
+    # Gad, the range that runs backwards: the Greek holds it after Zebulun.
+    assert convert(vrs, "Num 26:24", "lxx", "org") == "NUM 26:15"
+    assert convert(vrs, "Num 26:27", "lxx", "org") == "NUM 26:18"
+    # Judah, displaced four later by Gad's absence from the front.
+    assert convert(vrs, "Num 26:15", "lxx", "org") == "NUM 26:19"
+    # Asher, the other traveller, seven blocks early.
+    assert convert(vrs, "Num 26:28", "lxx", "org") == "NUM 26:44"
+    assert convert(vrs, "Num 26:30", "lxx", "org") == "NUM 26:46"  # the daughter, Serah
+    # Naphtali stands at 26:48 in both, and from there to the end they agree.
+    assert convert(vrs, "Num 26:48", "lxx", "org") == "NUM 26:48"
+
+    # A permutation, so it must invert exactly: every verse of the reordered stretch is
+    # reached once and comes home.
+    landed = {}
+    for verse in range(15, 48):
+        got = vrs.convert_all(VerseRef("NUM", 26, verse, vrs="lxx"), "org")
+        assert len(got) == 1
+        landed[got[0].verse] = verse
+    assert sorted(landed) == list(range(15, 48))
+    for org_verse, lxx_verse in landed.items():
+        back = vrs.convert_all(VerseRef("NUM", 26, org_verse, vrs="org"), "lxx")
+        assert [r.verse for r in back] == [lxx_verse]

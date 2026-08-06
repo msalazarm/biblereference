@@ -564,6 +564,42 @@
       "EXO 36:24-38": {
         "to": "EXO 39:17-31",
         "reason": "See the drop of EXO 36:25-38. Fifteen verses onto fifteen, one range rather than the fourteen separate entries it replaces, and beginning one verse earlier so that 36:24 is carried rather than skipped."
+      },
+      "NUM 26:15-18": {
+        "to": "NUM 26:19-22",
+        "reason": "The Greek second census lists the tribes in a different order from the Hebrew, and the two chapters are 65 verses each, so nothing about the shape of them says so. Gad, which org puts third, the Greek puts sixth; Asher, which org puts eleventh, the Greek puts seventh. Everything else keeps its place, every block has the same number of verses on both sides, and the nine ranges below tile 26:15-47 exactly once. Brenton and Swete agree block for block -- a translation and the Greek text itself -- so this is the Septuagint's order and not one editor's. Judah: 'And the sons of Juda, Er and Aunan; and Er and Aunan died in the land of Chanaan' is org 26:19, which says the same of Er and Onan. Swete opens the verse Ὑἱοὶ δὲ Ἰούδα."
+      },
+      "NUM 26:19-21": {
+        "to": "NUM 26:23-25",
+        "reason": "Issachar. 'And the sons of Issachar according to their families: to Thola, the family of the Tholaites' is org 26:23, 'The sons of Issachar after their families: of Tola, the family of the Tolaites'. Swete: Καὶ υἱοὶ Ἰσσαχὰρ κατὰ δήμους αὐτῶν."
+      },
+      "NUM 26:22-23": {
+        "to": "NUM 26:26-27",
+        "reason": "Zebulun. 'The sons of Zabulon according to their families: to Sared' is org 26:26, 'The sons of Zebulun after their families: of Sered'. Swete: Ὑἱοὶ Ζαβουλὼν κατὰ δήμους αὐτῶν."
+      },
+      "NUM 26:24-27": {
+        "to": "NUM 26:15-18",
+        "reason": "Gad, and the one range that runs backwards: the Greek holds it here, after Zebulun, where org holds it third, before Judah. 'The sons of Gad according to their families: to Saphon, the family of the Saphonites' is org 26:15, 'The sons of Gad after their families: of Zephon, the family of the Zephonites'. Swete: Ὑἱοὶ Γὰδ κατὰ δήμους αὐτῶν. The tribe is named outright in both, so the correspondence is not in doubt even though the Greek counts forty-four thousand five hundred of them where the Hebrew counts forty thousand five hundred -- a variant in the number, not a question about which tribe this is."
+      },
+      "NUM 26:28-31": {
+        "to": "NUM 26:44-47",
+        "reason": "Asher, the other moved block: the Greek holds it seventh, org eleventh. 'The sons of Aser according to their families; to Jamin, the family of the Jaminites' is org 26:44, 'The sons of Asher after their families: of Imnah, the family of the Imnites', and the four verses close together on the daughter -- 'And the name of the daughter of Aser, Sara' is org 26:46, 'The name of the daughter of Asher was Serah'. Swete: Ὑἱοὶ Ἀσὴρ κατὰ δήμους αὐτῶν."
+      },
+      "NUM 26:32-38": {
+        "to": "NUM 26:28-34",
+        "reason": "Joseph and Manasseh, back in order but seven verses late because Asher has gone ahead of them. 'The sons of Joseph according to their families, Manasse and Ephraim' is org 26:28, 'The sons of Joseph after their families: Manasseh and Ephraim', and the range closes on the same fifty-two thousand seven hundred in both."
+      },
+      "NUM 26:39-41": {
+        "to": "NUM 26:35-37",
+        "reason": "Ephraim. 'And these are the children of Ephraim; to Suthala, the family of the Suthalanites' is org 26:35, 'These are the sons of Ephraim after their families: of Shuthelah, the family of the Shuthelahites', and both count thirty-two thousand five hundred."
+      },
+      "NUM 26:42-45": {
+        "to": "NUM 26:38-41",
+        "reason": "Benjamin. 'The sons of Benjamin according to their families; to Bale, the family of the Balites' is org 26:38, 'The sons of Benjamin after their families: of Bela, the family of the Belaites'."
+      },
+      "NUM 26:46-47": {
+        "to": "NUM 26:42-43",
+        "reason": "Dan, the last of the moved blocks, after which Naphtali stands at 26:48 in both and the chapter is in step to its end. 'All the families of Samei according to their numbering, sixty-four thousand and four hundred' is org 26:43, and the count agrees to the man."
       }
     },
     "rsc": {

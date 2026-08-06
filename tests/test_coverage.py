@@ -144,33 +144,33 @@ def test_the_unreachable_half_is_reported_rather_than_assumed(walked) -> None:  
 def test_the_contradictions_that_remain_are_the_ones_we_can_name(walked) -> None:  # type: ignore[no-untyped-def]
     """Isolated flags are noise; runs are faults. Only runs are evidence.
 
-    The runs left are each a known textual fact rather than a mapping error, and they are
-    pinned here by name so a new one appearing is a test failure:
+    What is left is one textual fact, in two systems, and it is pinned here by name so a new
+    one appearing is a test failure:
 
-    * `NUM 1` / `NUM 26` -- the censuses and the tribal lists, where every verse has the
-      identical shape and a neighbour outscores the true match by accident. `NUM 1:6` is
-      "Of Symeon, Salamiel the son of Surisadai" in Brenton and "Of Shim'on, Shelumiel ben
-      Tzurishaddai" in the Orthodox Jewish Bible: the same verse, mapped by identity,
-      correctly.
+    * `NUM 1:6-9` in `lxx` and in `vul` -- the list of tribal princes, where every verse has
+      the identical shape and a neighbour outscores the true match by accident. `NUM 1:6` is
+      "Of Symeon, Salamiel the son of Surisadai" in Brenton, "Of Simeon, Salamiel the son of
+      Surisaddai" in the Douay and "Of Simeon: Shelumiel the son of Zurishaddai" in the World
+      English Bible. All three agree, verse for verse from 1:5 to 1:15, and identity is
+      exactly right. Both instruments flag it anyway, which is the useful part: the
+      deterministic walk and the model share this failure mode, because both are asking how
+      well the text matches and neither can tell twelve near-identical verses apart.
 
-    Three entries used to be here and are the reason this test is worth having. `vul LEV 15`
+    Four entries used to be here and are the reason this test is worth having. `vul LEV 15`
     was not repetition -- the Douay splits org 15:19 in two and nothing recorded it, so
     three verses of the purity law resolved one early. `lxx EXO 36:28-38` was the longest
     run of all and was not reordering -- upstream had left one verse of the Greek vestment
     account unmapped and written the fifteen after it one low. `vul EXO 39` was neither: the
     Douay condenses the joining of the breastplate into three verses where org takes five and
-    runs two behind, then one, then comes back into step -- a many-to-fewer correspondence
-    that a monotonic map describes perfectly well once someone writes down where the seams
-    are. All three went away when the reading was written down, which is what a real fault
-    looks like when it is fixed.
+    runs two behind, then one, then comes back into step. `lxx NUM 26` was the one that
+    really was a reordering -- the Greek second census puts Gad sixth and Asher seventh --
+    and it turned out to be expressible after all, because the moved blocks have the same
+    number of verses on both sides. All four went away when the reading was written down,
+    which is what a real fault looks like when it is fixed.
     """
     _, _, contradicted = walked
     runs = {(system, book, chapter) for system, book, chapter, _, _ in runs_of(contradicted, 4)}
-    assert runs == {
-        ("lxx", "NUM", 26),
-        ("lxx", "NUM", 1),
-        ("vul", "NUM", 1),
-    }
+    assert runs == {("lxx", "NUM", 1), ("vul", "NUM", 1)}
 
 
 def test_a_run_is_only_reported_when_it_is_consecutive() -> None:

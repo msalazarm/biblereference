@@ -227,12 +227,20 @@ No corpus exists in either. Only the structural invariants in `tests/test_alignm
 apply. Nothing to do unless a Russian Synodal corpus is added; noted so it is not mistaken
 for verified.
 
-### 7. Exodus 39 — deliberately not fixed
+### 7. Exodus 39 — ~~deliberately not fixed~~ settled by reading
 
-The alignment reports a clean shift and **the text refuses it**. The Douay condenses the
-Hebrew's ring-and-chain description, absorbing `org 39:19-20` rather than displacing them,
-so the correspondence is many-to-fewer. A mechanical off-by-one would be wrong in a way that
-looks right. Revisit only with a verse-by-verse reading, not with an alignment.
+**Done.** The diagnosis here was right in every particular and so was the refusal to act on
+it: the Douay does condense the ring-and-chain description, absorbing `org 39:19-20` rather
+than displacing them, and a mechanical off-by-one would have been wrong in a way that looks
+right. What it needed was the verse-by-verse reading this entry asked for, which the model
+pass finally made worth doing — the chapter runs two behind from 39:20, one behind from
+39:28, and level again from 39:39, with `org 39:28` divided across two Douay verses. Twenty
+verses of chapter 39 and three of chapter 38 are now written down, both `vul EXO 39` runs
+are gone from the coverage walk, and the covering round trip did not move.
+
+The lesson is worth keeping even though the item is closed: **an alignment that reports a
+clean shift over a condensed passage is reporting the average of several different offsets**,
+and the only way to tell that from a real displacement is to read the verses.
 
 ---
 
