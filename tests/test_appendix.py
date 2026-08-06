@@ -171,3 +171,63 @@ def test_a_document_with_no_citations_gets_no_appendices() -> None:
     out, report = Renderer(Config(appendix=True)).render_text("Just prose.\n")
     assert out == "Just prose.\n"
     assert report.total == 0
+
+
+# --------------------------------------------------------------------------------------
+# What the licence obliges, which is not what the publisher permits
+# --------------------------------------------------------------------------------------
+
+
+def test_a_credit_line_is_not_a_permission_note() -> None:
+    """Most texts here are public domain or ask only for attribution, and the credit line
+    already prints. Repeating that as a permission would bury the two that matter.
+    """
+    from biblereference.appendix import check_terms
+    from biblereference.licences import get
+
+    quoted = usage("demo", "Demo", 3, 40)
+    assert check_terms(quoted, None) is None
+    assert check_terms(quoted, get("public-domain")) is None
+    assert check_terms(quoted, get("cc-by-4.0")) is None
+
+
+def test_a_non_commercial_text_says_so_in_full() -> None:
+    """A CC BY-NC text has no publisher quota at all, so nothing in the old machinery
+    would have mentioned it. The obligation is real and belongs on the page.
+    """
+    from biblereference.appendix import check_terms
+    from biblereference.licences import get
+
+    finding = check_terms(
+        usage("peshitta-ot", "Peshitta Old Testament", 12, 300), get("cc-by-nc-4.0")
+    )
+    assert finding is not None
+    message = finding.message()
+    assert "12 distinct verses" in message
+    assert "may not be used commercially" in message.lower()
+
+
+def test_share_alike_says_to_keep_the_work_separable() -> None:
+    from biblereference.appendix import check_terms
+    from biblereference.licences import get
+
+    finding = check_terms(usage("rahlfs", "Rahlfs Septuagint", 5, 90), get("cc-by-sa-4.0"))
+    assert finding is not None and "separable" in finding.message()
+
+
+def test_a_text_whose_file_misstates_its_own_licence_prints_both() -> None:
+    """The Patristic Text Archive publishes the SBL Greek New Testament under a CC BY
+    header. Printing only the header's claim would state something untrue.
+    """
+    from dataclasses import replace
+
+    from biblereference.appendix import check_terms
+    from biblereference.licences import get
+
+    declared = replace(get("cc-by-4.0"), underlying=get("sblgnt"))
+    finding = check_terms(usage("sblgnt", "SBL Greek New Testament", 4, 60), declared)
+    assert finding is not None
+    message = finding.message()
+    assert "CC BY 4.0" in message
+    assert "SBL Greek New Testament licence" in message
+    assert "Society of Biblical Literature" in message

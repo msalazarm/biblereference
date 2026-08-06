@@ -24,14 +24,17 @@ from importlib import resources
 from typing import Final
 
 from .canon import NamingScheme, book_title
+from .licences import Licence
 from .refs import VerseRange, VerseRef
 from .versification import Versification, VersificationError
 
 __all__ = [
     "Quota",
     "RegisterEntry",
+    "TermsFinding",
     "Usage",
     "check_quota",
+    "check_terms",
     "cross_scheme_references",
     "quota_for",
 ]
@@ -135,6 +138,42 @@ class QuotaFinding:
             f"Douay-Rheims and the Clementine Vulgate are already available here and "
             f"carry none either."
         )
+
+
+@dataclass(frozen=True, slots=True)
+class TermsFinding:
+    """A text whose licence obliges something beyond a credit line."""
+
+    usage: Usage
+    licence: Licence
+
+    def message(self) -> str:
+        head = (
+            f"{self.usage.verse_count} distinct verses ({self.usage.words:,} words) of "
+            f"the {self.usage.label}, held under {self.licence.name}."
+        )
+        body = self.licence.notice
+        if self.licence.underlying is None:
+            return f"{head} {body}"
+        # The file says one thing and the edition is another. Printing only the file's
+        # claim would state something untrue in a document meant to be relied on.
+        return (
+            f"{head} {body}\n\nThe file this was parsed from declares "
+            f"{self.licence.name}, but the edition itself is "
+            f"{self.licence.underlying.name}: {self.licence.underlying.notice}"
+        )
+
+
+def check_terms(usage: Usage, licence: Licence | None) -> TermsFinding | None:
+    """Whether this text's licence needs saying out loud.
+
+    Attribution alone does not: the credit line is already printed, and repeating it as a
+    permission note would bury the two that matter -- a text that may not be used
+    commercially, and one whose terms spread to whatever is built from it.
+    """
+    if licence is None or not licence.restricted:
+        return None
+    return TermsFinding(usage=usage, licence=licence)
 
 
 @cache

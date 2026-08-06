@@ -182,6 +182,13 @@ def build_source(
     built: list[tuple[str, int]] = []
     notes: list[str] = []
     for corpus in source.build(archive):
+        # What the files said, where the parser could read it, and only then what the
+        # source claims. One upstream can hold texts under different terms -- the
+        # Patristic Text Archive publishes the Peshitta Old Testament under CC BY-NC and
+        # the New Testament beside it under CC BY -- so trusting the source alone would
+        # state the wrong licence for one of them.
+        terms = corpus.licence or source.terms
+        seen = corpus.licences or ((terms,) if terms else ())
         count = write_corpus(
             home,
             SourceMeta(
@@ -189,10 +196,12 @@ def build_source(
                 label=corpus.label,
                 language=corpus.language,
                 versification=corpus.versification,
-                license=source.license,
+                license=terms.summary if terms else source.license,
                 attribution=source.attribution,
                 source_url=source.homepage,
                 fetched_at=fetched_at,
+                licence_id=terms.id if terms else None,
+                licence_ids=",".join(sorted({licence.id for licence in seen})) or None,
             ),
             corpus.verses,
         )

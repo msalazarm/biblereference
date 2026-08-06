@@ -685,8 +685,37 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 f"                 built up online: {len(chapters)} chapter(s) of "
                 f"{', '.join(books)}"
             )
-        if item.license:
+        terms = item.terms
+        if terms is not None:
+            _say(f"                 terms: {terms.describe()}")
+            if terms.underlying is not None:
+                _say(
+                    f"                 but the edition is {terms.underlying.name}, which "
+                    f"the file's own header does not say"
+                )
+        elif item.license:
             _say(f"                 licence: {item.license}")
+
+    # The question a person actually has, which no per-corpus line answers: of everything
+    # I hold, what may I not use freely? Counted rather than listed, because the list is
+    # long and the number is what decides whether to read it.
+    held = [terms for item in meta if (terms := item.terms) is not None]
+    restricted = [terms for terms in held if terms.restricted]
+    if restricted:
+        forbids = sum(1 for terms in restricted if not terms.commercial)
+        viral = sum(1 for terms in restricted if terms.share_alike)
+        _say("")
+        if forbids:
+            _say(f"{forbids} corpus/corpora may not be used commercially.")
+        if viral:
+            _say(f"{viral} carry share-alike terms; keep derived work separable.")
+        _say("The `terms:` line against each corpus above says which.")
+    unread = [item for item in meta if item.terms is None]
+    if unread:
+        _say(
+            f"\n{len(unread)} corpus/corpora carry a licence nobody has read into the "
+            f"library's own terms, so nothing above speaks for them."
+        )
 
     versification = Versification.load()
     _say(f"\nversification systems: {', '.join(versification.system_names)}")

@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
+from .licences import Licence
 from .refs import VerseRef
 
 __all__ = ["BuiltCorpus", "RemoteFile", "Source", "all_sources", "get_source"]
@@ -41,6 +42,16 @@ class BuiltCorpus:
     verses: list[tuple[VerseRef, str]]
     notes: list[str] = field(default_factory=list)
     """Anything the parser wants the author to know -- books it skipped, and why."""
+    licence: Licence | None = None
+    """What the *files this corpus was built from* actually said, where the parser could
+    read it. Set here rather than only on the source because one upstream can hold texts
+    under different terms: the Patristic Text Archive publishes the Peshitta Old Testament
+    under CC BY-NC and the New Testament beside it under CC BY. Falls back to
+    :attr:`Source.terms` when the files carry no licence of their own."""
+    licences: tuple[Licence, ...] = ()
+    """Every distinct licence seen among those files. One entry is the ordinary case and
+    the invariant a parser should assert; more than one is visible in ``doctor`` rather
+    than merely assumed away."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +64,10 @@ class Source:
     license: str
     files: tuple[RemoteFile, ...]
     build: Callable[[Path], Iterable[BuiltCorpus]]
+    terms: Licence | None = None
+    """The licence as an object, where somebody has read it. ``license`` above stays the
+    human sentence, so a source written before this existed needs no edit; this is what
+    can be *asked* whether the text may be used commercially."""
     attribution: str | None = None
     """Credit line the renderer must print. Set wherever the licence requires it."""
     note: str = ""

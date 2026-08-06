@@ -19,6 +19,16 @@
 {% endfor %}
 
 {% endif %}
+{% if terms %}
+### Non-commercial and share-alike texts
+
+{% for t in terms %}
+**{{ t.label }}** — {{ t.licence }}{% if t.url %} ({{ t.url }}){% endif %}
+
+{{ t.note }}
+
+{% endfor %}
+{% endif %}
 {% if entries %}
 ### Permissions
 

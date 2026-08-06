@@ -22,8 +22,10 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFo
 from .appendix import (
     QuotaFinding,
     RegisterEntry,
+    TermsFinding,
     Usage,
     check_quota,
+    check_terms,
     cross_scheme_references,
     public_domain_note,
     recommended_alternative,
@@ -32,6 +34,7 @@ from .canon import AmbiguousBookError, Canon, NamingScheme, UnknownBookError, bo
 from .corpora.base import Corpus, CorpusError, VerseText, VerseUnavailable
 from .corpora.web import CRAWL_DELAY
 from .emphasis import SpanNotFoundError, apply_spans
+from .licences import Licence
 from .quotecheck import DEFAULT_THRESHOLD, check_quotation
 from .refs import ReferenceParseError, VerseRange, VerseRef, parse_reference
 from .tags import Citation, TagSyntaxError, find_citations
@@ -651,6 +654,16 @@ class Renderer:
         self._record_usage(rendition)
         return rendition
 
+    def _terms_for(self, corpus_id: str) -> Licence | None:
+        """What a corpus is held under, where the database recorded it.
+
+        Read from the corpus rather than carried on the rendition, because the licence is
+        a property of the text and not of any one quotation of it.
+        """
+        corpus = self._corpora.get(corpus_id)
+        meta = getattr(corpus, "meta", None)
+        return getattr(meta, "terms", None)
+
     def _record_usage(self, rendition: Rendition) -> None:
         """Accumulate what has been quoted, for the permissions check.
 
@@ -774,6 +787,28 @@ class Renderer:
             # A text with neither a quota nor a public-domain entry is one whose licence
             # asks only for attribution, and that is already in the list above.
 
+        # What the licence obliges, which is a different question from what the publisher
+        # permits: a quota is about how much you quote, terms are about what you may do
+        # with it afterwards. A CC BY-NC text has no quota at all and still may not be
+        # used commercially.
+        terms: list[TermsFinding] = []
+        for quoted in sorted(self._usage.values(), key=lambda u: u.label):
+            found = check_terms(quoted, self._terms_for(quoted.corpus_id))
+            if found is not None:
+                terms.append(found)
+        for obliged in terms:
+            if not obliged.licence.commercial:
+                report.warnings.append(
+                    f"{obliged.usage.label}: {obliged.licence.name} — may not be used "
+                    f"commercially; see the notices"
+                )
+        if terms and self.config.strict:
+            forbidden = [f.usage.label for f in terms if not f.licence.commercial]
+            if forbidden:
+                report.errors.append(
+                    "quoted texts that may not be used commercially: " + "; ".join(forbidden)
+                )
+
         alternative = recommended_alternative()
         overages = [f for _, f in restricted if f is not None and f.exceeded]
         for finding in overages:
@@ -806,6 +841,15 @@ class Renderer:
                 attributions=report.attributions,
                 public_domain=public_domain,
                 entries=entries,
+                terms=[
+                    {
+                        "label": f.usage.label,
+                        "licence": f.licence.name,
+                        "url": f.licence.url,
+                        "note": f.message(),
+                    }
+                    for f in terms
+                ],
                 document_words=document_words,
                 uses_register=self.config.appendix,
             )

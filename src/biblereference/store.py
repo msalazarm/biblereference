@@ -34,6 +34,7 @@ from typing import Final
 from platformdirs import user_data_dir
 
 from .corpora.base import VerseText, VerseUnavailable
+from .licences import LICENCES, Licence
 from .refs import VerseRef
 
 __all__ = [
@@ -75,7 +76,9 @@ CREATE TABLE IF NOT EXISTS source_meta (
     source_url    TEXT,
     fetched_at    TEXT,
     built_at      TEXT,
-    verse_count   INTEGER NOT NULL DEFAULT 0
+    verse_count   INTEGER NOT NULL DEFAULT 0,
+    licence_id    TEXT,
+    licence_ids   TEXT
 );
 
 -- Which chapters of an incrementally-built corpus have been read in full. A corpus
@@ -186,6 +189,16 @@ class SourceMeta:
     fetched_at: str | None = None
     built_at: str | None = None
     verse_count: int = 0
+    licence_id: str | None = None
+    """The :class:`~biblereference.licences.Licence` this corpus is held under, by id."""
+    licence_ids: str | None = None
+    """Every distinct licence among the files it was built from, comma-separated. One is
+    the ordinary case; more than one is worth being able to see."""
+
+    @property
+    def terms(self) -> Licence | None:
+        """The licence object, where the id is one this library knows."""
+        return LICENCES.get(self.licence_id or "")
 
 
 @dataclass(frozen=True)
@@ -278,6 +291,28 @@ class DataHome:
         return target
 
 
+#: Columns added to ``source_meta`` after the first release, in the order they arrived.
+#:
+#: ``CREATE TABLE IF NOT EXISTS`` does nothing to a table that already exists, so a new
+#: column in :data:`_SCHEMA` never reaches a database somebody has already built. That
+#: matters more here than it looks: :func:`read_meta` does ``SELECT *`` and passes the row
+#: straight to :class:`SourceMeta`, so the first ``doctor`` after an upgrade would raise
+#: ``TypeError`` on a missing keyword rather than say anything useful. Rebuilding is not an
+#: answer -- the database is the better part of a gigabyte and takes an hour.
+_ADDED_COLUMNS: Final = (
+    ("source_meta", "licence_id", "TEXT"),
+    ("source_meta", "licence_ids", "TEXT"),
+)
+
+
+def _migrate(connection: sqlite3.Connection) -> None:
+    """Bring an older database up to the current schema. Safe to run every time."""
+    for table, column, kind in _ADDED_COLUMNS:
+        present = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+        if column not in present:
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
+
+
 @contextmanager
 def open_store(home: DataHome) -> Iterator[sqlite3.Connection]:
     """Open the verse database, creating it if needed."""
@@ -286,6 +321,7 @@ def open_store(home: DataHome) -> Iterator[sqlite3.Connection]:
     try:
         connection.executescript(_SCHEMA)
         connection.executescript(SEARCH_SCHEMA)
+        _migrate(connection)
         yield connection
         connection.commit()
     finally:
@@ -311,8 +347,9 @@ def write_corpus(home: DataHome, meta: SourceMeta, verses: Iterable[tuple[VerseR
         )
         connection.execute(
             "INSERT OR REPLACE INTO source_meta (corpus, label, language, versification, "
-            "license, attribution, source_url, fetched_at, built_at, verse_count) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "license, attribution, source_url, fetched_at, built_at, verse_count, "
+            "licence_id, licence_ids) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 meta.corpus,
                 meta.label,
@@ -324,6 +361,8 @@ def write_corpus(home: DataHome, meta: SourceMeta, verses: Iterable[tuple[VerseR
                 meta.fetched_at,
                 datetime.now(UTC).isoformat(timespec="seconds"),
                 len(rows),
+                meta.licence_id,
+                meta.licence_ids,
             ),
         )
     return len(rows)
@@ -398,10 +437,12 @@ def add_chapter(
     with open_store(home) as connection:
         connection.execute(
             "INSERT INTO source_meta (corpus, label, language, versification, license, "
-            "attribution, source_url, fetched_at, built_at, verse_count) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0) "
+            "attribution, source_url, fetched_at, built_at, verse_count, licence_id, "
+            "licence_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?) "
             "ON CONFLICT(corpus) DO UPDATE SET label=excluded.label, "
             "attribution=COALESCE(excluded.attribution, source_meta.attribution), "
+            "licence_id=COALESCE(excluded.licence_id, source_meta.licence_id), "
+            "licence_ids=COALESCE(excluded.licence_ids, source_meta.licence_ids), "
             "built_at=excluded.built_at",
             (
                 meta.corpus,
@@ -413,6 +454,8 @@ def add_chapter(
                 meta.source_url,
                 meta.fetched_at or now,
                 now,
+                meta.licence_id,
+                meta.licence_ids,
             ),
         )
         connection.execute(
