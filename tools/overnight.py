@@ -43,19 +43,18 @@ from biblereference.judge import Judge, Verdict, open_judgements
 from biblereference.store import DataHome
 from biblereference.versification import PIVOT, Versification
 
-#: One server on each machine. The other two are reserved for another project, and the one
-#: left on this machine is deliberately the capable one: ``127.0.0.1:8080`` has four slots,
-#: a 128k context and the vision model loaded, which is what you want for anything
-#: interactive, while this run wants only two verses in and four tokens out.
+#: All four, when nothing else wants them. Two of these -- ``100.98.85.58:8090`` and
+#: ``127.0.0.1:8080`` -- belong to another project and must be dropped from this tuple the
+#: moment it needs them again; the run is resumable, so stopping and restarting on two
+#: costs only the judgements in flight.
 #:
-#: ``127.0.0.1:8080`` is left alone: it has four slots, a 128k context and the vision model
-#: loaded, and it is the one worth having for anything interactive. Measured, taking it
-#: instead of ``:8081`` would buy 6.1 judgements a second against 5.8 -- five percent, for
-#: the machine's only capable local server. The bottleneck is the round-robin share each
-#: server gets, not any one server's slots, which is why the one-slot server costs so
-#: little.
+#: The bottleneck is the round-robin share each server gets rather than any one server's
+#: slots, which is why the count matters more than which ones: measured on two, this run
+#: does about six judgements a second, and 128,000 verses is eight hours of that.
 SERVERS = (
     "http://100.98.85.58:8080",
+    "http://100.98.85.58:8090",
+    "http://127.0.0.1:8080",
     "http://127.0.0.1:8081",
 )
 
@@ -95,8 +94,8 @@ def phase_tally(connection, phase: str) -> collections.Counter[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    # Five slots across the two servers this run may use, so sixteen workers only queued
-    # requests inside llama.cpp where they could not be timed out or retried.
+    # Matched to the slots actually available: sixteen workers against five slots only
+    # queued requests inside llama.cpp, where they could be neither timed out nor retried.
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--database", default="judgement2.sqlite")
     parser.add_argument("--phases", default="suspicions,gap,confirmed")

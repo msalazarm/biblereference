@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from ..canon import is_known
+from ..licences import get
 from ..refs import VerseRef
 from ..sources import BuiltCorpus, RemoteFile, Source
 from ..versification import Versification, VersificationError
@@ -267,6 +268,7 @@ DRA: Final = Source(
     label="Douay-Rheims 1899 American Edition",
     homepage="https://ebible.org/find/details.php?id=engDRA",
     license="Public domain.",
+    terms=get("public-domain"),
     attribution=None,
     files=(RemoteFile(url=f"https://ebible.org/Scriptures/{_DRA_FILE}", name=_DRA_FILE),),
     build=build_dra,
@@ -278,6 +280,7 @@ WEBC: Final = Source(
     label="World English Bible, Catholic Edition",
     homepage="https://ebible.org/find/details.php?id=eng-web-c",
     license="Public domain.",
+    terms=get("public-domain"),
     attribution=None,
     files=(RemoteFile(url=f"https://ebible.org/Scriptures/{_WEBC_FILE}", name=_WEBC_FILE),),
     build=build_webc,
@@ -289,6 +292,7 @@ LATVUC: Final = Source(
     label="Clementine Vulgate",
     homepage="https://ebible.org/find/details.php?id=latVUC",
     license="Public domain.",
+    terms=get("public-domain"),
     attribution=None,
     files=(RemoteFile(url=f"https://ebible.org/Scriptures/{_LATVUC_FILE}", name=_LATVUC_FILE),),
     build=build_latvuc,
@@ -368,6 +372,13 @@ def _english_source(entry: Mapping[str, Any]) -> Source:
         license="Public domain." if public_domain else str(entry["copyright"]),
         # eBible redistributes these by the holder's permission; the credit line is the
         # holder's own copyright statement, which is what a notice has to reproduce.
+        #
+        # The flag is what the table records, and it is the only structured thing eBible
+        # publishes about terms -- so "by permission" here means exactly that and no more.
+        # It is not a grant of commercial use, and `by-permission` says so rather than
+        # letting fourteen copyrighted translations read as freely as the thirty-two that
+        # really are public domain.
+        terms=get("public-domain") if public_domain else get("by-permission"),
         attribution=None if public_domain else str(entry["copyright"]),
         files=(RemoteFile(url=f"https://ebible.org/Scriptures/{name}", name=name),),
         build=_english_builder(entry),

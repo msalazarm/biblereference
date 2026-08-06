@@ -208,3 +208,32 @@ def test_an_underlying_licence_governs_rather_than_the_header() -> None:
 def test_a_plain_licence_governs_itself() -> None:
     for licence in LICENCES.values():
         assert licence.effective is licence
+
+
+def test_every_registered_source_says_what_its_terms_are() -> None:
+    """Three exceptions, and each is stronger than a declaration rather than weaker.
+
+    `pta`, `perseus-wh` and `first1k` read the licence out of every file they parse, which
+    is the only correct thing to do where it varies inside one repository -- the Patristic
+    Text Archive publishes the Peshitta Old Testament under CC BY-NC and the New Testament
+    beside it under CC BY. A source-level `terms` would have to be wrong for one of them.
+    """
+    from biblereference.sources import all_sources
+
+    per_file = {"pta", "perseus-wh", "first1k"}
+    undeclared = {source.id for source in all_sources().values() if source.terms is None} - per_file
+    assert undeclared == set()
+
+
+def test_the_english_bibles_are_split_by_the_flag_the_table_records() -> None:
+    """Thirty-two are public domain and fourteen are redistributed by permission, and
+    "by permission" is not a grant of commercial use. Reading them alike would let
+    fourteen copyrighted translations look as free as the thirty-two that are not.
+    """
+    from biblereference.corpora.ebible import ENGLISH
+
+    kinds = {source.id: source.terms.id for source in ENGLISH if source.terms}
+    assert sorted(set(kinds.values())) == ["by-permission", "public-domain"]
+    assert sum(1 for value in kinds.values() if value == "public-domain") == 32
+    assert sum(1 for value in kinds.values() if value == "by-permission") == 14
+    assert not get("by-permission").commercial

@@ -29,6 +29,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Final
 
+from ..licences import get
 from ..refs import VerseRef
 from ..sources import BuiltCorpus, RemoteFile, Source
 
@@ -123,6 +124,9 @@ SOURCE: Final = Source(
         "Text public domain (H. B. Swete, d. 1917). The compilation is GPL-3.0, so it is "
         "fetched rather than redistributed."
     ),
+    # Swete died in 1917; the words are out of copyright. The GPL applies to the
+    # repository's compilation of them, which is why this fetches rather than vendors.
+    terms=get("public-domain"),
     attribution=(
         "Septuagint: H. B. Swete, The Old Testament in Greek (1930), digitised by "
         "Eliran Wong (https://github.com/eliranwong/LXX-Swete-1930)."

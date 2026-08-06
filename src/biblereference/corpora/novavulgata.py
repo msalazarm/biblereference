@@ -46,6 +46,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Final
 
+from ..licences import get
 from ..refs import VerseRef
 from ..sources import BuiltCorpus, RemoteFile, Source
 from ..versification import Versification
@@ -177,6 +178,8 @@ SOURCE: Final = Source(
         "Nova Vulgata, copyright Libreria Editrice Vaticana. Fetched for personal study "
         "and archived; not redistributed."
     ),
+    # The one text here that is still in copyright.
+    terms=get("vatican"),
     attribution=(
         "Latin: Nova Vulgata, Bibliorum Sacrorum Editio, © Libreria Editrice Vaticana. "
         "Used for private study."

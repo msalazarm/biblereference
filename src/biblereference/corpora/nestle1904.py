@@ -18,6 +18,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Final
 
+from ..licences import get
 from ..refs import VerseRef
 from ..sources import BuiltCorpus, RemoteFile, Source
 
@@ -69,6 +70,8 @@ SOURCE: Final = Source(
         "Nestle 1904 text is public domain. The repository declares no single licence; "
         "see the README in each of its directories."
     ),
+    # The 1904 text itself, which is what is stored.
+    terms=get("public-domain"),
     attribution=(
         "Greek New Testament: Eberhard Nestle, Novum Testamentum Graece (1904); "
         "transcription by Diego Santos, morphology by Ulrik Sandborg-Petersen, markup by "

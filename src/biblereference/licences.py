@@ -197,6 +197,60 @@ LICENCES: Final[dict[str, Licence]] = {
             ),
         ),
         Licence(
+            id="fetched-for-study",
+            name="Under copyright, fetched for personal study",
+            url=None,
+            commercial=False,
+            share_alike=False,
+            attribution=True,
+            rank=5,
+            summary=(
+                "Under copyright, with no licence to redistribute. Held a chapter at a "
+                "time for personal study; how much of it may be quoted is a quota rather "
+                "than a licence, and Appendix Z measures it."
+            ),
+            notice=(
+                "Under copyright. This library holds no licence to it and fetches it a "
+                "chapter at a time for personal study. What may be quoted is set by the "
+                "publisher's own limit, which the permissions section above measures."
+            ),
+        ),
+        Licence(
+            id="by-permission",
+            name="Redistributed by the holder's permission",
+            url=None,
+            commercial=False,
+            share_alike=False,
+            attribution=True,
+            rank=3,
+            summary=(
+                "Under copyright, redistributed by the holder's permission. The credit "
+                "line is the holder's own copyright statement."
+            ),
+            notice=(
+                "Under copyright and redistributed by permission of the holder, whose "
+                "copyright statement is reproduced above. Permission to redistribute is "
+                "not permission to use commercially; ask the holder."
+            ),
+        ),
+        Licence(
+            id="vatican",
+            name="© Libreria Editrice Vaticana",
+            url="https://www.vatican.va/archive/bible/nova_vulgata/documents/nova-vulgata_index_lt.html",
+            commercial=False,
+            share_alike=False,
+            attribution=True,
+            rank=4,
+            summary=(
+                "Copyright Libreria Editrice Vaticana. Fetched for personal study; no "
+                "licence to redistribute is granted."
+            ),
+            notice=(
+                "The Nova Vulgata is copyright Libreria Editrice Vaticana. It is held here "
+                "for personal study. Quoting it in published work needs their permission."
+            ),
+        ),
+        Licence(
             id="coptic-scriptorium",
             name="Coptic Scriptorium terms",
             url="https://copticscriptorium.org/download",

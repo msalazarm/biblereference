@@ -337,6 +337,7 @@ class BibleGatewayCorpus:
             language=self.language,
             versification=self.versification,
             license=f"{self.label}: under copyright. Fetched for personal study.",
+            licence_id="fetched-for-study",
             attribution=self._attribution,
             source_url=_BASE,
         )

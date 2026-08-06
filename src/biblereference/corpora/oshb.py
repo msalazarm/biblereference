@@ -23,6 +23,7 @@ from typing import Final
 
 from lxml import etree
 
+from ..licences import get
 from ..refs import VerseRef
 from ..sources import BuiltCorpus, RemoteFile, Source
 
@@ -81,6 +82,9 @@ SOURCE: Final = Source(
     label="Westminster Leningrad Codex",
     homepage="https://github.com/openscriptures/morphhb",
     license="Text: public domain. Lemma and morphology: CC BY 4.0.",
+    # Only the text is stored; the morphology this repository also carries, which is
+    # the CC BY part, is not parsed and not held.
+    terms=get("public-domain"),
     attribution=(
         "Hebrew: Westminster Leningrad Codex, via the Open Scriptures Hebrew Bible "
         "(https://github.com/openscriptures/morphhb). Text public domain."
