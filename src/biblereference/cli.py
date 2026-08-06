@@ -387,9 +387,16 @@ def _match_from(record: dict[str, object], searcher: Searcher) -> Match | None:
 #: language: choosing for faithfulness alone once put English against Latin and rejected
 #: every book at similarity 0.02.
 COVERAGE_WITNESSES: Final[dict[str, tuple[tuple[str, str], ...]]] = {
-    "org": (("ojb", "en"), ("wlc", "hbo"), ("n1904", "grc")),
+    "org": (
+        ("ojb", "en"),
+        ("wlc", "hbo"),
+        ("n1904", "grc"),
+        ("wh", "grc"),
+        ("peshitta-ot", "syc"),
+        ("peshitta-nt", "syc"),
+    ),
     "eng": (("web", "en"), ("kjv", "en")),
-    "lxx": (("brenton", "en"), ("swete", "grc")),
+    "lxx": (("brenton", "en"), ("rahlfs", "grc"), ("swete", "grc")),
     "vul": (("dra", "en"), ("latvuc", "la")),
     "nvl": (("novavulgata", "la"),),
 }

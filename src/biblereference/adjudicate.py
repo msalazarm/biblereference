@@ -109,9 +109,25 @@ class Task:
 #: witness was used is recorded, so a finding that rests only on the fallback can be told
 #: apart from one that does not.
 WITNESSES: Mapping[str, Sequence[tuple[str, str]]] = {
-    "org": (("wlc", "hbo"), ("n1904", "grc"), ("ojb", "en"), ("web", "en")),
+    # Order is what matters here: `witness_for` takes the first that holds the verse, so
+    # the Peshitta sits ahead of the English ones. That is the whole of its value. `wlc`
+    # has no deuterocanon and `n1904` no Old Testament, so before this every org-side
+    # comparison in Tobit, Judith, Sirach, Wisdom and Maccabees fell through to an
+    # English-tradition text speaking for org -- which is the exact fault that invalidated
+    # the first overnight run and had to be discovered from the inside.
+    "org": (
+        ("wlc", "hbo"),
+        ("n1904", "grc"),
+        ("peshitta-ot", "syc"),
+        ("peshitta-nt", "syc"),
+        ("ojb", "en"),
+        ("web", "en"),
+    ),
     "eng": (("web", "en"), ("kjv", "en"), ("asv", "en")),
-    "lxx": (("brenton", "en"), ("swete", "grc")),
+    # Rahlfs before Swete: it is the standard critical text, and it follows what `lxx`
+    # declares on 85% of chapters against Swete's 81% -- including the Psalms of Solomon,
+    # where it matches on all eighteen and Swete on three.
+    "lxx": (("brenton", "en"), ("rahlfs", "grc"), ("swete", "grc")),
     "vul": (("dra", "en"), ("latvuc", "la")),
     "nvl": (("novavulgata", "la"),),
 }
@@ -119,7 +135,24 @@ WITNESSES: Mapping[str, Sequence[tuple[str, str]]] = {
 #: Corpora that follow the numbering of the system they speak for, as a matter of textual
 #: tradition rather than of counting. A flag raised against anything else is provisional.
 PRIMARY: frozenset[str] = frozenset(
-    {"wlc", "n1904", "ojb", "brenton", "swete", "latvuc", "dra", "novavulgata", "web", "kjv", "asv"}
+    {
+        "wlc",
+        "n1904",
+        "ojb",
+        "brenton",
+        "swete",
+        "rahlfs",
+        "latvuc",
+        "dra",
+        "novavulgata",
+        "web",
+        "kjv",
+        "asv",
+        # The Peshitta is a second-century translation that follows the Hebrew's divisions,
+        # not an edition arranged to somebody's numbering after the fact.
+        "peshitta-ot",
+        "peshitta-nt",
+    }
 )
 
 #: ...except where the witness is standing in for a *different* system. ``web`` speaks for
@@ -143,15 +176,30 @@ class Witnesses:
             for corpus, _ in pairs
         }
 
-    def for_chapter(self, system: str, book: str, chapter: int) -> Iterator[tuple[str, str]]:
-        """Every usable witness for this chapter, best first."""
-        for corpus, language in WITNESSES.get(system, ()):
+    def for_chapter(
+        self, system: str, book: str, chapter: int, *, language: str | None = None
+    ) -> Iterator[tuple[str, str]]:
+        """Every usable witness for this chapter, best first.
+
+        ``language`` narrows to witnesses written in it. Calibration needs that: without
+        it, an ``org`` entry is always answered by the first faithful witness -- ``wlc``,
+        in Hebrew -- so a row meant to measure the model's Syriac would quietly measure
+        its Hebrew instead, and the Syriac pairs would go out untested.
+        """
+        for corpus, found in WITNESSES.get(system, ()):
+            if language is not None and found != language:
+                continue
             if (book, chapter) in self._faithful[(corpus, system)]:
-                yield corpus, language
+                yield corpus, found
 
 
 def witness_for(
-    witnesses: Witnesses, texts: _Texts, system: str, ref: VerseRef
+    witnesses: Witnesses,
+    texts: _Texts,
+    system: str,
+    ref: VerseRef,
+    *,
+    language: str | None = None,
 ) -> tuple[str, str] | None:
     """A corpus faithful to ``system`` here that actually holds this verse.
 
@@ -162,9 +210,11 @@ def witness_for(
     other witnesses carry. It matters more since ``wlc`` came first, that being a Hebrew
     text with no New Testament and no deuterocanon.
     """
-    for corpus, language in witnesses.for_chapter(system, ref.book, int(ref.chapter)):
+    for corpus, found in witnesses.for_chapter(
+        system, ref.book, int(ref.chapter), language=language
+    ):
         if texts.verse(corpus, ref):
-            return corpus, language
+            return corpus, found
     return None
 
 
@@ -179,7 +229,14 @@ def witness_for(
 #: The point is coverage of *language pairs*, not of books: the run is overwhelmingly Latin
 #: against something, and an aggregate that looked fine could hide the one pair that
 #: matters being no better than a coin.
-CALIBRATION: Sequence[tuple[str, str, str, str]] = (
+#: A fifth element, where present, forces the language pair as ``source-target``.
+#:
+#: Without it each side is answered by its first faithful witness, which for ``org`` is
+#: ``wlc`` in Hebrew and for ``lxx`` is Brenton in English -- so a row meant to measure the
+#: model's Syriac or its Greek would quietly measure something else, and the pair it was
+#: written for would go out untested. The pair is written the way
+#: :class:`Calibration` keys it, so a row and the thing it measures cannot drift apart.
+CALIBRATION: Sequence[tuple[str, str, str, str] | tuple[str, str, str, str, str]] = (
     # vul -> org, read by hand this session
     ("vul", "MAT 17:14", "MAT 17:15", "MAT 17:13"),
     ("vul", "MIC 5:11", "MIC 5:10", "MIC 5:12"),
@@ -191,6 +248,26 @@ CALIBRATION: Sequence[tuple[str, str, str, str]] = (
     ("vul", "PSA 22:1", "PSA 23:1", "PSA 23:2"),
     ("vul", "GEN 1:1", "GEN 1:1", "GEN 1:2"),
     ("vul", "ISA 53:5", "ISA 53:5", "ISA 53:6"),
+    # Every pair the run can now produce and nothing did before. The Peshitta answers for
+    # `org` wherever the Hebrew cannot -- which is the whole deuterocanon and the New
+    # Testament -- and Rahlfs answers for `lxx` in Greek, so the pivot is read in Hebrew
+    # against it. None of these three had a single calibration row until the corpora that
+    # produce them arrived.
+    ("vul", "GEN 1:1", "GEN 1:1", "GEN 1:2", "en-syc"),
+    ("vul", "ISA 53:5", "ISA 53:5", "ISA 53:6", "en-syc"),
+    ("vul", "MAT 17:14", "MAT 17:15", "MAT 17:13", "en-syc"),
+    ("vul", "JON 2:1", "JON 2:1", "JON 2:2", "en-syc"),
+    ("vul", "REV 20:8", "REV 20:9", "REV 20:7", "en-syc"),
+    ("nvl", "GEN 1:1", "GEN 1:1", "GEN 1:2", "la-syc"),
+    ("nvl", "ISA 53:5", "ISA 53:5", "ISA 53:6", "la-syc"),
+    ("nvl", "JHN 3:16", "JHN 3:16", "JHN 3:17", "la-syc"),
+    ("nvl", "MAT 5:4", "MAT 5:4", "MAT 5:5", "la-syc"),
+    ("nvl", "EXO 20:3", "EXO 20:3", "EXO 20:4", "la-syc"),
+    ("lxx", "GEN 1:1", "GEN 1:1", "GEN 1:2", "grc-hbo"),
+    ("lxx", "ISA 53:5", "ISA 53:5", "ISA 53:6", "grc-hbo"),
+    ("lxx", "EXO 20:3", "EXO 20:3", "EXO 20:4", "grc-hbo"),
+    ("lxx", "DEU 6:4", "DEU 6:4", "DEU 6:5", "grc-hbo"),
+    ("lxx", "MAL 3:22", "MAL 4:4", "MAL 4:5", "grc-hbo"),
     # nvl -> org: the pair the whole run rests on, and the only one held in Latin alone
     ("nvl", "GEN 1:1", "GEN 1:1", "GEN 1:2"),
     ("nvl", "PSA 23:1", "PSA 23:1", "PSA 23:2"),
@@ -267,16 +344,32 @@ class Calibration:
         return self.correct[languages] / seen if seen else 0.0
 
     def admits(self, languages: str) -> bool:
-        # An untested pair is admitted: it means calibration had no case for it, which is a
-        # gap in the calibration set rather than evidence against the model.
-        return not self.informative[languages] or self.rate(languages) >= THRESHOLD
+        """Whether answers in this language pair may be believed.
+
+        An unmeasured pair is refused, not admitted. The rule used to be the other way
+        round -- an untested pair meant calibration had no case for it, which was a gap in
+        the calibration set rather than evidence against the model -- and that held while
+        every pair a run could produce was in the set.
+
+        Syriac broke it. A Peshitta witness produces ``syc-hbo``, ``syc-en`` and
+        ``syc-grc``, none of which any calibration row could reach, and every one of them
+        would have been admitted untested. A whole sweep would then have reported
+        confidently on an instrument nobody had measured, which is worse than not sweeping:
+        by this module's own argument, an unmeasured instrument is not a weak result but no
+        result at all.
+        """
+        return bool(self.informative[languages]) and self.rate(languages) >= THRESHOLD
 
     def describe(self) -> str:
         lines = []
         for languages in sorted(self.asked):
             informative = self.informative[languages]
             share = informative / self.asked[languages] if self.asked[languages] else 0.0
-            verdict = "admitted" if self.admits(languages) else "EXCLUDED"
+            verdict = (
+                "admitted"
+                if self.admits(languages)
+                else ("EXCLUDED -- never measured" if not informative else "EXCLUDED")
+            )
             lines.append(
                 f"  {languages:10} {self.correct[languages]:>3}/{informative:<3} correct "
                 f"({self.rate(languages):.0%}), {share:.0%} of {self.asked[languages]} "
@@ -301,8 +394,14 @@ def calibrate(
     witnesses = Witnesses(home, vrs)
     result = Calibration()
     try:
-        for system, source, right, wrong in CALIBRATION:
-            task = _calibration_task(witnesses, texts, vrs, system, source, right, wrong)
+        for row in CALIBRATION:
+            system, source, right, wrong = row[:4]
+            pair = row[4] if len(row) > 4 else None
+            task = _calibration_task(
+                witnesses, texts, vrs, system, source, right, wrong, languages=pair
+            )
+            if task is None and pair is not None:
+                report(f"  calibration: no witness pair for {pair} at {system} {source}")
             if task is None:
                 continue
             judged = judge.judge(
@@ -330,14 +429,17 @@ def _calibration_task(
     source: str,
     right: str,
     wrong: str,
+    *,
+    languages: str | None = None,
 ) -> Task | None:
     src = _parse(source, system)
     mapped = _parse(right, PIVOT)
     control = _parse(wrong, PIVOT)
     if src is None or mapped is None or control is None:
         return None
-    found = witness_for(witnesses, texts, system, src)
-    target = witness_for(witnesses, texts, PIVOT, mapped)
+    left, _, right_language = (languages or "").partition("-")
+    found = witness_for(witnesses, texts, system, src, language=left or None)
+    target = witness_for(witnesses, texts, PIVOT, mapped, language=right_language or None)
     if found is None or target is None or not texts.verse(target[0], control):
         return None
     return Task(src, mapped, control, found[0], target[0], f"{found[1]}-{target[1]}")

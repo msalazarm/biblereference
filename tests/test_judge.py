@@ -190,3 +190,50 @@ def test_work_is_shared_between_servers_by_a_counter() -> None:
 
     hosts = [call["url"].split("/v1/")[0] for call in sent]
     assert hosts.count("http://one") == hosts.count("http://two") == 2
+
+
+# --------------------------------------------------------------------------------------
+# Calibration, and the pair nobody measured
+# --------------------------------------------------------------------------------------
+
+
+def test_an_unmeasured_language_pair_is_refused_rather_than_admitted() -> None:
+    """The rule used to be the other way round, and Syriac broke it.
+
+    An untested pair was admitted, on the reasoning that it meant calibration had no case
+    for it -- a gap in the calibration set rather than evidence against the model. That
+    held while every pair a run could produce was in the set. A Peshitta witness produces
+    `syc-hbo`, `syc-en` and `syc-grc`, which no calibration row could reach, and every one
+    would have been admitted untested: a whole sweep reporting confidently on an
+    instrument nobody had measured.
+    """
+    from biblereference.adjudicate import Calibration
+
+    calibration = Calibration()
+    assert not calibration.admits("syc-hbo"), "never measured is not the same as fine"
+
+    calibration.asked["la-syc"] = 10
+    calibration.informative["la-syc"] = 8
+    calibration.correct["la-syc"] = 8
+    assert calibration.admits("la-syc")
+
+    calibration.asked["en-syc"] = 10
+    calibration.informative["en-syc"] = 8
+    calibration.correct["en-syc"] = 4
+    assert not calibration.admits("en-syc"), "measured and bad is still refused"
+
+
+def test_the_report_distinguishes_measured_and_unmeasured_exclusions() -> None:
+    """Two very different reasons to refuse a pair, and the reader needs to tell them
+    apart: one says the model cannot read this, the other says nobody asked.
+    """
+    from biblereference.adjudicate import Calibration
+
+    calibration = Calibration()
+    calibration.asked["syc-hbo"] = 0
+    calibration.asked["en-hbo"] = 4
+    calibration.informative["en-hbo"] = 4
+    calibration.correct["en-hbo"] = 1
+    described = calibration.describe()
+    assert "never measured" in described
+    assert described.count("EXCLUDED") == 2

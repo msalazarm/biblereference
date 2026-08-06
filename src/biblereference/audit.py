@@ -75,8 +75,10 @@ class Witness:
 #: without which two thirds of the interesting disagreements are unreachable.
 WITNESSES: Final[dict[tuple[str, str], Witness]] = {
     ("org", "en"): Witness("ojb", "org", "en"),
+    ("org", "syc"): Witness("peshitta-ot", "org", "syc"),
     ("eng", "en"): Witness("web", "eng", "en"),
     ("lxx", "en"): Witness("brenton", "lxx", "en"),
+    ("lxx", "grc"): Witness("rahlfs", "lxx", "grc"),
     ("vul", "en"): Witness("dra", "vul", "en"),
     ("vul", "la"): Witness("latvuc", "vul", "la"),
     ("nvl", "la"): Witness("novavulgata", "nvl", "la"),
@@ -199,11 +201,16 @@ def witness_pairs() -> list[tuple[Witness, Witness]]:
     """Every family pair that can be checked with both sides in one language."""
     pairs: list[tuple[Witness, Witness]] = []
     families = ["org", "eng", "lxx", "vul", "nvl"]
+    # Derived from the table rather than written out, so that adding a witness in a new
+    # language cannot be silently ignored -- which is what a hardcoded ("la", "en") did to
+    # the Syriac when it arrived. Latin first for the reason below; the rest by name, so
+    # the order is at least stable.
+    languages = ["la", *sorted({key[1] for key in WITNESSES} - {"la"})]
     for i, left in enumerate(families):
         for right in families[i + 1 :]:
             shared = [
                 (WITNESSES[(left, lang)], WITNESSES[(right, lang)])
-                for lang in ("la", "en")
+                for lang in languages
                 if (left, lang) in WITNESSES and (right, lang) in WITNESSES
             ]
             # Latin first where both exist: comparing two Latin editions measures the

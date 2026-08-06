@@ -182,13 +182,34 @@ Public domain or freely licensed, fetched once and then archived:
 | English of the Vulgate | [Douay-Rheims 1899](https://ebible.org/find/details.php?id=engDRA) | for citations written in Vulgate numbering |
 | Latin | [Clementine Vulgate](https://ebible.org/find/details.php?id=latVUC) | Jerome as the Church received him; public domain |
 | Latin | [Nova Vulgata](https://www.vatican.va/archive/bible/nova_vulgata/documents/nova-vulgata_index_lt.html) | the official text since 1979, complete and in its own numbering; © Libreria Editrice Vaticana |
+| Latin | Castellio 1551, via [Corpus Corporum](https://mlat.uzh.ch) | translated from the originals owing nothing to Jerome — the only non-Vulgate Latin here; Genesis and the Gospels only |
+| **Syriac** | Peshitta Old Testament (ETCBC) and New Testament, via [PTA](https://github.com/PatristicTextArchive/pta_data) | a complete Syriac Bible; the Old Testament is **CC BY-NC** |
+| Septuagint | [Rahlfs 1935](https://github.com/PatristicTextArchive/pta_data), twice — PTA and Corpus Corporum | the standard critical text, in two independent transcriptions that agree on 96% of verses |
+| Greek NT | [SBLGNT](https://github.com/PatristicTextArchive/pta_data) and [Westcott–Hort](https://github.com/PerseusDL/canonical-greekLit) | three Greek New Testaments now, so a variant is visible rather than merely arguable |
+| **Coptic** | Mark 1 in Sahidic, via [First1KGreek](https://github.com/OpenGreekAndLatin/First1KGreek) | 45 verses; the seed of a language, not a coverage |
+| English of the LXX | Ottley's Isaiah 1904, via First1KGreek | the Septuagint *as one manuscript has it*, which Brenton is not |
 | Versification | [Copenhagen Alliance](https://github.com/Copenhagen-Alliance/versification-specification) | org / eng / lxx / vul maps |
 
-NA28, the BHS apparatus, and Rahlfs-Hanhart are under copyright and cannot be included.
-What you get instead are the public-domain diplomatic editions above: Nestle 1904 (61 words
-from NA28 across the whole New Testament), the Leningrad Codex that BHS itself prints, and
-Swete's Vaticanus-based Septuagint. Defensible, but not the modern eclectic editions —
-worth knowing before citing.
+NA28 and the BHS apparatus are under copyright and cannot be included. What you get instead
+are the public-domain and freely-licensed critical editions above: Nestle 1904 (61 words
+from NA28 across the whole New Testament), the SBL Greek New Testament, Westcott–Hort, the
+Leningrad Codex that BHS itself prints, and both Swete's Vaticanus-based Septuagint and
+Rahlfs. Defensible, and no longer only the diplomatic editions — but still not NA28.
+
+### What the licences oblige
+
+Most of the library is public domain or asks only for a credit line, which the renderer
+already prints. Six corpora are not, and `biblereference doctor` says which:
+
+    3 corpus/corpora may not be used commercially.
+    4 carry share-alike terms; keep derived work separable.
+
+The licence is read **per file**, never per repository, because it genuinely varies inside
+one: the Patristic Text Archive publishes the Peshitta Old Testament under CC BY-NC and the
+New Testament beside it under CC BY. Where a file's declared licence is not the edition's
+own terms — its Greek New Testament says CC BY 4.0 and the text is the SBLGNT, whose terms
+are not CC BY — the stricter of the two governs, because the other direction tells you that
+you may do something you may not.
 
 ## Copyrighted translations
 
