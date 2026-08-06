@@ -227,6 +227,42 @@ No corpus exists in either. Only the structural invariants in `tests/test_alignm
 apply. Nothing to do unless a Russian Synodal corpus is added; noted so it is not mistaken
 for verified.
 
+Still true after the TEI import, which added Syriac and Coptic but nothing Slavonic.
+
+### 8. `nvl` still has no same-language pivot partner
+
+`nvl` is checked at 0% by the coverage walk because its only witness is Latin and `org` has
+none. The TEI import did not fix this and it is worth recording *why*, since one of the
+texts it brought looked like the answer.
+
+Castellio translated the Bible into Latin in 1551 from the Hebrew and Greek, owing nothing
+to the Vulgate — so it ought to be an `org` corpus in Latin, which is exactly the missing
+piece. Measured, it is not: about 90% against every shipped system with `eng` winning
+narrowly, and its Genesis 31/32 is 55 verses and 32, the English tradition's division where
+the Hebrew has 54 and 33.
+
+The remaining candidate is Jerome's *Psalterium iuxta Hebraeos*, translated from the Hebrew
+and never adopted liturgically, at Corpus Corporum idno 656. It would cover the Psalms only,
+which is where `vul` and `nvl` diverge most, so it is worth more than its size suggests. The
+obstacle is that the transcription has 49 headings for 150 psalms and the headings are Hebrew
+superscriptions rather than numbers: segmenting it is an alignment job against a psalter of
+known divisions, not a parse.
+
+### 9. A book cannot be told it got longer
+
+`org` declares 42 chapters of `ENO`. 1 Enoch conventionally has 108, and the texts on hand
+run to 89 (Greek), 108 (German) and a Latin fragment that is chapter 106 alone.
+`fix_max_verses` raises when the chapter index is out of range, by design, so there is no way
+to extend a book — only to correct a verse count inside one.
+
+What is needed is an `extend_books` correction kind: append-only, able to lengthen and never
+to alter an existing count, with a recorded reason. It changes declared structure rather than
+mappings, so it wants its own invariant — at minimum that no existing mapping is left
+pointing outside the corrected range — and it moves `fingerprint()`, which every dependent is
+expected to notice.
+
+Until it exists, `ENO` stays modelled with no text, and 1 Enoch stays on disk unimported.
+
 ### 7. Exodus 39 — ~~deliberately not fixed~~ settled by reading
 
 **Done.** The diagnosis here was right in every particular and so was the refusal to act on
