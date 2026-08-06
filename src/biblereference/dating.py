@@ -48,6 +48,8 @@ TRANSLATED: Final[dict[str, int | None]] = {
     "rahlfs": None,  # Rahlfs 1935: another critical edition of the same ancient Greek
     "rahlfs-alt": None,  # the second text where Rahlfs prints two
     "sblgnt": None,  # the SBL Greek New Testament: a critical edition, ancient wording
+    "wh": None,  # Westcott and Hort 1881, likewise a critical edition of ancient Greek
+    "coptic-mark": None,  # the Sahidic version: a third-century translation
     # The Peshitta is a translation, but a second-century one, so its wording is as
     # ancient as anything else in this section and nothing here can be anachronistic to it.
     "peshitta-ot": None,
@@ -67,6 +69,7 @@ TRANSLATED: Final[dict[str, int | None]] = {
     "dra": 1752,  # Challoner's revision, which is the Douay-Rheims anyone reads
     "webster": 1833,
     "brenton": 1844,
+    "ottley": 1904,  # an English translation of the Septuagint as Codex Alexandrinus has it
     "lee": 1853,
     "oke": 1862,  # Etheridge's English of the Targum
     "ylt": 1862,

@@ -175,3 +175,66 @@ def test_every_corpus_declares_a_versification_this_library_ships() -> None:
         f"{corpus} -> {system}" for corpus, system in declared if system not in AVAILABLE_SYSTEMS
     )
     assert unknown == []
+
+
+def test_rahlfs_follows_the_psalms_of_solomon_that_lxx_declares_and_swete_does_not(
+    vrs: Versification,
+) -> None:
+    """The clearest case for having both Greek Septuagints rather than one.
+
+    Rahlfs numbers each psalm's superscription as verse 0; Swete folds it into verse 1 and
+    is one ahead from there down. Over the eighteen psalms, Rahlfs matches what `lxx`
+    declares on **all eighteen** and Swete on three.
+
+    This is the blind spot `faithful_chapters` documents, seen from the other side: a
+    corpus that folds a title into verse 1 looks plausible chapter by chapter and is wrong
+    all the way down, and only a second witness makes it visible.
+    """
+    import sqlite3
+    from pathlib import Path
+
+    database = Path.home() / ".local/share/biblereference/db/corpus.sqlite"
+    if not database.exists():
+        pytest.skip("corpus not built; run `biblereference sync`")
+    with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
+
+        def tops(corpus: str) -> dict[int, int]:
+            return {
+                int(ch): int(top)
+                for ch, top in connection.execute(
+                    "SELECT chapter, MAX(verse) FROM verse WHERE corpus = ? AND book = 'PSS' "
+                    "GROUP BY chapter",
+                    (corpus,),
+                )
+            }
+
+        swete, rahlfs = tops("swete"), tops("rahlfs")
+
+    declared = {ch: vrs.max_verse("lxx", "PSS", ch) for ch in range(1, 19)}
+    assert sum(rahlfs.get(ch) == top for ch, top in declared.items()) == 18
+    assert sum(swete.get(ch) == top for ch, top in declared.items()) == 3
+
+
+def test_the_syriac_new_testament_is_the_most_faithful_witness_to_the_pivot() -> None:
+    """Worth stating because it is the opposite of what one would guess.
+
+    `org`'s New Testament declares the traditional verse set, which includes verses the
+    critical Greek editions omit -- so Nestle 1904, the SBLGNT and Westcott-Hort each have
+    a dozen or more chapters that end short of what the pivot says. The Peshitta, being a
+    Byzantine-tradition text, has them, and ends up counting as `org` says on 257 of its
+    260 chapters.
+    """
+    from pathlib import Path
+
+    from biblereference.audit import faithful_chapters
+    from biblereference.store import DataHome
+
+    data = DataHome(Path.home() / ".local/share/biblereference")
+    if not Path(data.database).exists():
+        pytest.skip("corpus not built; run `biblereference sync`")
+    vrs = Versification.load()
+    scored = {
+        corpus: len(faithful_chapters(data, corpus, "org", vrs))
+        for corpus in ("peshitta-nt", "wh", "n1904", "sblgnt")
+    }
+    assert scored["peshitta-nt"] > max(scored[other] for other in ("wh", "n1904", "sblgnt"))

@@ -79,7 +79,7 @@ class Source:
 
 def _sources() -> dict[str, Source]:
     # Imported here so that fetching one source does not import every parser.
-    from .corpora import ebible, nestle1904, novavulgata, oshb, pta, swete
+    from .corpora import ebible, first1k, nestle1904, novavulgata, oshb, perseus, pta, swete
 
     return {
         source.id: source
@@ -88,6 +88,8 @@ def _sources() -> dict[str, Source]:
             swete.SOURCE,
             nestle1904.SOURCE,
             pta.SOURCE,
+            perseus.SOURCE,
+            first1k.SOURCE,
             ebible.WEBC,
             ebible.DRA,
             ebible.LATVUC,

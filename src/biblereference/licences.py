@@ -197,6 +197,26 @@ LICENCES: Final[dict[str, Licence]] = {
             ),
         ),
         Licence(
+            id="coptic-scriptorium",
+            name="Coptic Scriptorium terms",
+            url="https://copticscriptorium.org/download",
+            commercial=False,
+            share_alike=False,
+            attribution=True,
+            rank=5,
+            summary=(
+                "Coptic Scriptorium publishes this under its own terms rather than the "
+                "CC BY-SA that covers the rest of the repository it arrives in."
+            ),
+            notice=(
+                "From Coptic Scriptorium, under their own terms rather than the licence "
+                "covering the repository it was distributed in. Read "
+                "copticscriptorium.org/download before redistributing it. Recorded as "
+                "non-commercial because that is the safe direction to round an unread "
+                "licence, not because they have said so."
+            ),
+        ),
+        Licence(
             id="sblgnt",
             name="SBL Greek New Testament licence",
             url="https://sblgnt.com/license/",
