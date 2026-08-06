@@ -803,3 +803,50 @@ def test_the_greek_vestment_account_was_one_verse_early_throughout(vrs: Versific
     # And the verses before the mistake are untouched, which is how the boundary was found.
     assert convert(vrs, "Exod 36:9", "lxx", "org") == "EXO 39:2"
     assert convert(vrs, "Exod 36:22", "lxx", "org") == "EXO 39:15"
+
+
+def test_the_douay_condenses_the_vestments_and_comes_back_into_step(vrs: Versification) -> None:
+    """Twenty-two verses of Exodus 39, and not one of them was written down.
+
+    Nothing upstream says a word about the Vulgate's Exodus, so every verse of it fell
+    through to identity. It does not hold. The Douay joins the breastplate to the ephod in
+    three verses where org takes five -- "these both before and behind so answered one
+    another" is org's two separate pairs of gold rings, 39:19 and 39:20 -- so from 39:20 it
+    runs two behind, from 39:28 one behind, and at 39:39 it is level again.
+
+    The clearest is 39:20, "they made also the tunick of the ephod all of violet", which
+    identity sent to "they made two more rings of gold" when org 39:22 says exactly what the
+    Douay says: "he made the robe of the ephod of woven work, all of blue".
+    """
+    assert convert(vrs, "Exod 39:16", "vul", "org") == "EXO 39:16"  # in step to here
+    assert convert(vrs, "Exod 39:19", "vul", "org") == "EXO 39:21"
+    assert convert(vrs, "Exod 39:20", "vul", "org") == "EXO 39:22"
+    assert convert(vrs, "Exod 39:25", "vul", "org") == "EXO 39:27"
+    assert convert(vrs, "Exod 39:28", "vul", "org") == "EXO 39:29"
+    assert convert(vrs, "Exod 39:39", "vul", "org") == "EXO 39:39"  # and level again
+
+    # org 39:28 is the turban, the headbands and the trousers together; the Douay takes two
+    # verses over it, so converting the other way must return both halves.
+    assert [str(r) for r in vrs.convert_all(VerseRef("EXO", 39, 28, vrs="org"), "vul")] == [
+        "EXO 39:26",
+        "EXO 39:27",
+    ]
+
+
+def test_the_douay_reorders_the_silver_of_the_tabernacle(vrs: Versification) -> None:
+    """ "And it was offered by them that went to be numbered, from twenty years old and
+    upwards, of six hundred three thousand five hundred and fifty men" is org 38:26 --
+    the half-shekel a head from everyone counted. Neither the age nor the count appears in
+    org 38:25, which totals the silver, and identity sent it there.
+
+    Three verses, and the chapter is back in step by 38:28, where both count out the
+    thousand seven hundred and seventy-five shekels for the hooks of the pillars.
+    """
+    assert convert(vrs, "Exod 38:25", "vul", "org") == "EXO 38:26"
+    assert convert(vrs, "Exod 38:26", "vul", "org") == "EXO 38:27"
+    assert convert(vrs, "Exod 38:28", "vul", "org") == "EXO 38:28"
+
+    # Covering names the whole of what the Douay verse carries: it opens with the silver
+    # that org 38:25 totals before going on to the count that is org 38:26.
+    got = vrs.convert_all(VerseRef("EXO", 38, 25, vrs="vul"), "org", covering=True)
+    assert [str(r) for r in got] == ["EXO 38:25", "EXO 38:26"]

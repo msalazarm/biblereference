@@ -147,27 +147,28 @@ def test_the_contradictions_that_remain_are_the_ones_we_can_name(walked) -> None
     The runs left are each a known textual fact rather than a mapping error, and they are
     pinned here by name so a new one appearing is a test failure:
 
-    * `EXO 39` -- the Douay condenses the tabernacle account rather than displacing it, so
-      the correspondence is many-to-fewer and no offset is right.
     * `NUM 1` / `NUM 26` -- the censuses and the tribal lists, where every verse has the
       identical shape and a neighbour outscores the true match by accident. `NUM 1:6` is
       "Of Symeon, Salamiel the son of Surisadai" in Brenton and "Of Shim'on, Shelumiel ben
       Tzurishaddai" in the Orthodox Jewish Bible: the same verse, mapped by identity,
       correctly.
 
-    Two entries used to be here and are the reason this test is worth having. `vul LEV 15`
+    Three entries used to be here and are the reason this test is worth having. `vul LEV 15`
     was not repetition -- the Douay splits org 15:19 in two and nothing recorded it, so
     three verses of the purity law resolved one early. `lxx EXO 36:28-38` was the longest
     run of all and was not reordering -- upstream had left one verse of the Greek vestment
-    account unmapped and written the fifteen after it one low. Both runs went away when the
-    reading was written down, which is what a real fault looks like when it is fixed.
+    account unmapped and written the fifteen after it one low. `vul EXO 39` was neither: the
+    Douay condenses the joining of the breastplate into three verses where org takes five and
+    runs two behind, then one, then comes back into step -- a many-to-fewer correspondence
+    that a monotonic map describes perfectly well once someone writes down where the seams
+    are. All three went away when the reading was written down, which is what a real fault
+    looks like when it is fixed.
     """
     _, _, contradicted = walked
     runs = {(system, book, chapter) for system, book, chapter, _, _ in runs_of(contradicted, 4)}
     assert runs == {
         ("lxx", "NUM", 26),
         ("lxx", "NUM", 1),
-        ("vul", "EXO", 39),
         ("vul", "NUM", 1),
     }
 
@@ -275,7 +276,7 @@ def test_the_round_trip_holds_where_a_cover_is_recorded(vrs: Versification) -> N
     with two names is not a lost verse: English Greek Daniel 1:1 comes home as Daniel 1:1,
     which is the same words under the name English Bibles print.
 
-    This does not pass everywhere and is not asserted to. 2,848 verses still fail it, and
+    This does not pass everywhere and is not asserted to. 2,855 verses still fail it, and
     they are the honest work queue for this data -- Greek 2 Esdras and Esther, which are
     differently built books rather than differently numbered ones; the psalm
     superscriptions; and the Greek reorderings of Exodus and Jeremiah. What is asserted is

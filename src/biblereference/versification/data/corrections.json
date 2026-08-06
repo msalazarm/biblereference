@@ -446,6 +446,50 @@
       "NUM 15:17": {
         "to": "NUM 15:18",
         "reason": "The second. The Douay then splits org 15:18 across its own 15:17 and 15:18 -- 'Speak to the children of Israel, and thou shalt say to them' and 'When you are come into the land which I will give you' -- which absorbs the shift, so 15:19 agrees again and both chapters end at 41."
+      },
+      "EXO 38:25": {
+        "to": "EXO 38:26",
+        "reason": "The Douay reorders the silver accounting of the tabernacle. 'And it was offered by them that went to be numbered, from twenty years old and upwards, of six hundred three thousand five hundred and fifty men able to bear arms' is org 38:26, 'a beka a head, that is, half a shekel ... for everyone who passed over to those who were counted, from twenty years old and upward, for six hundred three thousand five hundred fifty men'. Neither the age nor the count appears in org 38:25, which totals the silver. Named as the second of the two it carries, so the identity fall-through still reaches 38:25."
+      },
+      "EXO 38:26": {
+        "to": "EXO 38:27",
+        "reason": "'There were moreover a hundred talents of silver, whereof were cast the sockets of the sanctuary, and of the entry where the veil hangeth' is the head of org 38:27, 'The one hundred talents of silver were for casting the sockets of the sanctuary and the sockets of the veil'. The Douay takes two verses over it and is back in step at 38:28, where both count out the thousand seven hundred and seventy-five shekels for the hooks."
+      },
+      "EXO 39:17": {
+        "to": "EXO 39:18",
+        "reason": "The Douay joins the breastplate to the ephod in three verses where org takes five, and from here to 39:38 it runs behind. 'On which rings the two golden chains should hang, which they put into the hooks that stood out in the corners of the ephod' is org 39:17, 'They put the two braided chains of gold in the two rings at the ends of the breastplate', together with 39:18, 'The other two ends of the two braided chains they put on the two settings ... on the shoulder straps of the ephod'. Named as the second so identity still reaches 39:17."
+      },
+      "EXO 39:18": {
+        "to": "EXO 39:20",
+        "reason": "'These both before and behind so answered one another, that the ephod and the rational were bound together' is org 39:19 and 39:20 -- the two pairs of gold rings, one on the ends of the breastplate and one on the shoulder straps, that answer each other. The second, for the same reason as 39:17."
+      },
+      "EXO 39:19": {
+        "to": "EXO 39:21",
+        "reason": "'Being fastened to the girdle and strongly coupled with rings, which a violet fillet joined, lest they should flutter loose' is org 39:21, 'They bound the breastplate by its rings to the rings of the ephod with a lace of blue, that it might be on the skillfully woven band of the ephod, and that the breastplate might not come loose from the ephod'. Clause for clause; identity sends it to the making of two rings of gold instead."
+      },
+      "EXO 39:20-25": {
+        "to": "EXO 39:22-27",
+        "reason": "Six verses two behind. 'They made also the tunick of the ephod all of violet' is org 39:22, 'He made the robe of the ephod of woven work, all of blue', and the run closes with 'They made also fine linen tunicks with woven work for Aaron and his sons', which is org 39:27 clause for clause."
+      },
+      "EXO 39:26": {
+        "to": "EXO 39:28",
+        "reason": "org 39:28 names the turban, the headbands and the linen trousers in one verse; the Douay takes two. This is the head, 'And mitres with their little crowns of fine linen'. Both halves map here, so converting org 39:28 into the Vulgate returns both."
+      },
+      "EXO 39:27": {
+        "to": "EXO 39:28",
+        "reason": "The tail, 'And linen breeches of fine linen'. From here the Douay is one behind rather than two."
+      },
+      "EXO 39:28-33": {
+        "to": "EXO 39:29-34",
+        "reason": "Six verses one behind, closing the vestments and opening the inventory. 'And a girdle of fine twisted linen, violet, purple, and scarlet twice dyed, of embroidery work' is org 39:29, 'the sash of fine twined linen, blue, purple, and scarlet, the work of the embroiderer'."
+      },
+      "EXO 39:34-37": {
+        "to": "EXO 39:35-38",
+        "reason": "The inventory, still one behind. 'The veil, the ark, the bars, the propitiatory' is org 39:35, 'the ark of the covenant with its poles, the mercy seat'."
+      },
+      "EXO 39:38": {
+        "to": "EXO 39:38",
+        "reason": "org 39:38 names the golden altar, the oil, the incense and the hanging for the door together; the Douay gives the hanging its own verse. 'And the hanging in the entry of the tabernacle' is the tail of it and 39:37 above is the head. Written out rather than left to identity because it is the verse that brings the chapter back into step: from 39:39, 'The altar of brass, the grate, the bars', the two agree to the end."
       }
     },
     "lxx": {
@@ -855,6 +899,18 @@
       "1CH 12:4": {
         "to": "1CH 12:4-5",
         "reason": "The same merge as eng's entry of the same name, and the Douay makes it at the same point: 'Samaias of Gabaon, the stoutest amongst the thirty and over the thirty' is org 12:4 and 'Jeremias, and Jeheziel, and Johanan, and Jezabad of Gaderoth' is 12:5."
+      },
+      "EXO 38:25": {
+        "to": "EXO 38:25-26",
+        "reason": "'And it was offered by them that went to be numbered' answers org 38:25, the silver of those counted, and the rest of the verse answers 38:26, the half-shekel a head from six hundred three thousand five hundred and fifty men."
+      },
+      "EXO 39:17": {
+        "to": "EXO 39:17-18",
+        "reason": "'On which rings the two golden chains should hang' is org 39:17 and 'which they put into the hooks that stood out in the corners of the ephod' is 39:18. The Douay carries both as one."
+      },
+      "EXO 39:18": {
+        "to": "EXO 39:19-20",
+        "reason": "'These both before and behind so answered one another' is org 39:19 and 39:20, the two pairs of rings, on the breastplate and on the shoulder straps."
       }
     },
     "lxx": {
