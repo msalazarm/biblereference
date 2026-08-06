@@ -406,3 +406,45 @@ def test_swete_carries_no_apparatus_markers_in_its_text() -> None:
             "WHERE text LIKE '%⸂%' OR text LIKE '%⸃%' OR text LIKE '%⸆%' GROUP BY corpus"
         ).fetchall()
     assert offenders == []
+
+
+# --------------------------------------------------------------------------------------
+# The chapters where the counts agree and the contents do not
+# --------------------------------------------------------------------------------------
+
+
+def test_every_recorded_content_swap_is_real_and_explained(vrs: Versification) -> None:
+    """The exclusion set is hand-maintained, which is the only thing it could be -- so
+    each entry has to be checkable, and stale ones have to fail rather than linger.
+
+    Three things are asserted of every entry: the chapter exists in the corpus, it *would*
+    have passed the count test without the exclusion (otherwise the entry is doing nothing
+    and should go), and there is a reason written down.
+    """
+    import sqlite3
+    from pathlib import Path
+
+    from biblereference.audit import _CONTENT_SWAPS, faithful_chapters
+    from biblereference.store import DataHome
+
+    data = DataHome(Path.home() / ".local/share/biblereference")
+    if not Path(data.database).exists():
+        pytest.skip("corpus not built; run `biblereference sync`")
+
+    with sqlite3.connect(f"file:{data.database}?mode=ro", uri=True) as connection:
+        for (corpus, book, chapter), reason in _CONTENT_SWAPS.items():
+            assert len(reason) > 80, f"{corpus} {book} {chapter} needs its evidence written down"
+            low, high, count = connection.execute(
+                "SELECT MIN(verse), MAX(verse), COUNT(DISTINCT verse) FROM verse "
+                "WHERE corpus = ? AND book = ? AND chapter = ? AND verse > 0",
+                (corpus, book, chapter),
+            ).fetchone()
+            assert low is not None, f"{corpus} does not hold {book} {chapter}"
+            # Complete, and ending where some system says: without the exclusion this
+            # chapter passes on counts, which is exactly why it needs excluding by name.
+            assert count == high - low + 1, f"{corpus} {book} {chapter} has a gap already"
+
+    # And the exclusion actually bites: the Peshitta is the case that matters, since it was
+    # the surviving org witness for Romans once the critical texts' gap disqualified them.
+    assert ("ROM", 16) not in faithful_chapters(data, "peshitta-nt", "org", vrs)
+    assert ("ROM", 15) in faithful_chapters(data, "peshitta-nt", "org", vrs)

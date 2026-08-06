@@ -513,6 +513,47 @@ def home_default() -> Path:
 BAND: Final = 200
 
 
+#: Chapters where a corpus has the right verse count and the wrong contents.
+#:
+#: :func:`faithful_chapters` compares verse *counts*, and its own docstring has always said
+#: that cannot see a content swap. These are the three that have been caught, each by
+#: reading rather than by any check. Every entry names the evidence, because an exclusion
+#: set without one is a place a fault can hide as easily as it can be fixed.
+#:
+#: Keyed on the corpus rather than on the pair, because the fact recorded is about the
+#: corpus: these verses do not hold what their numbers say they hold, whichever system is
+#: asking. Small on purpose -- the alternative considered was sampling each chapter's text
+#: against another witness, which catches the general case and needs a threshold of its own.
+_CONTENT_SWAPS: Final[dict[tuple[str, str, int], str]] = {
+    ("brenton", "JOS", 24): (
+        "The Greek transposes the end of Joshua: Brenton has 'Israel served the Lord' at 29 "
+        "and Joshua's death at 30, where the Hebrew order is the death at 29 and the "
+        "service at 31. Both editions print 33 verses, so the counts agree exactly. This is "
+        "a text-type variant rather than a numbering difference -- the same numbers over "
+        "different words -- and using Brenton to check a mapping here measures the "
+        "reordering instead."
+    ),
+    ("web", "MAT", 23): (
+        "The World English Bible alone puts 'you devour widows' houses' at 23:13 and 'you "
+        "shut up the Kingdom' at 23:14. The Greek (n1904, sblgnt) has the shutting at 13 and "
+        "omits 14 outright; the King James and the Douay both have the shutting at 13 and "
+        "the devouring at 14. Both editions print 39 verses. This one is already recorded "
+        "from the other side in `adjudicate.WITNESSES` -- 82 of 87 surviving flags in an "
+        "overnight run rested on it -- and belongs here so that the deterministic walk sees "
+        "it too."
+    ),
+    ("peshitta-nt", "ROM", 16): (
+        "The Peshitta places the grace-benediction after the doxology, so its 24/25/26 are "
+        "org's 25/26/27 and its 27 is the benediction the critical text puts at 16:24. It "
+        "prints 27 verses numbered 1-27 with no gap, so it passes on counts. The rule caused "
+        "this one rather than missing it: n1904 is the right witness and has 16:27, but the "
+        "critical text omits 16:24, so its chapter holds 26 verses numbered 1-27 and the gap "
+        "test disqualified it. A real textual omission in the correct witness handed the "
+        "question to the wrong one."
+    ),
+}
+
+
 def faithful_chapters(
     home: DataHome, corpus: str, system: str, vrs: Versification
 ) -> set[tuple[str, int]]:
@@ -544,6 +585,10 @@ def faithful_chapters(
     upstream and no rule here can reconcile them. Measured over the whole derivation it
     costs seven flagged rows, all in the Psalms, which is a smaller error than any repair
     attempted from this side would be.
+
+    **The other blind spot is a content swap**, where the counts match and the verses hold
+    each other's words. Nothing here can see one, so the three that have been found by
+    reading are written down in :data:`_CONTENT_SWAPS` and excluded by name.
     """
     connection = sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)
     try:
@@ -558,6 +603,8 @@ def faithful_chapters(
     out: set[tuple[str, int]] = set()
     for book, chapter, low, high, count in rows:
         if count != high - low + 1:  # a gap: the edition did not print the whole chapter
+            continue
+        if (corpus, str(book), int(chapter)) in _CONTENT_SWAPS:
             continue
         try:
             first = max(vrs.first_verse(system, str(book), int(chapter)), 1)

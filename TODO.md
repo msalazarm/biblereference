@@ -248,6 +248,19 @@ obstacle is that the transcription has 49 headings for 150 psalms and the headin
 superscriptions rather than numbers: segmenting it is an alignment job against a psalter of
 known divisions, not a parse.
 
+### ~~11. `faithful_chapters` has now been caught out three times~~ — DONE
+
+Option 1 taken: `audit._CONTENT_SWAPS`, keyed `(corpus, book, chapter)`, each entry carrying
+the evidence that put it there, consulted by `faithful_chapters` beside the existing gap
+test. Three entries, all three verified against the corpus before being written down.
+
+Thirty verses fewer are checkable and three contradictions are gone; `eng` moved 99.586% →
+99.592% and the whole walk 98.677% → 98.680%, still at 0 ghosts. Both walks are tabulated in
+`docs/versification-audit.md`. Option 2 — a textual sample per chapter — remains available
+and would replace the set without anything else moving.
+
+<details><summary>original entry</summary>
+
 ### 11. `faithful_chapters` has now been caught out three times
 
 It decides whether a corpus may speak for a system by comparing verse *counts*, and its own
@@ -274,6 +287,8 @@ Two options, and the first is much cheaper:
 2. Make the test textual rather than structural: sample a few verses of the chapter against
    another witness of the same system and require agreement. Catches the general case, costs
    a corpus read per chapter, and needs its own threshold.
+
+</details>
 
 ### 10. ~~`swete` carries editorial sigla in its stored text~~ — DONE
 

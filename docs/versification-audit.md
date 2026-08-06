@@ -770,8 +770,40 @@ is the most useful thing the pass found.
 A real textual omission in the correct witness handed the question to a witness whose counts
 agree and whose content does not. `brenton`'s Joshua 24 and `web`'s Matthew 23:13 were the
 first two instances of that blind spot; this is the third, and unlike those it was *caused*
-by the gap rule rather than merely missed by it. Three instances is the point at which a
-note stops being enough — see `TODO.md`.
+by the gap rule rather than merely missed by it.
+
+#### What was done about it
+
+Three instances is the point at which a note stops being enough. `audit._CONTENT_SWAPS` now
+names them — keyed `(corpus, book, chapter)`, each with its evidence written out — and
+`faithful_chapters` excludes them the way it already excludes a chapter with a gap.
+
+A hand-maintained set is the honest shape here and the cheaper of the two options. The other
+was to make the test textual: sample a few verses of every chapter against another witness of
+the same system and require agreement. That catches the general case, and it costs a corpus
+read per chapter and needs a threshold of its own; the set can be replaced by it later
+without anything else moving.
+
+Keyed on the corpus rather than on the pair, because what is recorded is a fact about the
+corpus: these verses do not hold what their numbers say, whichever system is asking.
+
+What it changed, both walks run in one process for comparison:
+
+| | before | after |
+|---|---:|---:|
+| verses converted | 156,146 | 156,146 |
+| ghosts | 0 | 0 |
+| checked against text | 80,734 (51.704%) | 80,704 (51.685%) |
+| confirmed | 98.677% | **98.680%** |
+| contradicted | 1,068 | **1,065** |
+| runs of 4+ | 2 | 2 |
+| `eng` confirmed | 99.586% | **99.592%** |
+| `lxx` confirmed | 97.765% | **97.767%** |
+
+Thirty verses fewer are checkable, which is Joshua 24 leaving the `lxx` side, and three
+contradictions are gone. Small, and the right size: what these were measuring was the
+instrument rather than the data, and the two that moved `eng` were org-side comparisons
+answered by the Peshitta's Romans 16.
 
 ### Calibration had to be fixed before any of this could be believed
 
