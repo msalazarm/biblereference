@@ -268,6 +268,30 @@ CALIBRATION: Sequence[tuple[str, str, str, str] | tuple[str, str, str, str, str]
     ("lxx", "EXO 20:3", "EXO 20:3", "EXO 20:4", "grc-hbo"),
     ("lxx", "DEU 6:4", "DEU 6:4", "DEU 6:5", "grc-hbo"),
     ("lxx", "MAL 3:22", "MAL 4:4", "MAL 4:5", "grc-hbo"),
+    # The four pairs the witness tables can produce and nothing had measured, found by
+    # enumerating the tables rather than by waiting for a run to skip 3,797 verses -- which
+    # is what the first one did, and correctly, now that an unmeasured pair is refused.
+    #
+    # `en-en` and `grc-en` are the English-tradition witness answering for org, which is a
+    # fallback rather than a first choice but still has to be measured before it is used.
+    # `grc-syc` is Greek against the Peshitta, and `grc-grc` is Greek against Greek, which
+    # only the New Testament can produce because that is where org's Greek witness reaches.
+    ("eng", "GEN 1:1", "GEN 1:1", "GEN 1:2", "en-en"),
+    ("eng", "ISA 53:5", "ISA 53:5", "ISA 53:6", "en-en"),
+    ("eng", "MAL 4:4", "MAL 3:22", "MAL 3:23", "en-en"),
+    ("eng", "JHN 3:16", "JHN 3:16", "JHN 3:17", "en-en"),
+    ("eng", "NEH 7:69", "NEH 7:68", "NEH 7:69", "en-en"),
+    ("lxx", "GEN 1:1", "GEN 1:1", "GEN 1:2", "grc-en"),
+    ("lxx", "ISA 53:5", "ISA 53:5", "ISA 53:6", "grc-en"),
+    ("lxx", "EXO 20:3", "EXO 20:3", "EXO 20:4", "grc-en"),
+    ("lxx", "DEU 6:4", "DEU 6:4", "DEU 6:5", "grc-en"),
+    ("lxx", "PSA 22:1", "PSA 23:1", "PSA 23:2", "grc-en"),
+    ("lxx", "GEN 1:1", "GEN 1:1", "GEN 1:2", "grc-syc"),
+    ("lxx", "ISA 53:5", "ISA 53:5", "ISA 53:6", "grc-syc"),
+    ("lxx", "EXO 20:3", "EXO 20:3", "EXO 20:4", "grc-syc"),
+    ("lxx", "DEU 6:4", "DEU 6:4", "DEU 6:5", "grc-syc"),
+    ("lxx", "JOB 1:21", "JOB 1:21", "JOB 1:22", "grc-syc"),
+    ("lxx", "MAL 3:22", "MAL 4:4", "MAL 4:5", "grc-grc"),
     # nvl -> org: the pair the whole run rests on, and the only one held in Latin alone
     ("nvl", "GEN 1:1", "GEN 1:1", "GEN 1:2"),
     ("nvl", "PSA 23:1", "PSA 23:1", "PSA 23:2"),
