@@ -960,3 +960,33 @@ def test_the_greek_deuteronomy_reverses_the_cornfield_and_the_vineyard(vrs: Vers
     assert convert(vrs, "Deut 23:25", "lxx", "org") == "DEU 23:26"  # the standing corn
     assert convert(vrs, "Deut 23:26", "lxx", "org") == "DEU 23:25"  # the vineyard
     assert convert(vrs, "Deut 23:26", "org", "lxx") == "DEU 23:25"  # and it inverts
+
+
+def test_the_vulgate_splits_and_rejoins_around_the_shema(vrs: Versification) -> None:
+    """Two verses of Deuteronomy 6, and both chapters have 25 verses either way.
+
+    The Vulgate makes a whole verse of what the Hebrew ends 6:11 with -- "et comederis, et
+    saturatus fueris", and thou shalt have eaten and be full -- and then joins org 6:12 and
+    6:13 into one. The split and the merge cancel, which is why nothing about the shape of
+    the chapter says so and why identity looked right.
+
+    It matters more than two verses usually would: org 6:13, "thou shalt fear the Lord thy
+    God and serve him only", is the verse Matthew 4:10 quotes, and before this a citation of
+    the Vulgate's 6:13 resolved to "beware lest thou forget" instead.
+    """
+    assert convert(vrs, "Deut 6:11", "vul", "org") == "DEU 6:11"
+    assert convert(vrs, "Deut 6:12", "vul", "org") == "DEU 6:11"  # the split
+    assert convert(vrs, "Deut 6:13", "vul", "org") == "DEU 6:12"  # the merge, naming the first
+    assert convert(vrs, "Deut 6:14", "vul", "org") == "DEU 6:14"  # and level again
+
+    # Both halves of the split come back, and both org verses of the merge reach the one
+    # Vulgate verse that carries them -- which is the whole point of naming the first.
+    assert [str(r) for r in vrs.convert_all(VerseRef("DEU", 6, 11, vrs="org"), "vul")] == [
+        "DEU 6:11",
+        "DEU 6:12",
+    ]
+    assert {str(vrs.convert_all(VerseRef("DEU", 6, n, vrs="org"), "vul")[0]) for n in (12, 13)} == {
+        "DEU 6:13"
+    }
+    got = vrs.convert_all(VerseRef("DEU", 6, 13, vrs="vul"), "org", covering=True)
+    assert [str(r) for r in got] == ["DEU 6:12", "DEU 6:13"]

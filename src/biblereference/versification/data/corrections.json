@@ -496,6 +496,14 @@
       "EXO 39:38": {
         "to": "EXO 39:38",
         "reason": "org 39:38 names the golden altar, the oil, the incense and the hanging for the door together; the Douay gives the hanging its own verse. 'And the hanging in the entry of the tabernacle' is the tail of it and 39:37 above is the head. Written out rather than left to identity because it is the verse that brings the chapter back into step: from 39:39, 'The altar of brass, the grate, the bars', the two agree to the end."
+      },
+      "DEU 6:12": {
+        "to": "DEU 6:11",
+        "reason": "The Vulgate splits org 6:11 and then joins org 6:12 and 6:13, so both chapters have 25 verses and nothing about their shape says so. 'Et comederis, et saturatus fueris' -- 'and thou shalt have eaten and be full' -- is the close of org 6:11, 'batim full of all good things, which thou filledst not ... when thou shalt have eaten and be full'. It is a whole verse in the Vulgate and half a clause in the Hebrew. Both Latin and the Douay have it, so this is the edition rather than one translator."
+      },
+      "DEU 6:13": {
+        "to": "DEU 6:12",
+        "reason": "The other half. 'Cave diligenter ne obliviscaris Domini, qui eduxit te de terra Aegypti' is org 6:12, and the rest of the same Latin verse -- 'Dominum Deum tuum timebis, et illi soli servies, ac per nomen illius jurabis' -- is org 6:13, which is the verse Matthew 4:10 quotes. Named as the first of the two it carries, because the Vulgate goes from one ahead back into step here: identity then reaches org 6:13, and both org verses resolve to this one. Level again at 6:14."
       }
     },
     "lxx": {
@@ -997,6 +1005,10 @@
       "PSA 129:4": {
         "to": "PSA 130:4-5",
         "reason": "'For with thee there is merciful forgiveness' is org 130:4 and 'by reason of thy law, I have waited for thee, O Lord; my soul hath relied on his word' is 130:5, 'I wait for Hashem, my nefesh doth wait, and in His Devar do I hope'."
+      },
+      "DEU 6:13": {
+        "to": "DEU 6:12-13",
+        "reason": "'Cave diligenter ne obliviscaris Domini' is org 6:12 and 'Dominum Deum tuum timebis, et illi soli servies' is 6:13. The Vulgate carries both as one verse."
       }
     },
     "lxx": {
