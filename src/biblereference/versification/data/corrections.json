@@ -626,6 +626,14 @@
       "JER 38:38-40": {
         "to": "JER 31:38-40",
         "reason": "Unchanged: the city built from the tower of Hananel, the measuring line to the hill Gareb, and the whole valley of the dead bodies and of the ashes."
+      },
+      "DEU 23:25": {
+        "to": "DEU 23:26",
+        "reason": "The Greek reverses the last two laws of the chapter. 'Ἐὰν δὲ εἰσέλθῃς εἰς ἀμητὸν τοῦ πλησίον σου, καὶ συλλέξεις ἐν ταῖς χερσίν σου στάχυς' -- if you go into your neighbour's standing corn you may pluck the ears with your hand -- is org 23:26, כִּי תָבֹא בְּקָמַת רֵעֶךָ וְקָטַפְתָּ מְלִילֹת בְּיָדֶךָ. Swete has the same two in the same order at his own 23:24 and 23:25, one lower because that edition breaks the chapter where the English does; the lxx system declares 26 verses here, as Brenton and the Hebrew both do."
+      },
+      "DEU 23:26": {
+        "to": "DEU 23:25",
+        "reason": "The other half. 'Ἐὰν δὲ εἰσέλθῃς εἰς τὸν ἀμπελῶνα τοῦ πλησίον σου, φάγῃ σταφυλήν' is org 23:25, כִּי תָבֹא בְּכֶרֶם רֵעֶךָ וְאָכַלְתָּ עֲנָבִים -- the vineyard and the grapes, which the Hebrew puts first and the Greek second."
       }
     },
     "rsc": {
@@ -981,12 +989,24 @@
       "EXO 39:18": {
         "to": "EXO 39:19-20",
         "reason": "'These both before and behind so answered one another' is org 39:19 and 39:20, the two pairs of rings, on the breastplate and on the shoulder straps."
+      },
+      "EZK 28:11": {
+        "to": "EZK 28:11-12",
+        "reason": "'And the word of the Lord came to me, saying' is org 28:11 and 'Son of man, take up a lamentation upon the king of Tyre' opens 28:12. The Douay puts the clause boundary a sentence later than the Hebrew and is level again at 28:13."
+      },
+      "PSA 129:4": {
+        "to": "PSA 130:4-5",
+        "reason": "'For with thee there is merciful forgiveness' is org 130:4 and 'by reason of thy law, I have waited for thee, O Lord; my soul hath relied on his word' is 130:5, 'I wait for Hashem, my nefesh doth wait, and in His Devar do I hope'."
       }
     },
     "lxx": {
       "NUM 21:19": {
         "to": "NUM 21:19-20",
         "reason": "'and from Manthanain to Naaliel, and from Naaliel to Bamoth' is org 21:19 and 'and from Bamoth to Janen, which is in the plain of Moab' is 21:20. The Greek carries both as one verse, and splits org 21:22 in two to compensate, so both chapters still end at thirty-five."
+      },
+      "EZK 3:2": {
+        "to": "EZK 3:2-3",
+        "reason": "'So he opened my mouth, and caused me to eat the volume' is org 3:2, and 'And he said to me, Son of man' opens 3:3. The Greek carries both; the exact map names the first, which is right, and covering names the whole of it."
       }
     },
     "nvl": {

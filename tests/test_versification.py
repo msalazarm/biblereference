@@ -945,3 +945,18 @@ def test_the_greek_jeremiah_swears_by_the_heavens_first(vrs: Versification) -> N
     assert sorted(
         vrs.convert_all(VerseRef("JER", 38, n, vrs="lxx"), "org")[0].verse for n in (35, 36, 37)
     ) == [35, 36, 37]
+
+
+def test_the_greek_deuteronomy_reverses_the_cornfield_and_the_vineyard(vrs: Versification) -> None:
+    """The last two laws of Deuteronomy 23 -- what you may take from a neighbour's field and
+    from his vineyard -- stand in opposite order in the Greek and the Hebrew.
+
+    Both Greek witnesses agree on the order. Swete numbers them one lower, at 23:24 and
+    23:25, because that edition breaks the chapter where the English does; the `lxx` system
+    declares 26 verses here, as Brenton and the Leningrad Codex both do, so Brenton's
+    numbering is the one that applies.
+    """
+    assert convert(vrs, "Deut 23:24", "lxx", "org") == "DEU 23:24"  # in step to here
+    assert convert(vrs, "Deut 23:25", "lxx", "org") == "DEU 23:26"  # the standing corn
+    assert convert(vrs, "Deut 23:26", "lxx", "org") == "DEU 23:25"  # the vineyard
+    assert convert(vrs, "Deut 23:26", "org", "lxx") == "DEU 23:25"  # and it inverts
