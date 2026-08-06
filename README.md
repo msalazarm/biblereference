@@ -169,7 +169,8 @@ Bible, which went public domain in 2023. `--strict` makes it a failing exit code
 
 ## Texts
 
-Public domain or freely licensed, fetched once and then archived:
+Fetched once and then archived. Most are public domain or ask only for a credit line; a
+few are not, and `doctor` says which — see [What the licences oblige](#what-the-licences-oblige).
 
 | | Source | Note |
 |---|---|---|
@@ -469,11 +470,11 @@ database, that is worth knowing rather than papering over.
 
 ```
 library digest -- run this on both machines and compare the last line:
-  sources        ab853964752816f7  57 source(s), newest fetch of each
-  texts          edac3672be0ff8bb  1,396,953 verses
-  versification  5c51d940ca700cbc  vendored data and corrections
+  sources        5ea7ec38362680fd  57 registered source(s)
+  texts          1e78d328b31bb0a5  1,518,339 verses built from them
+  versification  845aefeb77339b2c  vendored data and corrections
   code           0.1.0
-= library        d376bf27ac111b586cbc5c3d79e8b92ed6001872399bce7178a467070e2c8cc3
+= library        31adb664f7d33a2ffe95e9b798808ff5d5c4bae64f17a07c3a17ff7d730feb92
 ```
 
 Four parts, because when two machines disagree the useful question is immediately *which*
