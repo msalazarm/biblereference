@@ -554,7 +554,12 @@ def library_digest(home: DataHome) -> LibraryDigest:
     archived: set[str] = set()
     for entry in home.entries():  # newest last, so later writes win
         archived.add(entry.source)
-        if entry.path.rsplit("/", 1)[-1] in declared.get(entry.source, ()):
+        # An archived path is ``<source>/<date>/<the declared name>``, and the declared name
+        # is what has to match. Taking the last segment instead works only while no name
+        # contains a slash -- one that does would match nothing, and the source would drop
+        # out of the digest silently, which is the exact failure this matching exists to
+        # prevent.
+        if entry.path.split("/", 2)[-1] in declared.get(entry.source, ()):
             newest[entry.source] = entry.sha256
     sources = hashlib.sha256(
         "".join(f"{source}\x1f{digest}\x1e" for source, digest in sorted(newest.items())).encode()

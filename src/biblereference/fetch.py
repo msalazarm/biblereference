@@ -64,6 +64,46 @@ class BuildResult:
         return sum(count for _, count in self.corpora)
 
 
+#: Attempts per file, and the wait before each retry. A source of two files can afford to
+#: fail and be run again; one of 177 cannot, because the failure is almost never about that
+#: file -- it is a rate limit or a moment's unavailability, and the whole run is lost to it.
+#: Only 429 and 5xx are retried: a 404 is a wrong URL and waiting will not mend it.
+_ATTEMPTS: Final = 4
+_BACKOFF: Final = (1.0, 4.0, 15.0)
+_RETRY_ON: Final = frozenset({429, 500, 502, 503, 504})
+
+
+def _get(client: httpx.Client, url: str, *, report: Reporter = _silent) -> bytes:
+    """One file, retried where retrying can help."""
+    for attempt in range(1, _ATTEMPTS + 1):
+        try:
+            response = client.get(url)
+            response.raise_for_status()
+            return bytes(response.content)
+        except httpx.HTTPStatusError as exc:
+            retryable = exc.response.status_code in _RETRY_ON
+            # `Retry-After` is what a server that means it sends; honour it over our guess.
+            wait = _after(exc.response) if retryable else None
+            failure: Exception = exc
+        except httpx.TransportError as exc:  # timeout, connection reset, DNS
+            retryable, wait, failure = True, None, exc
+        if not retryable or attempt == _ATTEMPTS:
+            raise failure
+        pause = wait if wait is not None else _BACKOFF[min(attempt, len(_BACKOFF)) - 1]
+        report(f"  retrying in {pause:.0f}s ({attempt} of {_ATTEMPTS - 1})")
+        time.sleep(pause)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def _after(response: httpx.Response) -> float | None:
+    """``Retry-After`` in seconds, where the server sent one we can read."""
+    raw = response.headers.get("Retry-After", "").strip()
+    try:
+        return max(0.0, min(60.0, float(raw)))
+    except ValueError:
+        return None  # the HTTP-date form; our own backoff is good enough
+
+
 def fetch_source(
     source: Source | str,
     home: DataHome,
@@ -83,7 +123,12 @@ def fetch_source(
 
     existing = home.latest_archive(source.id)
     if existing is not None and not force:
-        present = {p.name for p in existing.iterdir()}
+        # Every path under the directory, relative to it, not just its top level.
+        # ``RemoteFile.name`` may contain slashes -- ``store_file`` creates the parents --
+        # and a non-recursive listing then sees only the directory, matches nothing, and
+        # re-downloads every file of every source on every run. Nothing shipped uses a
+        # nested name today, so this was latent rather than broken.
+        present = {str(p.relative_to(existing)) for p in existing.rglob("*") if p.is_file()}
         if all(f.name in present for f in source.files):
             report(f"{source.id}: already fetched into {existing}")
             return FetchResult(source.id, existing, 0, 0, skipped=len(source.files))
@@ -100,9 +145,7 @@ def fetch_source(
             if index > 1 and source.crawl_delay:
                 time.sleep(source.crawl_delay)
             report(f"{source.id}: [{index}/{len(source.files)}] {remote.name}")
-            response = client.get(remote.url)
-            response.raise_for_status()
-            payload = response.content
+            payload = _get(client, remote.url, report=report)
             home.store_file(
                 source.id,
                 remote.name,

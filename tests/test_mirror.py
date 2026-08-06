@@ -199,3 +199,79 @@ def test_a_local_copy_is_verified_before_it_is_trusted(home: DataHome) -> None:
     assert (result.copied, result.reused) == (1, 0), "the rotted copy must not be reused"
     assert server.served == 1
     assert home.sources.joinpath(theirs.path).read_bytes() == PAYLOAD
+
+
+def test_an_archive_of_nested_files_is_not_fetched_twice(tmp_path: Path) -> None:
+    """The already-fetched check has to look inside directories, not only at them.
+
+    ``RemoteFile.name`` may contain a slash. A non-recursive listing of the archive then
+    sees the directory and never the file, matches nothing, and re-downloads every file of
+    the source on every run -- which for a source of two files is invisible and for one of
+    a hundred and seventy-seven is the whole sync.
+    """
+    from dataclasses import replace
+
+    from biblereference.fetch import fetch_source
+    from biblereference.sources import RemoteFile, get_source
+
+    home = DataHome(tmp_path)
+    home.prepare()
+    source = replace(
+        get_source("oshb"),
+        files=(RemoteFile(url="https://example.invalid/a.xml", name="tei/a.xml"),),
+    )
+    home.store_file(source.id, "tei/a.xml", b"<TEI/>", url="https://example.invalid/a.xml")
+
+    # No network client is opened at all if the check works; if it does not, httpx tries
+    # to reach example.invalid and the test fails with a connection error rather than
+    # quietly passing.
+    result = fetch_source(source, home)
+    assert result.files == 0
+    assert result.skipped == 1
+
+
+def test_a_rate_limited_download_is_retried_rather_than_lost(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """177 files against one host cannot afford to lose the run to one 429.
+
+    The failure is almost never about the file: it is a rate limit or a moment's
+    unavailability, and without a retry the whole fetch is abandoned and the user is told
+    to run it again. A 404 is different -- it means a wrong URL, and waiting will not mend
+    it -- so only 429 and 5xx are retried.
+    """
+    import httpx
+
+    from biblereference import fetch as fetch_module
+
+    monkeypatch.setattr(fetch_module.time, "sleep", lambda _: None)
+
+    attempts = []
+
+    class _Client:
+        def get(self, url: str) -> httpx.Response:
+            attempts.append(url)
+            code = 429 if len(attempts) < 3 else 200
+            return httpx.Response(code, content=b"ok", request=httpx.Request("GET", url))
+
+    payload = fetch_module._get(_Client(), "https://example.invalid/a.xml")  # type: ignore[arg-type]
+    assert payload == b"ok"
+    assert len(attempts) == 3, "gave up too early, or did not stop once it succeeded"
+
+
+def test_a_missing_file_is_not_retried(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A 404 is a wrong URL. Retrying it wastes three waits and still fails."""
+    import httpx
+    import pytest as _pytest
+
+    from biblereference import fetch as fetch_module
+
+    monkeypatch.setattr(fetch_module.time, "sleep", lambda _: None)
+    attempts = []
+
+    class _Client:
+        def get(self, url: str) -> httpx.Response:
+            attempts.append(url)
+            return httpx.Response(404, request=httpx.Request("GET", url))
+
+    with _pytest.raises(httpx.HTTPStatusError):
+        fetch_module._get(_Client(), "https://example.invalid/gone.xml")  # type: ignore[arg-type]
+    assert len(attempts) == 1

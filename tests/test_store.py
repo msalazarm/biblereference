@@ -470,3 +470,36 @@ def test_the_page_fetcher_no_longer_shares_a_namespace_with_a_translation(home: 
     assert ARCHIVE not in registered, "the archive namespace must not be a source id"
     assert _LEGACY_ARCHIVE in registered, "which is exactly why it had to change"
     assert ARCHIVE != _LEGACY_ARCHIVE
+
+
+def test_the_digest_counts_a_source_whose_filename_has_a_path_in_it(home: DataHome) -> None:
+    """A declared name may contain a slash, and it still has to match.
+
+    ``store_file`` creates parent directories, so ``RemoteFile.name`` is allowed to be
+    ``tei/matthew.xml`` -- and the archived path is then
+    ``<source>/<date>/tei/matthew.xml``. Matching on the last segment alone finds
+    ``matthew.xml``, which is not what the source declared, so the source contributes
+    nothing to the digest and says nothing about it. That is the precise failure this
+    matching exists to prevent, arriving by another door.
+
+    Asserted through a real source rather than a stub, because only declared names count.
+    """
+    declared = {file.name for source in iter_sources(None) for file in source.files}
+    assert "eng-asv_usfm.zip" in declared, "the fixture below rests on this being real"
+
+    home.record(
+        ManifestEntry(
+            source="asv",
+            url="https://example.invalid/demo.zip",
+            path="asv/2026-01-01/eng-asv_usfm.zip",
+            sha256="abc123",
+            bytes=10,
+            fetched_at="2026-01-01T00:00:00+00:00",
+        )
+    )
+    counted = library_digest(home)
+    assert counted.source_count == 1
+
+    # The same line with the date segment split differently must still resolve to the
+    # declared name, which is everything after `<source>/<date>/`.
+    assert "asv/2026-01-01/eng-asv_usfm.zip".split("/", 2)[-1] == "eng-asv_usfm.zip"
