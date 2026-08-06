@@ -745,3 +745,37 @@ def test_a_cover_that_says_nothing_new_is_rejected(vrs: Versification) -> None:
     corrections = {"covers": {"eng": {"GEN 1:1": {"to": "GEN 1:1", "reason": "x"}}}}
     with pytest.raises(VersificationDataError, match="only what it already maps to"):
         _build_system("eng", corrections)
+
+
+def test_the_nova_vulgata_opens_judith_16_one_verse_ahead(vrs: Versification) -> None:
+    """The one fault a language model found that nothing else could have.
+
+    This repository holds the Nova Vulgata only in Latin and no other family holds Latin,
+    so not one of its 33,619 conversions had ever been checked against a word of text --
+    the deterministic audit reports it as 0% checkable and says so rather than implying
+    otherwise. A model reads across languages, which is exactly that gap.
+
+    org, eng and lxx all open the chapter with the narrator, "Judith began to sing this
+    thanksgiving in all Israel"; the Nova Vulgata folds that into the head of its own 16:1
+    and everything to 16:8 follows one early. It then divides org's 16:8 in two, which
+    closes the offset, and identity resumes at 16:9.
+
+    Both chapters declare twenty-five verses, so no comparison of counts could have found
+    it -- which is the third time in this audit that equal counts have hidden a real
+    divergence.
+    """
+    assert convert(vrs, "Jdt 16:1", "nvl", "org") == "JDT 16:2"
+    assert convert(vrs, "Jdt 16:6", "nvl", "org") == "JDT 16:7"
+    assert convert(vrs, "Jdt 16:7", "nvl", "org") == "JDT 16:8"
+    assert convert(vrs, "Jdt 16:8", "nvl", "org") == "JDT 16:8"
+    assert convert(vrs, "Jdt 16:9", "nvl", "org") == "JDT 16:9"
+
+    # Coming back, org 16:8 is both halves, and org 16:1 falls to the identity -- which is
+    # right, because the Nova Vulgata's 16:1 does carry the narrator's line.
+    assert convert(vrs, "Jdt 16:8", "org", "nvl") == "JDT 16:7-8"
+    assert convert(vrs, "Jdt 16:1", "org", "nvl") == "JDT 16:1"
+
+    # The Clementine is a different translation of Judith altogether and is declared
+    # unreliable for it, so it must still refuse rather than answer.
+    with pytest.raises(VersificationGapError):
+        convert(vrs, "Jdt 16:1", "vul", "org")

@@ -547,6 +547,18 @@
       "NEH 7:69-72": {
         "to": "NEH 7:68-71",
         "reason": "The four verses carried by the omission above -- camels and asses, the governor's gift, the heads of families, the rest of the people. The Nova Vulgata gives the chapter 72 verses to the Clementine's 73 because it also folds the Clementine's 7:73, 'Habitaverunt autem sacerdotes et Levitae', into the tail of its own 7:72, exactly as org does."
+      },
+      "JDT 16:1-6": {
+        "to": "JDT 16:2-7",
+        "reason": "The Nova Vulgata's Judith 16 opens one verse ahead of everything else, and nothing recorded it, so eight verses of Judith's song resolved one early. org, eng and lxx all begin the chapter with the narrator -- 'Judith began to sing this thanksgiving in all Israel, and all the people sang after her' -- and the Nova Vulgata folds that into the head of its own 16:1, 'Dixitque Iudith: Incipite Deo meo in tympanis', which is org's 16:2. Every verse to 16:8 follows one early: 'Tu es Deus conterens bella' is org 16:3, 'Venit Assur a montibus' is 16:4, 'Dominus omnipotens sprevit illos' is 16:6. Found by putting the whole system to a language model, because nothing else could: this repository holds the Nova Vulgata only in Latin and no other family holds Latin, so not one of its 33,619 conversions had ever been checked against a word of text. Verified afterwards against three witnesses that carry Judith -- web, dra and brenton -- which agree with each other and disagree with the Nova Vulgata, and it survived a change of witness between two independent model runs. Both chapters declare 25 verses, so no count could have found it."
+      },
+      "JDT 16:7": {
+        "to": "JDT 16:8",
+        "reason": "See the entry for JDT 16:1-6. The Nova Vulgata divides org's 16:8 in two, which is what closes the offset: 'Dispoliavit enim se stola viduitatis suae in exaltationem dolentium in Israel' and 'et colligavit capillos suos in mitra' are together org's single 'For she put off the apparel of her widowhood for the exaltation of those who were mourning in Israel, and anointed her face with ointment, and bound her hair in a tire'."
+      },
+      "JDT 16:8": {
+        "to": "JDT 16:8",
+        "reason": "See the entry for JDT 16:7, whose other half this is. Stated rather than left to the identity, because the identity would send it to org 16:8 for the wrong reason -- coincidence of number rather than of text -- and a reader checking this file should see that the two verses deliberately share a target. Identity resumes at 16:9, 'Sandalum eius rapuit oculum ipsius', which is org's 16:9 in every witness."
       }
     }
   },
