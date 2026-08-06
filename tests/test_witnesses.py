@@ -238,3 +238,111 @@ def test_the_syriac_new_testament_is_the_most_faithful_witness_to_the_pivot() ->
         for corpus in ("peshitta-nt", "wh", "n1904", "sblgnt")
     }
     assert scored["peshitta-nt"] > max(scored[other] for other in ("wh", "n1904", "sblgnt"))
+
+
+# --------------------------------------------------------------------------------------
+# Where the new corpora part company with the systems they declare
+# --------------------------------------------------------------------------------------
+
+
+def _ends_elsewhere(corpus: str, system: str, vrs: Versification) -> set[tuple[str, int]]:
+    """Complete chapters this corpus ends somewhere its system does not.
+
+    Complete only: a chapter the edition printed with a hole in it says nothing about
+    numbering, and counting it would turn a missing page into a disagreement.
+    """
+    import sqlite3
+    from pathlib import Path
+
+    from biblereference.versification import VersificationError
+
+    database = Path.home() / ".local/share/biblereference/db/corpus.sqlite"
+    if not database.exists():
+        pytest.skip("corpus not built; run `biblereference sync`")
+    out: set[tuple[str, int]] = set()
+    with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
+        rows = connection.execute(
+            "SELECT book, chapter, MIN(verse), MAX(verse), COUNT(DISTINCT verse) FROM verse "
+            "WHERE corpus = ? AND verse > 0 GROUP BY book, chapter",
+            (corpus,),
+        ).fetchall()
+    for book, chapter, low, high, count in rows:
+        if count != high - low + 1:
+            continue
+        try:
+            declared = vrs.max_verse(system, str(book), int(chapter))
+        except VersificationError:
+            continue
+        if high != declared:
+            out.add((str(book), int(chapter)))
+    return out
+
+
+def test_rahlfs_parts_from_lxx_in_sixteen_chapters_and_they_are_named(
+    vrs: Versification,
+) -> None:
+    """The queue for a future `rahlfs` system, and mostly a reassurance.
+
+    Rahlfs seeds its own family in `biblereference families`, so it is a numbering of its
+    own rather than a member of `lxx`. This says how much of one: sixteen chapters out of
+    1,135, and five of those are the Odes, which no two editions agree about.
+
+    The interesting one is Deuteronomy. Rahlfs ends chapter 28 at verse 69 and chapter 29
+    at 28 -- the Hebrew division, which is what `org` and the Peshitta use -- where Swete,
+    Brenton, LXX2012 and `lxx` itself all use 28:68 and 29:29. So `lxx`'s Deuteronomy
+    follows Swete and Brenton, and the standard critical text does not.
+
+    Pinned rather than corrected: `faithful_chapters` already excludes these from every
+    comparison, so nothing rests on them, and changing `lxx` to suit one witness would only
+    make it differently wrong -- the same argument that keeps Swete filed where it is.
+    """
+    assert _ends_elsewhere("rahlfs", "lxx", vrs) == {
+        ("2SA", 23),
+        ("4MA", 12),
+        ("DEU", 28),
+        ("DEU", 29),
+        ("EZR", 14),
+        ("EZR", 19),
+        ("NUM", 6),
+        ("NUM", 33),
+        ("ODA", 5),
+        ("ODA", 6),
+        ("ODA", 7),
+        ("ODA", 8),
+        ("ODA", 13),
+        ("PRO", 30),
+        ("PRO", 31),
+        ("WIS", 17),
+    }
+
+
+def test_the_peshitta_parts_from_org_almost_only_where_no_edition_agrees(
+    vrs: Versification,
+) -> None:
+    """Forty-seven chapters of 1,142, and the shape of them is the point.
+
+    Fifteen are the Psalms of Solomon, ten are 4 Ezra, seven the Odes and four Tobit --
+    books that survive in several recensions and that no two editions number alike. Strip
+    those and twelve are left in the whole protocanon and deuterocanon: Joshua 10, two
+    psalms, two chapters of Sirach, and a handful in Esdras and Maccabees.
+
+    That is the case for calling the Peshitta an `org` corpus, and it is a strong one: a
+    second-century translation made from the Hebrew agrees with the Hebrew's divisions
+    almost everywhere it can be checked.
+    """
+    off = _ends_elsewhere("peshitta-ot", "org", vrs)
+    assert len(off) == 47
+    contested = {"PSS", "EZA", "ODA", "TOB"}
+    assert sorted(book for book, _ in off if book not in contested) == [
+        "1ES",
+        "1ES",
+        "1MA",
+        "1MA",
+        "4MA",
+        "4MA",
+        "JOS",
+        "PSA",
+        "PSA",
+        "SIR",
+        "SIR",
+    ]
