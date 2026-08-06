@@ -887,3 +887,36 @@ def test_the_greek_second_census_reorders_the_tribes(vrs: Versification) -> None
     for org_verse, lxx_verse in landed.items():
         back = vrs.convert_all(VerseRef("NUM", 26, org_verse, vrs="org"), "lxx")
         assert [r.verse for r in back] == [lxx_verse]
+
+
+def test_the_nova_vulgata_reverses_tobias_two_reasons(vrs: Versification) -> None:
+    """Tobias sends Raphael ahead for the money and gives two reasons: Raguel has made him
+    swear to stay, and his father is counting the days. The Greek gives the oath first.
+
+    The Nova Vulgata gives them the other way round, following the Old Latin order -- the
+    Clementine has the same sequence at its own 9:4 and 9:5 -- while numbering its verses
+    with the Greek. Nothing in this repository could see that: `nvl` has one witness, in
+    Latin, and `org` has none in Latin, so not one of its conversions is checkable by text.
+    A model found it and Swete settled it.
+    """
+    assert convert(vrs, "Tob 9:3", "nvl", "org") == "TOB 9:4"  # the father counting days
+    assert convert(vrs, "Tob 9:4", "nvl", "org") == "TOB 9:3"  # Raguel's oath
+    assert convert(vrs, "Tob 9:2", "nvl", "org") == "TOB 9:2"  # and the swap is only the two
+    assert convert(vrs, "Tob 9:5", "nvl", "org") == "TOB 9:5"
+
+
+def test_the_nova_vulgata_joins_verses_of_sirach(vrs: Versification) -> None:
+    """Three places where a Nova Vulgata verse carries two of org's. The exact map names the
+    first, which is right -- the identity fall-through then reaches the second, which is the
+    same verse -- but it is only half the answer, and covering gives the whole of it.
+    """
+    for verse, whole in ((35, ["SIR 6:34", "SIR 6:35"]),):
+        got = vrs.convert_all(VerseRef("SIR", 6, verse, vrs="nvl"), "org", covering=True)
+        assert [str(r) for r in got] == whole
+    for verse, whole in ((18, ["SIR 14:17", "SIR 14:18"]), (25, ["SIR 14:24", "SIR 14:25"])):
+        got = vrs.convert_all(VerseRef("SIR", 14, verse, vrs="nvl"), "org", covering=True)
+        assert [str(r) for r in got] == whole
+
+    # "Omnis caro sicut vestimentum veterascet" is org 14:17 and it is what the exact map
+    # returns; the leaves of the green tree that follow in the same Latin verse are 14:18.
+    assert convert(vrs, "Sir 14:18", "nvl", "org") == "SIR 14:17"

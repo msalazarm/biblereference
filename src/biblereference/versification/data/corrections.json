@@ -662,6 +662,14 @@
       "JDT 16:8": {
         "to": "JDT 16:8",
         "reason": "See the entry for JDT 16:7, whose other half this is. Stated rather than left to the identity, because the identity would send it to org 16:8 for the wrong reason -- coincidence of number rather than of text -- and a reader checking this file should see that the two verses deliberately share a target. Identity resumes at 16:9, 'Sandalum eius rapuit oculum ipsius', which is org's 16:9 in every witness."
+      },
+      "TOB 9:3": {
+        "to": "TOB 9:4",
+        "reason": "The Nova Vulgata reverses Tobias's two reasons for sending Raphael ahead. 'Scis enim quoniam numerat dies pater et, si tardavero diem unum, contristabo eum valde' is org 9:4, 'My father counts the days; and if I wait long, he will be very grieved'. Swete's Greek puts that second -- 9:4 καὶ ὁ πατήρ μου ἀριθμεῖ τὰς ἡμέρας -- and so do the World English Bible, the King James, the American Standard, the Revised Version and Brenton, every one of them independent of the Latin. The Nova Vulgata follows the Old Latin order, which the Clementine keeps too at its own 9:4, while numbering its verses with the Greek."
+      },
+      "TOB 9:4": {
+        "to": "TOB 9:3",
+        "reason": "The other half of the swap. 'Sed vides quomodo Raguel iuraverit, cuius iuramentum spernere non possum' is org 9:3, 'because Raguel has sworn that I must not depart' -- Swete's διότι ὀμώμοχεν Ῥαγουὴλ μὴ ἐξελθεῖν με, which the Greek puts first."
       }
     }
   },
@@ -953,6 +961,20 @@
       "NUM 21:19": {
         "to": "NUM 21:19-20",
         "reason": "'and from Manthanain to Naaliel, and from Naaliel to Bamoth' is org 21:19 and 'and from Bamoth to Janen, which is in the plain of Moab' is 21:20. The Greek carries both as one verse, and splits org 21:22 in two to compensate, so both chapters still end at thirty-five."
+      }
+    },
+    "nvl": {
+      "SIR 6:35": {
+        "to": "SIR 6:34-35",
+        "reason": "'In multitudine presbyterorum sta et sapientiae illorum ex corde coniungere' is org 6:34, 'Stand in the multitude of the elders; attach yourself to whomever is wise', and 'ut omnem narrationem Dei velis audire, et proverbia intellegentiae non effugiant te' is 6:35, 'Be willing to listen to every godly discourse; don't let the proverbs of understanding escape you'. The Nova Vulgata carries both as one verse and is level again at 6:36."
+      },
+      "SIR 14:18": {
+        "to": "SIR 14:17-18",
+        "reason": "'Omnis caro sicut vestimentum veterascet' is org 14:17, 'All flesh grows old like a garment', and 'sicut folium fructificans in arbore viridi: alia generantur, et alia deiciuntur' is 14:18, the leaves of a thick tree that it sheds and grows."
+      },
+      "SIR 14:25": {
+        "to": "SIR 14:24-25",
+        "reason": "'qui requiescit iuxta domum illius et in parietibus illius figens palum' is org 14:24, 'He who lodges close to her house will also fasten a nail in her walls', and 'statuet casulam suam ad manus illius' is 14:25, pitching his tent near at hand to her."
       }
     }
   }
