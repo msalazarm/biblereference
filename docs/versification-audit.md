@@ -680,3 +680,116 @@ contradicted    0
 every time, and the 23 it could not are the repetitive stretches — consecutive verses of the
 tabernacle inventory and the census — where that is the expected answer rather than a
 worrying one.
+
+---
+
+## The second model pass — with Syriac, Rahlfs and three Greek New Testaments
+
+The pass above ran against four languages and 55 corpora. This one ran after the TEI import
+(see `docs/tei-corpora.md`) added Syriac, Coptic, the Peshitta, Rahlfs, the SBLGNT and
+Westcott–Hort, and it is worth recording separately because **the instrument changed, not
+just the sample**.
+
+**128,153 verses judged, 113,880 informative, 138 contradicted — 99.879% agreement.**
+
+```
+                judged   confirmed  contradicted  uninformative
+suspicions       1,432         947            26            459
+gap             46,724      39,542            68          7,114
+confirmed       79,997      73,253            44          6,700
+```
+
+### What the Syriac actually bought
+
+The concrete number is in the witness split for the gap phase — the verses no same-language
+witness can reach:
+
+```
+who answered for `org` on 46,724 gap tasks
+  wlc          24,036   Hebrew
+  peshitta-ot  11,622   Syriac    ← new
+  n1904         7,451   Greek
+  web           3,595   English
+```
+
+The Peshitta took over as `org`'s witness for **11,622 verses** — overwhelmingly the
+deuterocanon, where `wlc` has nothing and `n1904` no Old Testament, and where the question
+had therefore been falling through to an English-tradition text speaking for `org`. That is
+the exact fault that invalidated the first overnight run and had to be found from the
+inside. It is now answered by a second-century translation made from the Hebrew.
+
+**It confirmed the mappings rather than upsetting them.** 34 of the 138 contradictions rest
+on the Peshitta, out of 11,622 tasks: 0.29%.
+
+### One fault, in 128,153 judgements
+
+`vul DEU 6:12-13`. The Vulgate makes a whole verse of what the Hebrew ends 6:11 with — *et
+comederis, et saturatus fueris* — and then joins org 6:12 and 6:13 into one. The split and
+the merge cancel, both chapters have 25 verses, and identity looked right. It matters more
+than two verses usually would: org 6:13 is what Matthew 4:10 quotes, and a citation of the
+Vulgate's 6:13 had been resolving to *beware lest thou forget*.
+
+Re-judged against its own old answer with the model: confirmed.
+
+That is the whole of it. Everything else read was a known cluster, a verse already settled
+in the first pass, or an artefact — and the artefacts are worth naming because they are the
+same three kinds as last time, arriving through new witnesses.
+
+### The three kinds of false alarm, again
+
+**A shorter recension.** `1MA 10:44` was flagged in `eng`, `lxx` *and* `vul` — three systems
+independently, which is normally what a real textual fact looks like. Every Latin, Greek and
+English witness has the same verse; the **Peshitta's is abbreviated**, lacking the "expense
+from the king's revenue" clause, so the model preferred the neighbour that has it. The
+Peshitta's Maccabees, Tobit, Wisdom and Baruch are shorter texts throughout, which makes it a
+weaker witness *there* than its 82% overall faithfulness suggests. Worth knowing before
+trusting a deuterocanon flag that rests on it.
+
+**Model noise on identical text.** `eng GEN 48:12` — "Joseph brought them out from between
+his knees, and he bowed himself with his face to the earth" against the org witness's
+"Yosef brought them out from between his knees, and he bowed himself with his face to the
+ground" — flagged. And `vul MIC 5:11`, which is *one of this module's own calibration
+entries*, a mapping known to be correct, marked uninformative during calibration and
+contradicted during the run. That is the noise floor, made visible.
+
+**A witness whose counts agree and whose content does not** — and this one is new, and it
+is the most useful thing the pass found.
+
+### A third instance of the `faithful_chapters` blind spot, and this time it was caused by it
+
+`ROM 16:27` was flagged in two systems. Tracing why:
+
+1. `n1904` **is** the right witness here and has Romans 16:27, the doxology.
+2. But the critical text omits Romans 16:24, so its chapter holds 26 verses numbered 1–27.
+3. `faithful_chapters` rejects any chapter where `count != high - low + 1` — "a gap: the
+   edition did not print the whole chapter" — so **`n1904` was disqualified**.
+4. `peshitta-nt` has 27 verses numbered 1–27 with no gap, so it passed the count test.
+5. Its content is shifted: the Peshitta places the grace-benediction *after* the doxology,
+   so its 25/26/27 are org's 26/27/benediction.
+
+A real textual omission in the correct witness handed the question to a witness whose counts
+agree and whose content does not. `brenton`'s Joshua 24 and `web`'s Matthew 23:13 were the
+first two instances of that blind spot; this is the third, and unlike those it was *caused*
+by the gap rule rather than merely missed by it. Three instances is the point at which a
+note stops being enough — see `TODO.md`.
+
+### Calibration had to be fixed before any of this could be believed
+
+`Calibration.admits` returned `True` for a language pair with no rows, on the reasoning that
+an untested pair meant the calibration set had a gap rather than the model having a fault.
+That held while every pair a run could produce was in the set. Syriac broke it: a Peshitta
+witness produces `en-syc`, `la-syc` and `grc-hbo`, none of which any existing row could
+reach, and all three would have been admitted **untested**.
+
+It is now refused, and the report distinguishes "EXCLUDED" from "EXCLUDED — never measured".
+Nor was it fixable by adding rows alone: `_calibration_task` picks witnesses through
+`witness_for`, which returns the *first* faithful one, so an `org` row is answered by `wlc`
+in Hebrew whatever it was written for. A row may now force the pair as `source-target`.
+
+Enumerating the tables rather than waiting to be told: of the twelve pairs a source system
+crossed with `org`'s witnesses can produce, eight were measured. The four that were not cost
+the first attempt 3,797 skipped verses. Three are now measured. `grc-grc` is not and stays
+refused, because it needs Greek on both sides and `org`'s Greek witness reaches only the New
+Testament while `lxx` is the Old — no calibration case exists because no real case does.
+
+**75/75 correct across eleven pairs.**

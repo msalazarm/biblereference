@@ -248,6 +248,41 @@ obstacle is that the transcription has 49 headings for 150 psalms and the headin
 superscriptions rather than numbers: segmenting it is an alignment job against a psalter of
 known divisions, not a parse.
 
+### 11. `faithful_chapters` has now been caught out three times
+
+It decides whether a corpus may speak for a system by comparing verse *counts*, and its own
+docstring records that this cannot see a content swap. Three instances now:
+
+* `brenton`'s Joshua 24 — puts "Israel served the Lord" at 29 and Joshua's death at 30,
+  reversing the Hebrew. Both editions have 33 verses.
+* `web`'s Matthew 23:13 — alone among the Greek, the King James and the Douay in putting
+  "devour widows' houses" first.
+* `peshitta-nt`'s Romans 16 — places the grace-benediction *after* the doxology, so its
+  25/26/27 are org's 26/27/benediction.
+
+The third is the one that argues for doing something. It was **caused** by the rule rather
+than missed by it: `n1904` is the correct witness and has Romans 16:27, but the critical text
+omits 16:24, so its chapter holds 26 verses numbered 1-27 and the gap test disqualified it.
+The Peshitta's 27 verses run 1-27 with no gap, so it passed on counts while its content is
+shifted. A real textual omission in the right witness handed the question to the wrong one.
+
+Two options, and the first is much cheaper:
+
+1. A hand-maintained exclusion set, `(corpus, book, chapter)`, consulted by
+   `faithful_chapters`. Three entries today. Honest, small, and needs a place to record
+   *why* each was excluded — which is the part that makes it worth having.
+2. Make the test textual rather than structural: sample a few verses of the chapter against
+   another witness of the same system and require agreement. Catches the general case, costs
+   a corpus read per chapter, and needs its own threshold.
+
+### 10. ~~`swete` carries editorial sigla in its stored text~~ — DONE
+
+634 markers across 402 verses, stripped in `corpora/swete.py`. Verse counts unchanged, so
+nothing was a marker alone. The other differences that diff turned up -- elision apostrophes
+and real textual variants between the two digitisations -- are not ours to fix.
+
+<details><summary>original entry</summary>
+
 ### 10. `swete` carries editorial sigla in its stored text
 
 389 of its 28,443 verses (1.4%) contain characters like `⸂⸆⸃`, and 13 of `swete-daniel`'s
@@ -262,6 +297,8 @@ third is not.
 
 Not done yet only because changing an `lxx` witness while an audit is running would move the
 instrument under the measurement.
+
+</details>
 
 ### 9. A book cannot be told it got longer
 
