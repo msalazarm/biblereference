@@ -187,6 +187,28 @@ ALIASES: Final[dict[str, str]] = {
     "ܓܠܝܢܐ ܕܝܘܚܢܢ": "REV",
 }
 
+#: Where the title cannot tell two files apart and the recension is what differs.
+#:
+#: Rahlfs prints Daniel, Susanna and Bel twice, because Theodotion's version and the Old
+#: Greek diverge too far to conflate. The archive titles both members of each pair
+#: identically -- ΔΑΝΙΗΛ and ΔΑΝΙΗΛ, ΣΟΥΣΑΝΝΑ and ΣΟΥΣΑΝΝΑ -- and distinguishes them only
+#: by version tag, so nothing in the file says which is which.
+#:
+#: **Corpus Corporum's transcription of the same edition does say**, labelling its
+#: divisions ``Dan``/``Dan Th`` and ``Sus``/``Sus Th``. Comparing the two archives verse by
+#: verse settles it at 100% against 45%: ``grc1`` is Theodotion and ``grc2`` is the Old
+#: Greek, for all three books.
+#:
+#: This is not cosmetic. ``lxx`` does not declare ``DAN`` at all -- it declares ``DAG`` for
+#: the Old Greek and ``DNT`` for Theodotion -- so before this the Greek Daniel sat in a
+#: book its own versification does not have.
+OVERRIDES: Final[dict[str, str]] = {
+    "pta061.pta-grc1": "DNT",  # ΔΑΝΙΗΛ, Theodotion
+    "pta061.pta-grc2": "DAG",  # ΔΑΝΙΗΛ, the Old Greek
+    "pta060.pta-grc1": "SST",  # ΣΟΥΣΑΝΝΑ, Theodotion
+    "pta060.pta-grc2": "SUS",  # ΣΟΥΣΑΝΝΑ, the Old Greek
+}
+
 #: Which corpus each PTA version belongs to. The Old/New Testament split is not editorial
 #: neatness: it is where the licences change, and a corpus has to be able to state one.
 #:
@@ -271,12 +293,15 @@ def scan_pta(root: Path) -> dict[str, dict[str, object]]:
         _, work, version = stem.split(".", 2)
         tree = etree.parse(str(path))
         titles = titles_of(tree)
-        book = next((found for title in titles if (found := resolve(title))), None)
+        key = f"{work}.{version}"
+        book = OVERRIDES.get(key) or next(
+            (found for title in titles if (found := resolve(title))), None
+        )
         title = titles[0] if titles else ""
         corpus = None
         if book is not None:
             corpus = CORPUS_OF.get((version, book in _NT))
-        out[f"{work}.{version}"] = {
+        out[key] = {
             "book": book,
             "corpus": corpus,
             "title": title,

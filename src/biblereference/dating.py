@@ -46,6 +46,7 @@ TRANSLATED: Final[dict[str, int | None]] = {
     "swete": None,  # Swete: a critical edition of the Septuagint
     "swete-daniel": None,  # Theodotion's Greek Daniel, likewise
     "rahlfs": None,  # Rahlfs 1935: another critical edition of the same ancient Greek
+    "rahlfs-cc": None,  # the same edition, transcribed independently
     "rahlfs-alt": None,  # the second text where Rahlfs prints two
     "sblgnt": None,  # the SBL Greek New Testament: a critical edition, ancient wording
     "wh": None,  # Westcott and Hort 1881, likewise a critical edition of ancient Greek
@@ -57,6 +58,7 @@ TRANSLATED: Final[dict[str, int | None]] = {
     "peshitta-alt": None,
     "latvuc": 405,  # Jerome's Vulgate; the Clementine of 1592 is an edition of it
     "novavulgata": 1979,  # a new Latin translation, not an edition of Jerome
+    "castellio": 1551,  # a new Latin translation from the originals, owing nothing to Jerome
     # -- English, in order of when the wording was made -----------------------------------
     "wycliffe": 1395,
     "wyc2017": 1395,  # Wycliffe with the spelling modernised

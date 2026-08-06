@@ -308,11 +308,22 @@ def milestone_verses(
     verse number correctly, and extracts nothing at all. So this walks the chapter in
     document order and accumulates text against whichever marker was last seen -- the same
     idea ``corpora/swete.py`` uses for word offsets, arriving from the other direction.
+
+    A book of one chapter has no chapter division either, exactly as in
+    :func:`cts_verses`: Susanna and Bel put their milestones straight into a paragraph
+    under the book. Where no numbered chapter is found, the element passed in *is* chapter
+    1 -- and asking that of the element rather than of the whole document is what keeps a
+    caller iterating books from pouring one book's verses into another's chapter 1.
     """
-    for chapter in root.iter(f"{{{TEI_NS}}}{chapter_tag}"):
-        number = _chapter_of(chapter)
-        if number is None:
-            continue
+    numbered: list[tuple[int, etree._Element]] = [
+        (found, chapter)
+        for chapter in root.iter(f"{{{TEI_NS}}}{chapter_tag}")
+        if (found := _chapter_of(chapter)) is not None
+    ]
+    if not numbered and isinstance(root, etree._Element):
+        numbered = [(1, root)]
+
+    for number, chapter in numbered:
         current: tuple[int, str] | None = None
         parts: list[str] = []
         for element in chapter.iter():

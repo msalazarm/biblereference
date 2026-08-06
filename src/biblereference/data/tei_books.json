@@ -685,7 +685,7 @@
       "title": "Ezekiel"
     },
     "pta060.pta-grc1": {
-      "book": "SUS",
+      "book": "SST",
       "corpus": "rahlfs",
       "file": "pta9999.pta060.pta-grc1.xml",
       "title": "ΣΟΥΣΑΝΝΑ"
@@ -703,13 +703,13 @@
       "title": "Susanna"
     },
     "pta061.pta-grc1": {
-      "book": "DAN",
+      "book": "DNT",
       "corpus": "rahlfs",
       "file": "pta9999.pta061.pta-grc1.xml",
       "title": "ΔΑΝΙΗΛ"
     },
     "pta061.pta-grc2": {
-      "book": "DAN",
+      "book": "DAG",
       "corpus": "rahlfs-alt",
       "file": "pta9999.pta061.pta-grc2.xml",
       "title": "ΔΑΝΙΗΛ"
