@@ -449,6 +449,19 @@ def test_two_readings_of_the_same_words_are_one_record_with_an_alternate() -> No
     assert [str(p) for p in only.alternates] == ["PSA 53:1"]
 
 
+def test_one_passage_read_as_two_barely_overlapping_spans_is_one_record() -> None:
+    """The clause the looser overlap test needs, and the regression that proved it.
+
+    Requiring a *substantial* overlap is what lets two neighbouring quotations both
+    survive. Applied to the same passage it lets it survive twice: scanning Mark 1:1
+    followed by Acts 1:8 returned Acts 1:8 as two records, found at two nearly disjoint
+    spans. A different passage has to claim most of the shorter span; the same passage
+    claims any overlap at all.
+    """
+    kept = _without_overlaps([_match("ACT 1:8", (0, 40), 0.9), _match("ACT 1:8", (36, 90), 0.88)])
+    assert [str(m.passage) for m in kept] == ["ACT 1:8"]
+
+
 def test_one_passage_found_in_two_numberings_is_not_its_own_rival() -> None:
     """The Douay and the Clementine agree across the New Testament, so a quotation is
     found once in `eng` and again in `vul`. Comparing the ranges rather than the verses

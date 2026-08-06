@@ -912,3 +912,62 @@ separate kind so that it can be strict about the one thing it is allowed to do.
   skipped as out-of-range, so the extended books join the set that check covers.
 
 It moves `fingerprint()`, which every dependent is expected to notice.
+
+## An unrelated fault the same discipline caught: `scan` merging two quotations
+
+Not a versification matter, but it was found the same way — by reading the output of a case
+that should have been easy — and it is worth recording beside the rest.
+
+`biblereference scan` on *"In the beginning was the Word. And God so loved the world that he
+gave his only Son."* returned **one** quotation: John 1:1, quoting the chimera *"In the
+beginning was the Word And God so loved the"*, with John 3:16 demoted to an alternate.
+
+`_matched_span` grows a span outward from the longest matching block and stops at the first
+real gap, and the gap was measured **only on the searched-text side**:
+
+```
+JHN 1:1  blocks [Match(a=0, b=0, size=7), Match(a=7, b=11, size=1), Match(a=10, b=13, size=1)]
+JHN 3:16 blocks [Match(a=7, b=1, size=10), Match(a=17, b=12, size=1)]
+```
+
+John 1:1's anchor is a genuine seven-word run. The two blocks it then absorbed are the single
+words *God* and *the* — which sit at positions 11 and 13 of John 1:1 while the text had not
+advanced at all. `blocks[i].b`, where a block sits *in the verse*, was never consulted.
+
+A quotation and the verse it quotes advance together. A speaker interpolating a clause of his
+own moves the text on while the verse stands still, which is what the existing gap of eight
+words is for; the reverse — the verse leaping several words ahead while the text has not moved
+— is a coincidence agreeing, not a quotation continuing. Bounding both sides fixes it, with
+the verse side much tighter at two. John 3:16's own closing *Son*, separated from *only* by the
+verse's *begotten*, has a verse-side gap of 1 and is still reached.
+
+Two more faults in the same function, both found while fixing it:
+
+* The overlap check was a bare interval intersection, so **one shared character deleted a
+  match**. Two quotations written one after another share the space between them. A different
+  passage now has to claim most of the shorter span before it counts as reading the same
+  words — and the same passage claims any overlap at all, or one verse comes back twice.
+* Rebuilding each match to attach its alternates **dropped `composed` and `identified_at`**,
+  so after any `scan` every record reported `anachronistic` as False and ignored a configured
+  threshold. That is the one field a patristic count is supposed to filter on.
+
+### Measured, both configurations in one process
+
+Twelve pairs of well-known verses written one after another with no filler, and ten patristic
+and monastic documents where a lost match would be a regression:
+
+| | before | after |
+|---|---:|---:|
+| adjacent pairs finding both quotations | 7/12 | **8/12** |
+| matches over ten documents | 13 | **17** |
+
+The four the pairs still miss are limits rather than faults: *Jesus wept* is two words, Genesis
+1:1 and John 1:1 open with the same four, and the Lord's Prayer in Matthew and Luke is the same
+prayer.
+
+The prose gain is the real evidence, because nobody chose those documents to suit the fix.
+**Four quotations appear that were not found before** — 2 Corinthians 6:14-15, Acts 13:22-23,
+Acts 2:22-24 and Psalm 69:21-25 — each of them previously swallowed by an over-extended
+neighbouring span. Nothing was lost: four spans start later than they did, which is the point,
+and every passage found before is still found. Revelation 21:4 is also now read correctly where
+before it was reported as the parallel at Revelation 7:16-17.

@@ -1343,7 +1343,7 @@ def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
     reading, and it is kept as an alternate rather than dropped. Which case it is depends
     only on how close the scores are.
 
-    Two quotations that merely *touch* are neither. See :func:`_same_words`.
+    Two quotations that merely *touch* are neither. See :func:`_claims`.
     """
     kept: list[Match] = []
     rivals: dict[int, list[VerseRange]] = {}
@@ -1351,14 +1351,14 @@ def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
         if match.span is None:
             kept.append(match)
             continue
-        overlapping = next(
-            (index for index, other in enumerate(kept) if _same_words(match.span, other.span)),
+        claimed = next(
+            (index for index, other in enumerate(kept) if _claims(other, match)),
             None,
         )
-        if overlapping is None:
+        if claimed is None:
             kept.append(match)
             continue
-        winner = kept[overlapping]
+        winner = kept[claimed]
         if winner.similarity - match.similarity > _TIE:
             continue
         # Compared on coordinates, not on the VerseRange: a passage found in two
@@ -1367,7 +1367,7 @@ def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
         here = _coordinates(match.passage)
         if here == _coordinates(winner.passage):
             continue
-        seen = rivals.setdefault(overlapping, [])
+        seen = rivals.setdefault(claimed, [])
         if all(here != _coordinates(rival) for rival in seen):
             seen.append(match.passage)
 
@@ -1389,20 +1389,32 @@ def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
     return sorted(resolved, key=lambda m: m.span or (0, 0))
 
 
-def _same_words(left: tuple[int, int] | None, right: tuple[int, int] | None) -> bool:
-    """Whether two spans claim the same stretch of text rather than merely abutting.
+def _claims(winner: Match, match: Match) -> bool:
+    """Whether `winner` has already accounted for what `match` found.
 
-    A bare interval intersection is what this used to be, and one shared character was
-    enough to delete a match. Two quotations written one after another share the space
-    between them and sometimes a word; that makes them neighbours, not rival readings of
-    one passage. Requiring the overlap to be most of the shorter span keeps the case this
-    is for -- the same words read as slightly different spans -- and lets neighbours alone.
+    Three cases arrive here overlapping, and only two of them are one result:
+
+    * **The same passage, read as two slightly different spans.** One result, always. A
+      passage found through two versifications that agree there arrives this way too.
+    * **Two passages over the same words** -- Psalm 14 and Psalm 53, Galatians 6:9 and
+      2 Thessalonians 3:13. One result, and the loser becomes an alternate if it scored
+      nearly as well.
+    * **Two quotations written one after another.** Neighbours, not rivals. They share the
+      space between them and sometimes a word, and a bare interval intersection -- which
+      this used to be -- deleted the second of them for it.
+
+    So a different passage has to claim *most* of the shorter span before it counts as
+    reading the same words, while the same passage claims any overlap at all. Without that
+    second clause the same verse came back twice from one sentence.
     """
+    left, right = winner.span, match.span
     if left is None or right is None:
         return False
     shared = min(left[1], right[1]) - max(left[0], right[0])
     if shared <= 0:
         return False
+    if _coordinates(winner.passage) == _coordinates(match.passage):
+        return True
     return shared * 2 > min(left[1] - left[0], right[1] - right[0])
 
 
