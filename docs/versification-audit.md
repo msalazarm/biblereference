@@ -498,16 +498,185 @@ Matthew 5 and Malachi 3 did.
 
 **The round trip is now a checkable claim.** Convert every verse into another system and
 back, measured through the pivot so that a book with two names does not count as a loss, and
-you must land on the text you started from. Over all 798,132 conversions between all twenty
-ordered pairs: 2,919 failures under the exact map, 2,848 under covering.
+you must land on the text you started from. Over all 753,562 ordered conversions between all
+twenty ordered pairs: **2,939 failures under the exact map, 2,851 under covering.**
 
-That remaining 2,848 is the honest work queue, and it is dominated by places where the
+That remaining 2,851 is the honest work queue, and it is dominated by places where the
 question is not really about numbering at all — Greek 2 Esdras (1,702) and Greek Esther (501)
 are differently *built* books, not differently numbered ones; then the psalm superscriptions
 (~313) and the Greek reorderings of Exodus and Jeremiah (~200). `tests/test_coverage.py`
 pins the count so it cannot climb quietly.
 
+The model pass moved it by four, in both directions and for good reasons either way. Four
+were *added* by correcting `lxx EXO 36:24`, and they are honest: org's Exodus 36:24 is the
+forty silver sockets, the Greek's is the golden wreaths on the rings, and now that the
+library knows the second it can no longer pretend the first comes home. Eight were removed by
+recording where a Nova Vulgata verse of Sirach carries two of org's. Every reordering
+corrected — Numbers 26, Jeremiah 38, Deuteronomy 23 — left the count untouched to the verse,
+which is the check a permutation has to pass.
+
 **The exhaustive walk barely moves**, because it scores each conversion at its first target
 and covering only ever adds a second. That is worth saying plainly rather than leaving as an
 implication: covering improves the *derivation* and the *round trip*, not the textual
 confirmation rate.
+
+---
+
+## The model pass, exhaustively
+
+The audit above uses a model on 60 verses. This section is what happened when it was run on
+all of them: **126,597 conversions judged**, every one that any witness could reach, over two
+nights.
+
+### The witness question, which decided the first run
+
+Run one produced 87 survivors and 82 of them rested on `web` speaking for `org` — an
+English-tradition corpus standing in for a system it does not follow. Wherever `eng` and
+`org` diverge in numbering, that witness is answering about the wrong verse, and the run was
+measuring the gap between two families rather than testing a mapping. It was found from the
+inside: `vul MAT 23:13` was flagged, and `vul` and `org` plainly agree there while `web` is
+the one out of step.
+
+Reordering the witnesses so that `org` is spoken for by corpora that follow `org` — `wlc`
+first, then `n1904`, and only then English — took calibration from 28/28 to **47/47** and
+was worth re-running the whole thing for. `witness_for` also had to stop at the first
+*faithful* witness rather than the first witness, because `wlc` is a Hebrew text with no New
+Testament and no deuterocanon.
+
+### What it agreed with
+
+On verses the deterministic walk had already confirmed, the model agreed on **73,143 of
+73,182 informative answers — 99.947%**. That is the number that makes the disagreements worth
+reading: two instruments that fail differently, agreeing this closely, mean the residue is
+small and readable rather than a wall.
+
+131 contradictions, **107 surviving three fresh seeds**. Split by which instruments spoke:
+
+| | verses | |
+|---|---|---|
+| both instruments | 43 | four real faults, and the rest repetition |
+| model only, nothing else could reach it | 40 | three real faults, all invisible to every other check |
+| deterministic said fine | 24 | all artefacts, twenty-two of them one cluster |
+
+### What it found that nothing else could
+
+Seven corrections came out of the 107, and three of them exist only because a model was run.
+
+**`nvl TOB 9:3-4` — Tobias's two reasons, reversed.** He sends Raphael ahead and gives two:
+Raguel has made him swear to stay, and his father is counting the days. Swete's Greek puts
+the oath first, and so do the World English Bible, the King James, the American Standard,
+the Revised Version and Brenton. The Nova Vulgata gives them the other way round, following
+the Old Latin order the Clementine also keeps, while numbering with the Greek.
+
+**`nvl JDT 16:1-8` — one verse early throughout**, verified against `web`, `dra` *and*
+`brenton`, all three agreeing against the Nova Vulgata.
+
+Neither was reachable by anything else, and the reason is worth stating exactly: `nvl` has
+one witness, in Latin, and `org` has none in Latin. **Not one of its 35,641 conversions is
+checkable against text**, so the coverage walk does not move by a single verse for either
+correction. It scores `nvl` at 0% and that zero is honest.
+
+**`lxx JER 38:35-37` — the Greek swears by the heavens first.** After the new covenant the
+Hebrew gives the ordinances of sun and moon, the oath that Israel will not cease while they
+last, then the oath about measuring the heavens. The Greek puts the heavens first. Here the
+deterministic walk had no witness for a different reason: the Orthodox Jewish Bible has 39
+verses in Jeremiah 31 where the Hebrew and the English both have 40, so `faithful_chapters`
+refuses it, and the remaining `org` witnesses are Hebrew and Greek — neither of them English,
+so no same-language comparison exists.
+
+### What it found that the walk found too
+
+Four more, each flagged by both instruments and settled by reading:
+
+* **`lxx EXO 36:24-38`**, fifteen verses one low, because upstream left 36:24 unmapped as
+  though it were a Greek plus. It is not: "they put the golden wreaths on the rings on both
+  sides of the oracle" is org 39:17.
+* **`vul EXO 38:25-26` and `39:17-38`**, twenty-three verses that nothing upstream said a
+  word about. This settled the long-standing refusal to touch Exodus 39 recorded in `TODO.md`.
+* **`lxx NUM 26:15-47`**, the Greek second census, which puts Gad sixth and Asher seventh.
+* **`lxx DEU 23:25-26`**, the cornfield and the vineyard, reversed.
+
+### Reorderings are expressible, which this audit had wrong
+
+The standing rule was that a transposition cannot be described and should keep identity with
+a note. Numbers 26 disproves it. The mapping is a dict, not an offset, and where the moved
+blocks have the same number of verses on both sides — which they do, because a reordering
+moves material rather than redividing it — the result is an exact bijection. The nine ranges
+for Numbers 26 tile 26:15-47 once each; the covering round trip does not move by a verse,
+which is the check that a permutation must pass. Jeremiah 38 is a three-cycle and Deuteronomy
+23 a two-cycle, both by the same argument.
+
+What genuinely cannot be expressed is a **split and a merge inside one renumbered chapter**.
+`latvuc` Psalm 108 looks like one: it breaks org 109:16 at a comma and joins 109:17 and
+109:18. Correcting that would leave one org verse with no source, and because the psalm is
+renumbered the coordinate fall-through lands in a different psalm — `vul PSA 109` declares
+seven verses, so org 109:18 would resolve to a verse that does not exist. It is moot here,
+because the Nova Vulgata settles it the other way, but the limit is real and worth knowing.
+
+### The three categories of false alarm
+
+Nearly a hundred flags were read and found correct. They sort into three kinds, and naming
+them is what lets the next run's identical flags be dismissed by reference:
+
+**Repetition.** The censuses and the lists. `NUM 1:6-9` in both `lxx` and `vul` is the list of
+tribal princes — "Of Simeon, Salamiel the son of Surisaddai" — where Brenton, the Douay and
+the World English Bible agree verse for verse and identity is exactly right. Both instruments
+flag it, and that is the useful part: **they share this failure mode**, because both ask how
+well the text matches and neither can tell twelve near-identical verses apart. The `lxx EXO
+25` cluster is the same thing at scale — 22 of the 107 survivors, in a loose translation of
+repetitive instructions, all provably correct.
+
+**Free translation.** The Greek abbreviates Jeremiah and Job and gives Proverbs a different
+second line; the Douay renders "when the congregation was assembled against Moses and Aaron"
+as *cumque oriretur seditio, et tumultus incresceret*. Same verse, different words.
+
+**A corpus, not a system.** Three of these, and they are the most interesting because each
+one indicts an instrument rather than the data:
+
+* `latvuc`/`dra` Psalm 108, above — the Nova Vulgata, Latin and independent, agrees with
+  `org` and with the mapping.
+* `brenton` Joshua 24, which puts "Israel served the Lord" at 29 and Joshua's death at 30,
+  reversing the Hebrew. Swete's Greek has them in the Hebrew order. **The faithful-chapter
+  restriction cannot see this**, because it compares verse counts and both are 33 — the
+  blind spot `faithful_chapters` already documents, now with a second instance.
+* `web` Matthew 23:13, which alone among the Greek, the King James and the Douay puts
+  "devour widows' houses" first.
+
+### Text-type variants are not versification faults
+
+Three findings were carried into the correction plan as verified and should not have been.
+The distinction that kills them is worth stating flatly: **a versification difference is the
+same words under different numbers; a text-type variant is the same number over different
+words.**
+
+`MAT 21:29-30`, the two sons, differs by manuscript family — but verse 30 begins "he came to
+the second" in *both* the Greek and the English, so the verse boundaries are identical and
+only the answers inside them are swapped. Mapping across it would be wrong. `PHP 1:16-17`
+transposes love and rivalry between the Received Text and the critical text, and English
+Bibles themselves disagree — the World English Bible and the King James one way, the ESV and
+NIV the other — so `eng` cannot assert either. `MAT 23:13-14` is the `web` quirk above.
+
+None was applied. That they were on the list is the reason this section exists: **a finding
+that has not been read is not a finding**, however many instruments agree, and the plan that
+carried them said so about a different group without noticing it applied to these.
+
+### Re-judging the corrections
+
+The cheapest possible check on the whole exercise, and it was run last: take every conversion
+this audit changed, and put the **old answer against the new one** to the model. A correction
+that was right should turn its own contradiction into a confirmation.
+
+85 conversions changed — 33 in `lxx NUM 26`, 21 in `vul EXO 39`, 15 in `lxx EXO 36`, 7 in
+`nvl JDT 16`, 3 in `lxx JER 38`, 2 each in `lxx DEU 23`, `vul EXO 38` and `nvl TOB 9`. Judged
+against a calibration of 47/47:
+
+```
+confirmed      62
+uninformative  23
+contradicted    0
+```
+
+**Zero.** Where the model could tell the two candidates apart it preferred the new answer
+every time, and the 23 it could not are the repetitive stretches — consecutive verses of the
+tabernacle inventory and the census — where that is the expected answer rather than a
+worrying one.
