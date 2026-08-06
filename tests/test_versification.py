@@ -779,3 +779,27 @@ def test_the_nova_vulgata_opens_judith_16_one_verse_ahead(vrs: Versification) ->
     # unreliable for it, so it must still refuse rather than answer.
     with pytest.raises(VersificationGapError):
         convert(vrs, "Jdt 16:1", "vul", "org")
+
+
+def test_the_greek_vestment_account_was_one_verse_early_throughout(vrs: Versification) -> None:
+    """Fifteen verses, and the cause was one verse upstream never mapped.
+
+    The Septuagint tells the tabernacle story in a different order from the Hebrew, and
+    upstream expresses that by sending its chapter 36 into org's 39 verse by verse --
+    correctly as far as 36:23. It then leaves 36:24 unmapped, as though it were a Greek plus
+    with no Hebrew counterpart, and so wrote everything after it one low.
+
+    It is not a plus: "they put the golden wreaths on the rings on both sides of the oracle"
+    is org 39:17, "they put the two braided chains of gold in the two rings at the ends of
+    the breastplate". The clearest of the fifteen is 36:29, which pointed at "they bound the
+    breastplate by its rings" while org 39:22 says what the Greek says -- "he made the robe
+    of the ephod of woven work, all of blue".
+    """
+    assert convert(vrs, "Exod 36:23", "lxx", "org") == "EXO 39:16"
+    assert convert(vrs, "Exod 36:24", "lxx", "org") == "EXO 39:17"
+    assert convert(vrs, "Exod 36:29", "lxx", "org") == "EXO 39:22"
+    assert convert(vrs, "Exod 36:38", "lxx", "org") == "EXO 39:31"
+
+    # And the verses before the mistake are untouched, which is how the boundary was found.
+    assert convert(vrs, "Exod 36:9", "lxx", "org") == "EXO 39:2"
+    assert convert(vrs, "Exod 36:22", "lxx", "org") == "EXO 39:15"

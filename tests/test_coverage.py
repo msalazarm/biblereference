@@ -147,23 +147,24 @@ def test_the_contradictions_that_remain_are_the_ones_we_can_name(walked) -> None
     The runs left are each a known textual fact rather than a mapping error, and they are
     pinned here by name so a new one appearing is a test failure:
 
-    * `EXO 36` / `EXO 39` -- the Septuagint and the Douay reorder and condense the
-      tabernacle account bodily. Monotonic alignment cannot describe a transposition.
+    * `EXO 39` -- the Douay condenses the tabernacle account rather than displacing it, so
+      the correspondence is many-to-fewer and no offset is right.
     * `NUM 1` / `NUM 26` -- the censuses and the tribal lists, where every verse has the
       identical shape and a neighbour outscores the true match by accident. `NUM 1:6` is
       "Of Symeon, Salamiel the son of Surisadai" in Brenton and "Of Shim'on, Shelumiel ben
       Tzurishaddai" in the Orthodox Jewish Bible: the same verse, mapped by identity,
       correctly.
 
-    `vul LEV 15` used to be here and is the reason this test is worth having. It was not
-    repetition -- the Douay splits org 15:19 into two and nothing recorded it, so three
-    verses of the purity law resolved one early. Reading the run is what found it; the run
-    went away when the split was written down.
+    Two entries used to be here and are the reason this test is worth having. `vul LEV 15`
+    was not repetition -- the Douay splits org 15:19 in two and nothing recorded it, so
+    three verses of the purity law resolved one early. `lxx EXO 36:28-38` was the longest
+    run of all and was not reordering -- upstream had left one verse of the Greek vestment
+    account unmapped and written the fifteen after it one low. Both runs went away when the
+    reading was written down, which is what a real fault looks like when it is fixed.
     """
     _, _, contradicted = walked
     runs = {(system, book, chapter) for system, book, chapter, _, _ in runs_of(contradicted, 4)}
     assert runs == {
-        ("lxx", "EXO", 36),
         ("lxx", "NUM", 26),
         ("lxx", "NUM", 1),
         ("vul", "EXO", 39),
