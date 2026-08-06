@@ -45,10 +45,13 @@ __all__ = [
     "SourceMeta",
     "SqliteCorpus",
     "add_chapter",
+    "all_books",
+    "chapter_index",
     "default_data_home",
     "library_digest",
     "open_store",
     "read_chapter",
+    "read_meta",
     "stored_chapters",
 ]
 
@@ -670,6 +673,55 @@ def stored_chapters(home: DataHome, corpus: str) -> list[tuple[str, int, int]]:
     return [(book, chapter, count) for book, chapter, count in rows]
 
 
+def all_books(home: DataHome) -> dict[str, frozenset[str]]:
+    """Which books each corpus holds, for the whole library, in one query.
+
+    The same answer :attr:`SqliteCorpus.books` gives, asked once for everybody. Sixty-odd
+    corpora asking separately is a quarter of a second and this is a fifth of that; the
+    difference matters because the per-corpus answer is cached on the corpus object, and
+    anything that opens a fresh set of corpora -- a thread, a worker -- pays it again.
+    """
+    if not home.database.exists():
+        return {}
+    with closing(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)) as connection:
+        try:
+            rows = connection.execute("SELECT DISTINCT corpus, book FROM verse").fetchall()
+        except sqlite3.OperationalError:
+            return {}
+    out: dict[str, set[str]] = {}
+    for corpus, book in rows:
+        out.setdefault(corpus, set()).add(book)
+    return {corpus: frozenset(books) for corpus, books in out.items()}
+
+
+def chapter_index(home: DataHome) -> dict[str, dict[str, dict[int, int]]]:
+    """``corpus -> book -> chapter -> verses held``, for the whole library, in one query.
+
+    What a reader needs before it fetches anything: which versions carry the passage at all,
+    how far each book runs in each of them, and which chapters are short. Answering it from
+    the verse table per request would be a scan a second; answering it once is half a second
+    and about three megabytes, and it only changes when the database is rebuilt.
+
+    Counts, not verse numbers. A chapter that omits a verse the edition does not print has a
+    lower count than its highest number, and that difference is real -- it is what
+    :func:`~biblereference.audit.faithful_chapters` looks at -- so a caller wanting the
+    highest number has to ask for it rather than infer it from here.
+    """
+    if not home.database.exists():
+        return {}
+    with closing(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)) as connection:
+        try:
+            rows = connection.execute(
+                "SELECT corpus, book, chapter, COUNT(*) FROM verse GROUP BY corpus, book, chapter"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return {}
+    out: dict[str, dict[str, dict[int, int]]] = {}
+    for corpus, book, chapter, count in rows:
+        out.setdefault(corpus, {}).setdefault(book, {})[int(chapter)] = int(count)
+    return out
+
+
 def read_meta(home: DataHome) -> list[SourceMeta]:
     """Everything the database knows it holds."""
     if not home.database.exists():
@@ -691,16 +743,30 @@ class SqliteCorpus:
     the reading.
     """
 
-    def __init__(self, home: DataHome, meta: SourceMeta) -> None:
+    def __init__(
+        self, home: DataHome, meta: SourceMeta, books: frozenset[str] | None = None
+    ) -> None:
         self._home = home
         self._meta = meta
         self._connection = sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)
-        self._books: frozenset[str] | None = None
+        self._books = books
 
     @classmethod
-    def load_all(cls, home: DataHome) -> dict[str, SqliteCorpus]:
-        """Open every corpus the database holds, keyed by id."""
-        return {meta.corpus: cls(home, meta) for meta in read_meta(home)}
+    def load_all(
+        cls, home: DataHome, books: Mapping[str, frozenset[str]] | None = None
+    ) -> dict[str, SqliteCorpus]:
+        """Open every corpus the database holds, keyed by id.
+
+        Opening the connections is cheap -- a few milliseconds for the whole library. What
+        is not is the ``SELECT DISTINCT book`` each corpus runs the first time it is asked
+        whether it holds something: a quarter of a second across sixty-odd corpora, paid
+        again by every thread that opens its own set. Pass ``books`` -- from
+        :func:`all_books`, which answers for the whole library in one query -- to seed them.
+        """
+        return {
+            meta.corpus: cls(home, meta, books.get(meta.corpus) if books else None)
+            for meta in read_meta(home)
+        }
 
     @property
     def id(self) -> str:
@@ -726,13 +792,69 @@ class SqliteCorpus:
     def meta(self) -> SourceMeta:
         return self._meta
 
-    def has_book(self, book: str) -> bool:
+    @property
+    def books(self) -> frozenset[str]:
+        """Every book this corpus holds. Read once and kept."""
         if self._books is None:
             rows = self._connection.execute(
                 "SELECT DISTINCT book FROM verse WHERE corpus = ?", (self.id,)
             ).fetchall()
             self._books = frozenset(row[0] for row in rows)
-        return book in self._books
+        return self._books
+
+    def has_book(self, book: str) -> bool:
+        return book in self.books
+
+    def available(self, refs: Sequence[VerseRef]) -> list[VerseText]:
+        """The verses of ``refs`` this corpus actually holds, in order, skipping the rest.
+
+        :meth:`fetch` raises on the first missing verse, and that is the right contract for
+        the renderer: a citation that silently loses a verse is a citation that misquotes.
+        Reading is the other case. Editions genuinely differ about what a chapter contains,
+        and a chapter shown with two verses absent is worth reading where a chapter refused
+        outright is not -- so this reports what is there and lets the caller see the
+        difference by counting.
+        """
+        wanted = [ref for ref in refs if not ref.is_letter_chapter]
+        if not wanted:
+            return []
+        found: dict[tuple[str, int, int, str], str] = {}
+        # One query per chapter rather than one per verse: a chapter of a psalm is 176
+        # round trips otherwise, and every corpus in the library pays them.
+        for book, chapter in dict.fromkeys((ref.book, int(ref.chapter)) for ref in wanted):
+            for verse, subverse, text in self._connection.execute(
+                "SELECT verse, subverse, text FROM verse "
+                "WHERE corpus = ? AND book = ? AND chapter = ?",
+                (self.id, book, chapter),
+            ):
+                found[(book, chapter, int(verse), subverse or "")] = text
+        out = []
+        for ref in wanted:
+            text = found.get((ref.book, int(ref.chapter), ref.verse, ref.subverse))
+            if text is not None:
+                out.append(VerseText(ref=ref, text=text))
+        return out
+
+    def chapter(self, book: str, chapter: int) -> list[VerseText]:
+        """Every verse the corpus holds of one chapter, in its own numbering.
+
+        Unlike :meth:`available` this does not need to be told which verses to expect, so it
+        answers for an edition that prints verses its declared system does not have --
+        which is how a corpus's own divisions become visible rather than being clipped to
+        the system's.
+        """
+        rows = self._connection.execute(
+            "SELECT verse, subverse, text FROM verse "
+            "WHERE corpus = ? AND book = ? AND chapter = ? ORDER BY verse, subverse",
+            (self.id, book, int(chapter)),
+        ).fetchall()
+        return [
+            VerseText(
+                ref=VerseRef(book, chapter, int(verse), subverse or "", vrs=self.versification),
+                text=text,
+            )
+            for verse, subverse, text in rows
+        ]
 
     def fetch(self, refs: Sequence[VerseRef]) -> list[VerseText]:
         out: list[VerseText] = []

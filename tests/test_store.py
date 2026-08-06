@@ -503,3 +503,90 @@ def test_the_digest_counts_a_source_whose_filename_has_a_path_in_it(home: DataHo
     # The same line with the date segment split differently must still resolve to the
     # declared name, which is everything after `<source>/<date>/`.
     assert "asv/2026-01-01/eng-asv_usfm.zip".split("/", 2)[-1] == "eng-asv_usfm.zip"
+
+
+# --------------------------------------------------------------------------------------
+# Reading a passage that is not all there
+# --------------------------------------------------------------------------------------
+
+
+def _small(home: DataHome) -> SqliteCorpus:
+    """A corpus with a hole in it: John 3 without verse 2."""
+    write_corpus(
+        home,
+        SourceMeta(corpus="gappy", label="Gappy", language="en", versification="eng"),
+        [(VerseRef("JHN", 3, verse, vrs="eng"), f"verse {verse}") for verse in (1, 3, 4)]
+        + [(VerseRef("GEN", 1, 1, vrs="eng"), "in the beginning")],
+    )
+    return SqliteCorpus.load_all(home)["gappy"]
+
+
+def test_available_reads_round_a_missing_verse_where_fetch_refuses(home: DataHome) -> None:
+    """The two contracts are different on purpose.
+
+    A citation that silently loses a verse misquotes, so `fetch` raises. A chapter shown
+    with one verse absent is still worth reading, so `available` reports what is there --
+    and the caller sees the difference by counting.
+    """
+    corpus = _small(home)
+    refs = [VerseRef("JHN", 3, verse, vrs="eng") for verse in (1, 2, 3, 4)]
+
+    with pytest.raises(VerseUnavailable):
+        corpus.fetch(refs)
+
+    found = corpus.available(refs)
+    assert [v.ref.verse for v in found] == [1, 3, 4]
+    assert len(found) < len(refs)  # how a caller knows it is partial
+
+
+def test_available_keeps_the_order_it_was_asked_in(home: DataHome) -> None:
+    """It reads by chapter to avoid a query per verse, so the order has to be restored."""
+    corpus = _small(home)
+    refs = [VerseRef("JHN", 3, verse, vrs="eng") for verse in (4, 1, 3)]
+    assert [v.ref.verse for v in corpus.available(refs)] == [4, 1, 3]
+
+
+def test_chapter_answers_without_being_told_what_to_expect(home: DataHome) -> None:
+    """Which is what makes an edition's own divisions visible rather than clipped to the
+    system's."""
+    corpus = _small(home)
+    assert [v.ref.verse for v in corpus.chapter("JHN", 3)] == [1, 3, 4]
+    assert corpus.chapter("JHN", 99) == []
+    assert corpus.chapter("ZZZ", 1) == []
+
+
+def test_the_book_sets_can_be_seeded_and_agree_with_asking_each_corpus(
+    home: DataHome,
+) -> None:
+    """Sixty-odd corpora each running `SELECT DISTINCT book` costs a quarter of a second,
+    paid again by every thread that opens its own set. One query answers for all of them --
+    and it has to give the same answer, or the seed is a lie that never surfaces."""
+    from biblereference.store import all_books
+
+    _small(home)
+    books = all_books(home)
+    assert books == {"gappy": frozenset({"JHN", "GEN"})}
+
+    seeded = SqliteCorpus.load_all(home, books)["gappy"]
+    unseeded = SqliteCorpus.load_all(home)["gappy"]
+    assert seeded.books == unseeded.books
+    assert seeded.has_book("JHN") and not seeded.has_book("MRK")
+
+
+def test_the_chapter_index_counts_verses_rather_than_numbering_them(home: DataHome) -> None:
+    """John 3 here holds three verses numbered up to 4. The difference is what tells a
+    chapter with a hole from a complete one, so the index must not smooth it away."""
+    from biblereference.store import chapter_index
+
+    _small(home)
+    assert chapter_index(home) == {"gappy": {"JHN": {3: 3}, "GEN": {1: 1}}}
+
+
+def test_the_whole_library_queries_are_empty_before_anything_is_built(
+    tmp_path: Path,
+) -> None:
+    from biblereference.store import all_books, chapter_index
+
+    empty = DataHome(tmp_path / "nothing")
+    assert all_books(empty) == {}
+    assert chapter_index(empty) == {}
