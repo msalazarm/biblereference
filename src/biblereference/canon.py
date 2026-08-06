@@ -142,8 +142,13 @@ _ORDER_INDEX: Final[dict[str, int]] = {c: i for i, c in enumerate(CANONICAL_ORDE
 
 #: Books cited without a chapter -- "Jude 5" means Jude 1:5. Includes the short
 #: deuterocanonical pieces, which are routinely cited by verse alone.
+#:
+#: ``PS2`` was here until the Syriac arrived. It is the psalms after the Hebrew Psalter's
+#: 150, and while Psalm 151 was the only one anybody held it behaved as a single chapter;
+#: the Peshitta's second recension carries 152 to 155 as well, so it has five now and
+#: ``PS2 5`` has to mean Psalm 155 rather than the fifth verse of Psalm 151.
 SINGLE_CHAPTER_BOOKS: Final[frozenset[str]] = frozenset(
-    {"OBA", "PHM", "2JN", "3JN", "JUD", "SUS", "BEL", "LJE", "S3Y", "MAN", "PS2", "SST", "BLT"}
+    {"OBA", "PHM", "2JN", "3JN", "JUD", "SUS", "BEL", "LJE", "S3Y", "MAN", "SST", "BLT"}
 )
 
 _TITLES: Final[dict[str, str]] = {
@@ -231,7 +236,9 @@ _TITLES: Final[dict[str, str]] = {
     "MAN": "Prayer of Manasseh",
     "3MA": "3 Maccabees",
     "4MA": "4 Maccabees",
-    "PS2": "Psalm 151",
+    # Psalms 151 to 155. Titled for the book rather than for its first chapter now that the
+    # Syriac has brought the other four; "Psalm 151" remains an alias, and resolves to it.
+    "PS2": "Additional Psalms",
     "PSS": "Psalms of Solomon",
     "ODA": "Odes",
     "ENO": "Enoch",

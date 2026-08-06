@@ -169,6 +169,22 @@ def _files() -> tuple[RemoteFile, ...]:
     )
 
 
+def _chapter_for(book: str, chapter: int) -> int:
+    """The chapter this verse belongs to, where the file numbers itself by another scheme.
+
+    One case, and it is not a general mechanism. The three apocryphal-psalm files number
+    their chapters by *psalm* number -- 151 to 155 -- because in the manuscript that is what
+    they are. ``PS2`` is the book of psalms after the Hebrew Psalter's 150, so Psalm 151 is
+    its first chapter, which is where the five English corpora holding it put it. Taking the
+    file's numbering literally left the Syriac Psalm 151 at ``PS2 151``, four chapters past
+    the end of a book with one, so nothing could cite it and no comparison with the English
+    could see it.
+    """
+    if book == "PS2" and 151 <= chapter <= 155:
+        return chapter - 150
+    return chapter
+
+
 def build(archive: Path) -> Iterator[BuiltCorpus]:
     """Parse the archive into one corpus per (edition, Testament)."""
     verses: dict[str, list[tuple[VerseRef, str]]] = {}
@@ -189,7 +205,7 @@ def build(archive: Path) -> Iterator[BuiltCorpus]:
             licences.setdefault(corpus, set()).add(found)
         rows = verses.setdefault(corpus, [])
         for chapter, verse, subverse, text in cts_verses(tree):
-            rows.append((VerseRef(book, chapter, verse, subverse), text))
+            rows.append((VerseRef(book, _chapter_for(book, chapter), verse, subverse), text))
 
     for corpus, rows in sorted(verses.items()):
         label, language, versification = CORPORA[corpus]

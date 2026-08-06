@@ -14,16 +14,20 @@ from pathlib import Path
 
 import pytest
 
-from biblereference.refs import VerseRef
+from biblereference.refs import VerseRef, parse_reference
 from biblereference.search import (
     COVERAGE,
     IDENTIFIED,
     QUOTATION,
+    Match,
     ScaledRun,
     Searcher,
+    Witness,
     _coverage,
+    _matched_span,
     _ratio,
     _tokens,
+    _without_overlaps,
     build_index,
     index_is_stale,
 )
@@ -32,6 +36,10 @@ from biblereference.store import DataHome, SourceMeta, write_corpus
 # Two renderings of the same passages, far enough apart to tell apart. The archaic one
 # stands in for the King James family and the plain one for the modern translations.
 ARCHAIC = {
+    # John 1:1 is here for one reason: its second half repeats "God" and "the Word" often
+    # enough that a stray word of a *later* quotation lands inside it. See
+    # test_two_quotations_written_one_after_another_stay_apart.
+    "JHN 1:1": "In the beginning was the Word, and the Word was with God, and the Word was God.",
     "JHN 3:16": "For God so loved the world, that he gave his only begotten Son, that "
     "whosoever believeth in him should not perish, but have everlasting life.",
     "JHN 3:17": "For God sent not his Son into the world to condemn the world; but that "
@@ -48,6 +56,8 @@ ARCHAIC = {
 }
 
 MODERN = {
+    "JHN 1:1": "In the beginning the Word already existed. The Word was with God, and "
+    "the Word was God.",
     "JHN 3:16": "For God loved the world so much that he gave his one and only Son, so "
     "that everyone who believes in him will not perish but have eternal life.",
     "JHN 3:17": "God did not send his Son into the world to condemn the world, but to "
@@ -317,6 +327,48 @@ def test_two_quotations_in_one_document_are_two_records(searcher: Searcher) -> N
     assert {str(m.passage) for m in matches} == {"PSA 23:1-2", "EPH 2:9"}
 
 
+def test_two_quotations_written_one_after_another_stay_apart(searcher: Searcher) -> None:
+    """The case with no filler between them, which is the hard one.
+
+    John 1:1 repeats *God* and *the Word*, so a quotation of John 3:16 beginning *God so
+    loved* has its first word sitting inside John 1:1's second half. Measured on the
+    searched-text side alone that word is adjacent to the John 1:1 match and gets absorbed;
+    the span then swallows most of John 3:16, and the overlap check deletes the second
+    quotation as a duplicate. One chimeric record where there should be two.
+    """
+    document = (
+        "In the beginning was the Word. And God so loved the world that he gave his only Son."
+    )
+    matches = searcher.scan(document)
+
+    assert [str(m.passage) for m in matches] == ["JHN 1:1", "JHN 3:16"]
+    first, second = matches
+    assert first.quoted.lower().startswith("in the beginning was the word")
+    assert "loved" not in first.quoted.lower()
+    assert second.quoted.lower().startswith("god so loved the world")
+    # Neither is a rival reading of the other; they are neighbours.
+    assert not first.ambiguous
+    assert not second.ambiguous
+
+
+def test_a_scanned_record_keeps_the_date_it_was_judged_on(
+    searcher_dated: Searcher,
+) -> None:
+    """`scan` rebuilds every match to attach its alternates, and rebuilding it without the
+    date silently turned `anachronistic` off for the whole document -- the one field a
+    patristic count is supposed to filter on."""
+    (record,) = [
+        m.to_dict()
+        for m in searcher_dated.scan(
+            "and remember what he told us not of works lest any man should boast which "
+            "means none of us can take the credit for any of it at all"
+        )
+    ]
+
+    assert record["composed"] == 407
+    assert record["anachronistic"] is True
+
+
 def test_a_document_of_ordinary_preaching_yields_nothing(searcher: Searcher) -> None:
     """A false positive rate above zero puts noise into every cell of the distribution,
     and the rarely-quoted passages are where it would show up worst."""
@@ -348,6 +400,69 @@ def test_the_record_carries_everything_a_pipeline_needs(searcher: Searcher) -> N
     assert record["span"] and len(record["span"]) == 2
     assert record["translations"][0]["corpus"] == "archaic"
     assert record["ambiguous"] is False
+
+
+# --------------------------------------------------------------------------------------
+# Where a span begins and ends, and when two spans are one
+# --------------------------------------------------------------------------------------
+
+
+def test_a_span_stops_where_the_verse_leaps_ahead_of_the_text() -> None:
+    """The verse-side bound, on its own.
+
+    *God* is the eighth word of the text and the eleventh of John 1:1. On the text side it
+    is adjacent to the run before it and would be absorbed; on the verse side it is four
+    words further on, which is a coincidence agreeing rather than a quotation continuing.
+    """
+    query = _tokens("In the beginning was the Word. And God so loved the world")
+    assert _matched_span(query, _tokens(ARCHAIC["JHN 1:1"])) == (0, 7)
+
+
+def test_a_span_follows_the_verse_over_a_word_the_quotation_omits() -> None:
+    """The other direction, which must still work: *only Son* skips the verse's
+    *begotten*, a verse-side gap of one, and the span has to reach the closing word."""
+    query = _tokens("God so loved the world that he gave his only Son")
+    assert _matched_span(query, _tokens(ARCHAIC["JHN 3:16"])) == (0, 11)
+
+
+def _match(passage: str, span: tuple[int, int], similarity: float) -> Match:
+    return Match(
+        parse_reference(passage),
+        (Witness("archaic", "Archaic", "", similarity, 1611, similarity),),
+        span=span,
+        quoted="",
+    )
+
+
+def test_two_quotations_that_merely_touch_are_both_kept() -> None:
+    """A single shared character used to be enough to delete one of them."""
+    kept = _without_overlaps([_match("JHN 1:1", (0, 30), 0.9), _match("JHN 3:16", (29, 80), 0.85)])
+    assert [str(m.passage) for m in kept] == ["JHN 1:1", "JHN 3:16"]
+    assert not any(m.ambiguous for m in kept)
+
+
+def test_two_readings_of_the_same_words_are_one_record_with_an_alternate() -> None:
+    """Which is what the overlap check is actually for."""
+    kept = _without_overlaps([_match("PSA 14:1", (0, 40), 0.9), _match("PSA 53:1", (2, 38), 0.88)])
+    (only,) = kept
+    assert str(only.passage) == "PSA 14:1"
+    assert [str(p) for p in only.alternates] == ["PSA 53:1"]
+
+
+def test_one_passage_found_in_two_numberings_is_not_its_own_rival() -> None:
+    """The Douay and the Clementine agree across the New Testament, so a quotation is
+    found once in `eng` and again in `vul`. Comparing the ranges rather than the verses
+    they name made the match an alternate of itself and reported it as ambiguous."""
+    english = _match("JHN 3:16", (0, 40), 0.9)
+    latin = Match(
+        parse_reference("JHN 3:16", vrs="vul"),
+        english.witnesses,
+        span=(1, 39),
+        quoted="",
+    )
+    (only,) = _without_overlaps([english, latin])
+    assert only.alternates == ()
+    assert not only.ambiguous
 
 
 # --------------------------------------------------------------------------------------

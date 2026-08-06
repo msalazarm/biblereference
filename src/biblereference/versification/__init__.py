@@ -971,6 +971,43 @@ def _build_system(name: str, corrections: dict[str, object]) -> _System:
         max_verses[book] = tuple(counts)
         _fixed_books.add(book)
 
+    # Lengthening a book, which `fix_max_verses` refuses to do by design: it raises when the
+    # chapter index is out of range, because silently growing a book is how a typo in a
+    # chapter number becomes a new chapter nobody asked for. So this is a separate kind with
+    # its own invariants, and the strictest of them is that it can only append.
+    extensions = _sub(corrections, "extend_books").get(name, {})
+    assert isinstance(extensions, dict)
+    for book, spec in extensions.items():
+        if book not in max_verses:
+            raise VersificationDataError(
+                f"correction for {name!r} extends {book!r}, which neither upstream nor "
+                f"add_books defines -- use add_books to introduce a book, not extend_books"
+            )
+        counts = list(max_verses[book])
+        added = sorted((int(chapter), int(count)) for chapter, count in spec["chapters"].items())
+        for offset, (chapter, count) in enumerate(added):
+            if chapter <= len(counts):
+                raise VersificationDataError(
+                    f"correction for {name!r} extends {book} to chapter {chapter}, which it "
+                    f"already has ({book} has {len(counts)} chapters) -- extend_books only "
+                    f"appends; use fix_max_verses to change a chapter that exists"
+                )
+            if chapter != len(counts) + 1 + offset:
+                raise VersificationDataError(
+                    f"correction for {name!r} extends {book} to chapter {chapter}, leaving a "
+                    f"hole after {len(counts) + offset} -- an extension must be contiguous, "
+                    f"because a book with a missing chapter in the middle cannot be walked"
+                )
+            if count < 1:
+                raise VersificationDataError(
+                    f"correction for {name!r} gives {book} {chapter} {count} verses -- a "
+                    f"chapter nothing can be cited from is not worth declaring"
+                )
+        max_verses[book] = tuple(counts) + tuple(count for _, count in added)
+        # Extending brings chapters into range that the orphan check below skipped as
+        # out-of-range, so the same check has to cover them.
+        _fixed_books.add(book)
+
     mapped_raw = raw.get("mappedVerses", {})
     assert isinstance(mapped_raw, dict)
 

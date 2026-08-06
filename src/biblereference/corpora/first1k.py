@@ -17,10 +17,18 @@ So this brings the two files that are not Swete:
 * **Coptic Mark** -- one chapter, 45 verses, and the only Coptic anywhere in this
   library. Worth having as the seed of a language rather than for its coverage.
 
-1 Enoch is here too and is *not* imported yet. ``org`` declares 42 chapters; the Greek
-recension runs to 89, the German to 108 and the Latin fragment is chapter 106 alone. Until
-a versification can be told that a book got longer, importing it would put verses where
-nothing can cite them.
+1 Enoch is here too and is *not* imported, and the reason is worse than it first looked.
+The four files -- two Greek recensions, a German translation, a Latin fragment -- agree with
+each other and with Dillmann's universal division: 108 chapters, about 1,078 verses, chapter
+1 with nine verses and chapter 4 with one. ``org`` declares ``ENO`` with **42 chapters and
+1,563 verses**, beginning 28, 42, 30, 88, and it is upstream's own data rather than anything
+corrected here.
+
+So this is not a book that needs lengthening; whatever ``org``'s ``ENO`` describes, it is not
+the book these witnesses transmit, and no chapter of it matches. ``extend_books`` cannot help
+-- extending 42 to 108 would leave the first 42 declaring counts nothing holds. Importing
+would need ``org``'s ``ENO`` rewritten wholesale, which is a claim about upstream being wrong
+that nothing here can support. Written up in ``docs/versification-audit.md``.
 
 The INTF's Mark is likewise held back. It is a diplomatic transcription -- ``<ab>`` inside
 chapter divisions, and an apparatus of ``<rdg type="orig">`` and ``<rdg type="corr">`` with

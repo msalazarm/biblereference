@@ -175,10 +175,26 @@ _COMMON_SHARE: Final = 0.02
 #: than a winner and a duplicate.
 _TIE: Final = 0.06
 
-#: Words that may fall between two agreements and still count as one quotation. Wide
-#: enough for a clause the speaker interpolated, narrow enough that a coincidental word
-#: half a paragraph later does not extend the span to meet it.
+#: Words of the *searched text* that may fall between two agreements and still count as one
+#: quotation. Wide enough for a clause the speaker interpolated, narrow enough that a
+#: coincidental word half a paragraph later does not extend the span to meet it.
 _SPAN_GAP: Final = 8
+
+#: Words of the *verse* that may be skipped between two agreements. Much tighter than
+#: :data:`_SPAN_GAP`, and asymmetric on purpose.
+#:
+#: A quotation and the verse it quotes advance together. A speaker interpolating a clause of
+#: his own moves the text on while the verse stands still, which is what the wider gap above
+#: is for; but the reverse -- the verse leaping several words ahead while the text has not
+#: moved at all -- is not a quotation continuing. It is a different part of the verse
+#: coincidentally agreeing with a different part of the text.
+#:
+#: Without this bound, *In the beginning was the Word. And God so loved the world...* was
+#: reported as one quotation of John 1:1 running to "so loved the": the single words *God*
+#: and *the*, which sit at positions 11 and 13 of John 1:1, were absorbed while the text had
+#: already moved into John 3:16. Their verse-side gaps are 4 and 2; John 3:16's own closing
+#: *Son*, separated from *only* by the verse's *begotten*, has a gap of 1.
+_VERSE_GAP: Final = 2
 
 #: Words a match must share consecutively with the text it claims to quote. Measured over
 #: this corpus: formulaic sermon language aligns with a longest run of at most five, while
@@ -1206,23 +1222,30 @@ class Searcher:
         )
 
 
+def _coordinates(passage: VerseRange) -> tuple[str, object, int, int]:
+    """Which verses a passage names, without saying which system numbered them.
+
+    Two passages with these coordinates equal are one passage reached twice. A New Testament
+    quotation is found in the English numbering and again in the Vulgate's, because the two
+    agree there and both the Douay-Rheims and the Clementine are indexed. Where the systems
+    genuinely disagree the coordinates differ, so nothing is conflated that should not be.
+    """
+    return (
+        passage.book,
+        passage.start.chapter,
+        passage.start.verse,
+        passage.end.verse,
+    )
+
+
 def _one_per_passage(matches: Sequence[Match]) -> list[Match]:
     """Collapse the same passage reached through different versifications.
 
-    A New Testament quotation matches in the English numbering and again in the Vulgate's,
-    because the two agree there and both the Douay-Rheims and the Clementine are indexed.
-    They are one result about one passage, and reporting them twice would double-count
-    every New Testament citation in a study. Where the systems genuinely disagree the
-    coordinates differ, so nothing is merged that should not be.
+    Reporting one passage twice would double-count every New Testament citation in a study.
     """
     kept: dict[tuple[str, object, int, int], Match] = {}
     for match in matches:
-        key = (
-            match.passage.book,
-            match.passage.start.chapter,
-            match.passage.start.verse,
-            match.passage.end.verse,
-        )
+        key = _coordinates(match.passage)
         best = kept.get(key)
         if best is None or match.similarity > best.similarity:
             kept[key] = match
@@ -1269,6 +1292,8 @@ def _matched_span(query: Sequence[str], actual: Sequence[str]) -> tuple[int, int
     transcript quoting Psalm 23 and then Ephesians 2 half a paragraph later had the psalm
     reported as spanning both, which swallowed the second quotation whole and lost it. So
     the span grows outward from the longest block and stops at the first real gap.
+
+    A gap is measured on both sides. See :func:`_continues`.
     """
     blocks = [b for b in _matcher(query, actual).get_matching_blocks() if b.size]
     if not blocks:
@@ -1276,11 +1301,27 @@ def _matched_span(query: Sequence[str], actual: Sequence[str]) -> tuple[int, int
 
     anchor = max(range(len(blocks)), key=lambda i: blocks[i].size)
     low, high = anchor, anchor
-    while low > 0 and blocks[low].a - _end(blocks[low - 1]) <= _SPAN_GAP:
+    while low > 0 and _continues(blocks[low - 1], blocks[low]):
         low -= 1
-    while high + 1 < len(blocks) and blocks[high + 1].a - _end(blocks[high]) <= _SPAN_GAP:
+    while high + 1 < len(blocks) and _continues(blocks[high], blocks[high + 1]):
         high += 1
     return blocks[low].a, _end(blocks[high])
+
+
+def _continues(earlier: Match_, later: Match_) -> bool:
+    """Whether `later` carries the quotation on from `earlier`, or merely agrees with it.
+
+    Both distances are bounded, because a quotation and its verse advance together. Only
+    the searched-text side was bounded once, and a single common word standing where the
+    verse had already moved on was enough to drag a span across the sentence after it.
+
+    ``get_matching_blocks`` yields blocks increasing in both coordinates, so neither gap is
+    ever negative.
+    """
+    return (
+        later.a - _end(earlier) <= _SPAN_GAP
+        and later.b - (int(earlier.b) + int(earlier.size)) <= _VERSE_GAP
+    )
 
 
 def _end(block: Match_) -> int:
@@ -1301,6 +1342,8 @@ def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
     But a loser that scored nearly as well is not a duplicate; it is a genuine rival
     reading, and it is kept as an alternate rather than dropped. Which case it is depends
     only on how close the scores are.
+
+    Two quotations that merely *touch* are neither. See :func:`_same_words`.
     """
     kept: list[Match] = []
     rivals: dict[int, list[VerseRange]] = {}
@@ -1308,21 +1351,25 @@ def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
         if match.span is None:
             kept.append(match)
             continue
-        low, high = match.span
         overlapping = next(
-            (
-                index
-                for index, other in enumerate(kept)
-                if other.span is not None and low < other.span[1] and other.span[0] < high
-            ),
+            (index for index, other in enumerate(kept) if _same_words(match.span, other.span)),
             None,
         )
         if overlapping is None:
             kept.append(match)
             continue
         winner = kept[overlapping]
-        if winner.similarity - match.similarity <= _TIE and match.passage != winner.passage:
-            rivals.setdefault(overlapping, []).append(match.passage)
+        if winner.similarity - match.similarity > _TIE:
+            continue
+        # Compared on coordinates, not on the VerseRange: a passage found in two
+        # versifications that agree there is one passage, and comparing the objects made
+        # it its own alternate -- reporting `ambiguous` for a match nothing rivalled.
+        here = _coordinates(match.passage)
+        if here == _coordinates(winner.passage):
+            continue
+        seen = rivals.setdefault(overlapping, [])
+        if all(here != _coordinates(rival) for rival in seen):
+            seen.append(match.passage)
 
     resolved = [
         Match(
@@ -1331,10 +1378,32 @@ def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
             span=m.span,
             quoted=m.quoted,
             alternates=tuple(rivals.get(index, ())),
+            # Carried, not dropped. Rebuilding without them made every scanned match report
+            # anachronistic as False and ignore a Searcher's configured identified
+            # threshold, whatever it had been asked for.
+            composed=m.composed,
+            identified_at=m.identified_at,
         )
         for index, m in enumerate(kept)
     ]
     return sorted(resolved, key=lambda m: m.span or (0, 0))
+
+
+def _same_words(left: tuple[int, int] | None, right: tuple[int, int] | None) -> bool:
+    """Whether two spans claim the same stretch of text rather than merely abutting.
+
+    A bare interval intersection is what this used to be, and one shared character was
+    enough to delete a match. Two quotations written one after another share the space
+    between them and sometimes a word; that makes them neighbours, not rival readings of
+    one passage. Requiring the overlap to be most of the shorter span keeps the case this
+    is for -- the same words read as slightly different spans -- and lets neighbours alone.
+    """
+    if left is None or right is None:
+        return False
+    shared = min(left[1], right[1]) - max(left[0], right[0])
+    if shared <= 0:
+        return False
+    return shared * 2 > min(left[1] - left[0], right[1] - right[0])
 
 
 def scan_records(

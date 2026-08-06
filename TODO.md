@@ -315,6 +315,27 @@ instrument under the measurement.
 
 </details>
 
+### ~~9. A book cannot be told it got longer~~ — DONE, and the case it was written for was wrong
+
+`extend_books` exists, append-only, with five invariants and no orphaned mappings, applied in
+`_build_system` beside `fix_max_verses`.
+
+**But 1 Enoch is not what it is for.** `org`'s `ENO` is 42 chapters and 1,563 verses,
+beginning 28, 42, 30, 88 — and all four First1KGreek witnesses divide 1 Enoch as everyone
+does, 108 chapters and ~1,078 verses, chapter 1 with nine. Extending 42 to 108 would leave the
+first 42 declaring counts nothing holds. 1 Enoch stays unimported, now for a reason that was
+measured.
+
+Asking which books *do* outrun their system turned up 21 pairs and exactly one real case: the
+Syriac apocryphal psalms. `org PS2` was one chapter — Psalm 151 — and the Peshitta's second
+recension carries 152 to 155 as well, which the import had put at `PS2 151-155` where nothing
+could cite them and where the Syriac Psalm 151 did not line up with the five English witnesses
+holding it at `PS2 1`. `PS2` is five chapters now, the import renumbers, and `PS2` has left
+`SINGLE_CHAPTER_BOOKS`. Still 0 ghosts. All 21 pairs are tabulated in
+`docs/versification-audit.md`.
+
+<details><summary>original entry</summary>
+
 ### 9. A book cannot be told it got longer
 
 `org` declares 42 chapters of `ENO`. 1 Enoch conventionally has 108, and the texts on hand
@@ -329,6 +350,8 @@ pointing outside the corrected range — and it moves `fingerprint()`, which eve
 expected to notice.
 
 Until it exists, `ENO` stays modelled with no text, and 1 Enoch stays on disk unimported.
+
+</details>
 
 ### 7. Exodus 39 — ~~deliberately not fixed~~ settled by reading
 

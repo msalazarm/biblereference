@@ -20,6 +20,7 @@ from biblereference.versification import (
     PIVOT,
     VerseOutOfRangeError,
     Versification,
+    VersificationDataError,
     VersificationGapError,
     fingerprint,
 )
@@ -1015,3 +1016,64 @@ def test_the_psalms_of_solomon_and_the_odes_can_be_cited_in_english(vrs: Versifi
     # evidence is not evidence.
     assert not vrs.has_book("vul", "PSS")
     assert not vrs.has_book("vul", "ODA")
+
+
+# --------------------------------------------------------------------------------------
+# extend_books: telling a system that a book got longer
+# --------------------------------------------------------------------------------------
+
+
+def test_the_additional_psalms_reach_all_five(vrs: Versification) -> None:
+    """`PS2` is the psalms after the Hebrew Psalter's 150, and org declared one of them.
+
+    The Peshitta's second recension carries 152 to 155 as well -- they survive almost only
+    in Syriac -- so with one chapter declared they had nowhere to be cited from, and the
+    import had put them at PS2 151-155 where nothing could reach them.
+    """
+    from biblereference.refs import parse_reference
+
+    assert vrs.chapter_count("org", "PS2") == 5
+    assert [vrs.max_verse("org", "PS2", c) for c in range(1, 6)] == [7, 6, 6, 20, 21]
+    vrs.validate(parse_reference("PS2 5:21", vrs="org"))  # Psalm 155, its last verse
+
+
+def test_ps2_is_no_longer_cited_without_a_chapter() -> None:
+    """It was a single-chapter book while Psalm 151 was the only one anybody held. With
+    five, `PS2 5` has to be Psalm 155 rather than the fifth verse of Psalm 151."""
+    from biblereference.canon import SINGLE_CHAPTER_BOOKS
+    from biblereference.refs import parse_reference
+
+    assert "PS2" not in SINGLE_CHAPTER_BOOKS
+    assert str(parse_reference("PS2 5:1", vrs="org")) == "PS2 5:1"
+
+
+def _extend(book: str, chapters: dict[str, int]) -> None:
+    """Build `org` with one synthetic extend_books entry, to exercise an invariant."""
+    from biblereference.versification import _build_system
+
+    _build_system(
+        "org", {"extend_books": {"org": {book: {"chapters": chapters, "reason": "test"}}}}
+    )
+
+
+def test_extending_a_chapter_that_exists_is_refused() -> None:
+    """That is `fix_max_verses`'s job, and doing it here would let a typo in a chapter
+    number silently rewrite a real chapter's length."""
+    with pytest.raises(VersificationDataError, match="already has"):
+        _extend("PS2", {"1": 9})
+
+
+def test_an_extension_with_a_hole_is_refused() -> None:
+    with pytest.raises(VersificationDataError, match="hole"):
+        _extend("PS2", {"2": 6, "4": 20})
+
+
+def test_extending_a_book_the_system_does_not_have_is_refused() -> None:
+    """`add_books` introduces a book; this only lengthens one."""
+    with pytest.raises(VersificationDataError, match="add_books"):
+        _extend("ZZZ", {"1": 4})
+
+
+def test_an_extension_to_an_empty_chapter_is_refused() -> None:
+    with pytest.raises(VersificationDataError, match="not worth declaring"):
+        _extend("PS2", {"2": 0})

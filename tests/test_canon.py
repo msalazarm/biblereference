@@ -163,8 +163,16 @@ def test_normalize_collapses_spelling_variants() -> None:
 
 
 def test_single_chapter_books_include_short_deuterocanonical_pieces() -> None:
-    assert {"SUS", "BEL", "LJE", "S3Y", "MAN", "PS2"} <= SINGLE_CHAPTER_BOOKS
+    assert {"SUS", "BEL", "LJE", "S3Y", "MAN"} <= SINGLE_CHAPTER_BOOKS
     assert "SIR" not in SINGLE_CHAPTER_BOOKS
+
+
+def test_the_additional_psalms_are_no_longer_a_single_chapter() -> None:
+    """`PS2` was Psalm 151 alone while that was the only one anybody held. The Peshitta's
+    second recension carries 152 to 155 too, so it has five chapters and `PS2 5` means
+    Psalm 155 rather than the fifth verse of Psalm 151."""
+    assert "PS2" not in SINGLE_CHAPTER_BOOKS
+    assert book_title("PS2") == "Additional Psalms"
 
 
 def test_every_ordered_book_has_a_title_and_a_canon() -> None:

@@ -825,3 +825,90 @@ refused, because it needs Greek on both sides and `org`'s Greek witness reaches 
 Testament while `lxx` is the Old — no calibration case exists because no real case does.
 
 **75/75 correct across eleven pairs.**
+
+## Can a book be told it got longer? — `extend_books`, and what it turned out to be for
+
+`TODO.md` item 9 asked for a correction kind that could lengthen a book, and gave 1 Enoch as
+the case: *"`org` declares 42 chapters of `ENO`. 1 Enoch conventionally has 108."* Building it
+meant first checking that diagnosis, and the diagnosis is wrong.
+
+### `org`'s `ENO` is not 1 Enoch as anybody divides it
+
+The four texts First1KGreek holds under `tlg1463.tlg001` were parsed and counted:
+
+| | chapters | verses | note |
+|---|---|---:|---|
+| Greek, recension 1 | 1–32, 89 | 246 | chapter 4 absent |
+| Greek, recension 2 | 1–32 | 235 | chapter 4 absent |
+| German | 33–108 | 843 | complete run |
+| Latin fragment | 106 | 13 | one chapter |
+
+They agree with each other and with Dillmann's universal division: chapter 1 has 9 verses,
+chapter 2 has 2 or 3, chapter 3 has 1. Together they cover 1–108 in about 1,078 verses.
+
+`org` declares `ENO` with **42 chapters and 1,563 verses**, beginning 28, 42, 30, 88, 40. It
+is in upstream's own `maxVerses`, not in any correction here. Whatever it describes, it is
+not the book these four witnesses transmit, and no chapter of it matches: `ENO 1` is 28
+verses where every witness prints 9, `ENO 4` is 88 where the text has one.
+
+So `extend_books` cannot rescue 1 Enoch. Lengthening 42 to 108 would leave chapters 1–42
+declaring counts nothing holds, and 1 Enoch would be imported into a book-shaped hole. It
+stays unimported, now for a reason that is understood rather than guessed. Correcting `org`'s
+`ENO` wholesale — 42 `fix_max_verses` entries and 66 extensions — is the only thing that
+would work, and that is a claim about upstream being wrong which nothing here can support.
+
+### Then who wants `extend_books`?
+
+Asked properly, rather than assumed: which `(corpus, book)` pairs hold a chapter their
+declared system does not have? **Twenty-one.** Every one was read.
+
+| | verdict |
+|---|---|
+| `lxx MAL` at 4 chapters (swete, lxx2012, lxx2012uk) | **`lxx` is right.** Rahlfs and Brenton both print 3 chapters ending at 3:24; the three that print 4 are following the English division, where 3:19–24 becomes 4:1–6. `eng` declares exactly their [14, 17, 18, 6]. No correction. |
+| `lxx NEH`, `DAN`, `EST`, `S3Y` at 0 chapters | Not lengthening: `lxx` numbers Nehemiah inside 2 Esdras and Daniel's Greek under `DAG`. `add_books` territory, and a modelling question rather than a count. |
+| `lxx JOS` 25, `lxx TOB` 15 (rahlfs-cc only) | One witness, and its pair disagrees: `rahlfs` from the Patristic Text Archive has 24 and 14. Two digitisations of one printed edition that differ mean one is wrong — a diff, not a correction. |
+| `org EZA` 14 (peshitta-ot) | One witness. 4 Ezra's chapter division varies by more than one chapter across the traditions. |
+| `eng ESG` 16 (kjv, rv, wyc2017, wyc2018) | Already `unreliable`. |
+| **`org PS2` 155 (peshitta-alt)** | **The one real case.** Below. |
+
+### The one real case: the psalms after 150
+
+`PS2` is the book of psalms following the Hebrew Psalter's 150. `org` declared it with one
+chapter of seven verses — Psalm 151, which is where five English corpora put it, at
+`PS2 1:1-7`. The Syriac tradition carries four more, psalms 152 to 155, surviving almost only
+in Syriac; the Patristic Text Archive's second Peshitta recension has all five.
+
+The import took the files' own chapter numbers, which are *psalm* numbers, so the Syriac
+landed at `PS2 151` to `PS2 155` — four chapters past the end of a book with one. Two things
+were wrong at once and only one of them was the versification:
+
+* **65 verses were uncitable.** `PS2 152:1` names a chapter no system declares.
+* **The Syriac Psalm 151 did not line up with the English one.** It sat at `PS2 151:1` where
+  `web`, `webbe`, `webu`, `asvbt` and `ourb` all have `PS2 1:1`, so no comparison could see
+  it and no lookup could find it. That was an import fault, not a mapping one.
+
+Both fixed. `corpora/pta.py` renumbers 151–155 to 1–5 on the way in, and `org PS2` is
+extended from one chapter to five — `[7, 6, 6, 20, 21]`, read from the manuscript's own
+numbering with each psalm's superscription excluded as verse 0. `PS2` also leaves
+`SINGLE_CHAPTER_BOOKS`, because `PS2 5` now has to mean Psalm 155 rather than the fifth verse
+of Psalm 151, and its title becomes *Additional Psalms* rather than *Psalm 151*.
+
+`biblereference coverage` is unchanged at **0 ghosts**, and Psalm 151:1 now reads
+*"I was small among my brothers"* in English and ܙܥܘܪܐ ܗܘܝܬ ܒܐܚܝ̈ in Syriac at the same
+coordinate.
+
+### The invariants it carries
+
+`fix_max_verses` raises when a chapter index is out of range, by design: silently growing a
+book is how a typo in a chapter number becomes a chapter nobody asked for. `extend_books` is a
+separate kind so that it can be strict about the one thing it is allowed to do.
+
+* **Append-only.** The lowest new chapter must be exactly one past the end.
+* **Contiguous.** A hole is refused: a book with a missing chapter in the middle cannot be walked.
+* **Never alters.** A chapter the system already has is refused, naming `fix_max_verses`.
+* **Never introduces.** A book neither upstream nor `add_books` defines is refused, naming `add_books`.
+* **No empty chapters.** One nothing can be cited from is not worth declaring.
+* **No orphaned mappings.** Extending brings chapters into range that the existing check
+  skipped as out-of-range, so the extended books join the set that check covers.
+
+It moves `fingerprint()`, which every dependent is expected to notice.
