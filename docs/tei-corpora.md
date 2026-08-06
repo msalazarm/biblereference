@@ -140,6 +140,19 @@ swete  vs rahlfs       14,446 of 26,899 verses differ (54%)
 The first is two hands copying one book. The second is two different editions, and the gap
 between the two numbers is what makes the identification safe rather than assumed.
 
+Sorted, the 1,022 are: 1,019 differing only in punctuation, 691 where the length differs by
+more than three words, and 381 where the wording does. The last are mostly Corpus Corporum
+splitting a word across a line and leaving the space in — `παι δεύεται`, `αὐ τὸν` — which is
+in its source rather than in this reader.
+
+The 691 are the interesting ones, and they are verse *boundaries*. At Exodus 18:25/26 the
+Patristic Text Archive ends verse 25 with καὶ ἐκρίνοσαν τὸν λαὸν πᾶσαν ὥραν and Corpus
+Corporum begins verse 26 with it; Swete and Brenton both agree with the second, so PTA is
+wrong there. **But it is not systematic.** Arbitrating forty of them against Swete by word
+overlap: Corpus Corporum wins 20, PTA 15, three are a draw and two have no arbiter. Neither
+transcription can be preferred wholesale, and the 691 are a queue of individually readable
+cases rather than a fault in one file.
+
 Three Greek New Testaments do the same for the New Testament. Against Nestle 1904 over Luke:
 the SBLGNT differs in 19% of verses at 99% mean similarity, Westcott–Hort in 28% at 98%. One
 text is a claim; three make a variant visible.
