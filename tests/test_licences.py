@@ -186,3 +186,25 @@ def test_a_database_built_before_the_licence_columns_is_migrated(tmp_path: Path)
         [],
     )
     assert {item.corpus for item in read_meta(home)} == {"ancient", "new"}
+
+
+def test_an_underlying_licence_governs_rather_than_the_header() -> None:
+    """The one direction this must never round.
+
+    The Patristic Text Archive publishes the SBL Greek New Testament under a CC BY 4.0
+    header, and CC BY permits commercial use; the SBLGNT's own terms do not. Answering
+    with the header would tell a user they may do something they may not.
+    """
+    from dataclasses import replace
+
+    declared = replace(get("cc-by-4.0"), underlying=get("sblgnt"))
+    assert declared.commercial, "the header itself does say so"
+    assert not declared.effective.commercial, "but the edition does not"
+    assert declared.restricted
+    assert "governed by" in declared.describe()
+    assert "non-commercial" in declared.describe()
+
+
+def test_a_plain_licence_governs_itself() -> None:
+    for licence in LICENCES.values():
+        assert licence.effective is licence

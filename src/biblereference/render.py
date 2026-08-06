@@ -55,11 +55,17 @@ _LANGUAGE_NAMES: Final[Mapping[str, str]] = {
     "grc": "Greek",
     "hbo": "Hebrew",
     "la": "Latin",
+    "syc": "Syriac",
+    "cop": "Coptic",
+    "de": "German",
 }
 
 #: Languages written right to left. Their text is wrapped in a Unicode directional
 #: isolate so that neighbouring Markdown punctuation does not reorder on screen.
-_RTL: Final = frozenset({"hbo"})
+#:
+#: Syriac is one of them and Coptic is not, which is the whole reason this is a set rather
+#: than "anything not Latin script".
+_RTL: Final = frozenset({"hbo", "syc"})
 
 #: English versions that come from a fetched source rather than from ``pythonbible``,
 #: so that asking for one before building says so instead of reporting it as unknown.
@@ -797,13 +803,13 @@ class Renderer:
             if found is not None:
                 terms.append(found)
         for obliged in terms:
-            if not obliged.licence.commercial:
+            if not obliged.licence.effective.commercial:
                 report.warnings.append(
                     f"{obliged.usage.label}: {obliged.licence.name} — may not be used "
                     f"commercially; see the notices"
                 )
         if terms and self.config.strict:
-            forbidden = [f.usage.label for f in terms if not f.licence.commercial]
+            forbidden = [f.usage.label for f in terms if not f.licence.effective.commercial]
             if forbidden:
                 report.errors.append(
                     "quoted texts that may not be used commercially: " + "; ".join(forbidden)

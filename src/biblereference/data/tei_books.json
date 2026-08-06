@@ -1,0 +1,1066 @@
+{
+  "pta": {
+    "pta001.pta-grc1": {
+      "book": "GEN",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta001.pta-grc1.xml",
+      "title": "ΓΕΝΕΣΙΣ"
+    },
+    "pta001.pta-syc1": {
+      "book": "GEN",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta001.pta-syc1.xml",
+      "title": "Genesis"
+    },
+    "pta002.pta-grc1": {
+      "book": "EXO",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta002.pta-grc1.xml",
+      "title": "ΕΞΟΔΟΣ"
+    },
+    "pta002.pta-syc1": {
+      "book": "EXO",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta002.pta-syc1.xml",
+      "title": "Exodus"
+    },
+    "pta003.pta-grc1": {
+      "book": "LEV",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta003.pta-grc1.xml",
+      "title": "ΛΕΥΙΤΙΚΟΝ"
+    },
+    "pta003.pta-syc1": {
+      "book": "LEV",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta003.pta-syc1.xml",
+      "title": "Leviticus"
+    },
+    "pta004.pta-grc1": {
+      "book": "NUM",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta004.pta-grc1.xml",
+      "title": "ΑΡΙΘΜΟΙ"
+    },
+    "pta004.pta-syc1": {
+      "book": "NUM",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta004.pta-syc1.xml",
+      "title": "Numbers"
+    },
+    "pta005.pta-grc1": {
+      "book": "DEU",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta005.pta-grc1.xml",
+      "title": "ΔΕΥΤΕΡΟΝΟΜΙΟΝ"
+    },
+    "pta005.pta-syc1": {
+      "book": "DEU",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta005.pta-syc1.xml",
+      "title": "Deuteronomy"
+    },
+    "pta006.pta-grc1": {
+      "book": "JOS",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta006.pta-grc1.xml",
+      "title": "ΙΗΣΟΥΣ"
+    },
+    "pta006.pta-syc1": {
+      "book": "JOS",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta006.pta-syc1.xml",
+      "title": "Joshua"
+    },
+    "pta007.pta-grc1": {
+      "book": "JDG",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta007.pta-grc1.xml",
+      "title": "ΚΡΙΤΑΙ"
+    },
+    "pta007.pta-grc2": {
+      "book": "JDB",
+      "corpus": "rahlfs-alt",
+      "file": "pta9999.pta007.pta-grc2.xml",
+      "title": "Judices (Codex Vaticanus)"
+    },
+    "pta007.pta-syc1": {
+      "book": "JDG",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta007.pta-syc1.xml",
+      "title": "Judges"
+    },
+    "pta008.pta-grc1": {
+      "book": "RUT",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta008.pta-grc1.xml",
+      "title": "ΡΟΥΘ"
+    },
+    "pta008.pta-syc1": {
+      "book": "RUT",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta008.pta-syc1.xml",
+      "title": "Ruth"
+    },
+    "pta009.pta-grc1": {
+      "book": "1SA",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta009.pta-grc1.xml",
+      "title": "ΒΑΣΙΛΕΙΩΝ Αʹ"
+    },
+    "pta009.pta-syc1": {
+      "book": "1SA",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta009.pta-syc1.xml",
+      "title": "Samuel 1"
+    },
+    "pta010.pta-grc1": {
+      "book": "2SA",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta010.pta-grc1.xml",
+      "title": "ΒΑΣΙΛΕΙΩΝ Βʹ"
+    },
+    "pta010.pta-syc1": {
+      "book": "2SA",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta010.pta-syc1.xml",
+      "title": "Samuel 2"
+    },
+    "pta011.pta-grc1": {
+      "book": "1KI",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta011.pta-grc1.xml",
+      "title": "ΒΑΣΙΛΕΙΩΝ Γʹ"
+    },
+    "pta011.pta-syc1": {
+      "book": "1KI",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta011.pta-syc1.xml",
+      "title": "Kings 1"
+    },
+    "pta012.pta-grc1": {
+      "book": "2KI",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta012.pta-grc1.xml",
+      "title": "ΒΑΣΙΛΕΙΩΝ Δʹ"
+    },
+    "pta012.pta-syc1": {
+      "book": "2KI",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta012.pta-syc1.xml",
+      "title": "Kings 2"
+    },
+    "pta013.pta-grc1": {
+      "book": "1CH",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta013.pta-grc1.xml",
+      "title": "ΠΑΡΑΛΕΙΠΟΜΕΝΩΝ Αʹ"
+    },
+    "pta013.pta-syc1": {
+      "book": "1CH",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta013.pta-syc1.xml",
+      "title": "Chronicles 1"
+    },
+    "pta014.pta-grc1": {
+      "book": "2CH",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta014.pta-grc1.xml",
+      "title": "ΠΑΡΑΛΕΙΠΟΜΕΝΩΝ Βʹ"
+    },
+    "pta014.pta-syc1": {
+      "book": "2CH",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta014.pta-syc1.xml",
+      "title": "Chronicles 2"
+    },
+    "pta015.pta-syc1": {
+      "book": "MAN",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta015.pta-syc1.xml",
+      "title": "Prayer of Manasseh A"
+    },
+    "pta015.pta-syc2": {
+      "book": "MAN",
+      "corpus": "peshitta-alt",
+      "file": "pta9999.pta015.pta-syc2.xml",
+      "title": "Prayer of Manasseh B"
+    },
+    "pta016.pta-grc1": {
+      "book": "1ES",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta016.pta-grc1.xml",
+      "title": "ΕΣΔΡΑΣ Αʹ"
+    },
+    "pta016.pta-syc1": {
+      "book": "EZR",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta016.pta-syc1.xml",
+      "title": "Ezra"
+    },
+    "pta017.pta-grc1": {
+      "book": "EZR",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta017.pta-grc1.xml",
+      "title": "ΕΣΔΡΑΣ Βʹ"
+    },
+    "pta017.pta-syc1": {
+      "book": "NEH",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta017.pta-syc1.xml",
+      "title": "Nehemia"
+    },
+    "pta018.pta-syc1": {
+      "book": "1ES",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta018.pta-syc1.xml",
+      "title": "Esdras 3"
+    },
+    "pta019.pta-syc1": {
+      "book": "EZA",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta019.pta-syc1.xml",
+      "title": "Esdras 4"
+    },
+    "pta020.pta-grc1": {
+      "book": "ESG",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta020.pta-grc1.xml",
+      "title": "ΕΣΘΗΡ"
+    },
+    "pta020.pta-syc1": {
+      "book": "EST",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta020.pta-syc1.xml",
+      "title": "Esther"
+    },
+    "pta021.pta-grc1": {
+      "book": "JDT",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta021.pta-grc1.xml",
+      "title": "ΙΟΥΔΙΘ"
+    },
+    "pta021.pta-syc1": {
+      "book": "JDT",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta021.pta-syc1.xml",
+      "title": "Judith"
+    },
+    "pta022.pta-grc1": {
+      "book": "TOB",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta022.pta-grc1.xml",
+      "title": "ΤΩΒΙΤ"
+    },
+    "pta022.pta-grc2": {
+      "book": "TBS",
+      "corpus": "rahlfs-alt",
+      "file": "pta9999.pta022.pta-grc2.xml",
+      "title": "Tobias (Codex Sinaiticus)"
+    },
+    "pta022.pta-syc1": {
+      "book": "TOB",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta022.pta-syc1.xml",
+      "title": "Tobit A"
+    },
+    "pta022.pta-syc2": {
+      "book": "TOB",
+      "corpus": "peshitta-alt",
+      "file": "pta9999.pta022.pta-syc2.xml",
+      "title": "Tobit B"
+    },
+    "pta023.pta-grc1": {
+      "book": "1MA",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta023.pta-grc1.xml",
+      "title": "ΜΑΚΚΑΒΑΙΩΝ Αʹ"
+    },
+    "pta023.pta-syc1": {
+      "book": "1MA",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta023.pta-syc1.xml",
+      "title": "Maccabees 1 A"
+    },
+    "pta023.pta-syc2": {
+      "book": "1MA",
+      "corpus": "peshitta-alt",
+      "file": "pta9999.pta023.pta-syc2.xml",
+      "title": "Maccabees 1 B"
+    },
+    "pta024.pta-grc1": {
+      "book": "2MA",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta024.pta-grc1.xml",
+      "title": "ΜΑΚΚΑΒΑΙΩΝ Βʹ"
+    },
+    "pta024.pta-syc1": {
+      "book": "2MA",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta024.pta-syc1.xml",
+      "title": "Maccabees 2"
+    },
+    "pta025.pta-grc1": {
+      "book": "3MA",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta025.pta-grc1.xml",
+      "title": "ΜΑΚΚΑΒΑΙΩΝ Γʹ"
+    },
+    "pta025.pta-syc1": {
+      "book": "3MA",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta025.pta-syc1.xml",
+      "title": "Maccabees 3"
+    },
+    "pta026.pta-grc1": {
+      "book": "4MA",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta026.pta-grc1.xml",
+      "title": "ΜΑΚΚΑΒΑΙΩΝ Δʹ"
+    },
+    "pta026.pta-syc1": {
+      "book": "4MA",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta026.pta-syc1.xml",
+      "title": "Maccabees 4"
+    },
+    "pta031.pta-grc1": {
+      "book": "PSA",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta031.pta-grc1.xml",
+      "title": "ΨΑΛΜΟΙ"
+    },
+    "pta031.pta-syc1": {
+      "book": "PSA",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta031.pta-syc1.xml",
+      "title": "Psalms"
+    },
+    "pta031.pta-syc2": {
+      "book": "PS2",
+      "corpus": "peshitta-alt",
+      "file": "pta9999.pta031.pta-syc2.xml",
+      "title": "Apocryphal Psalms A"
+    },
+    "pta031.pta-syc3": {
+      "book": "PS2",
+      "corpus": "peshitta-alt",
+      "file": "pta9999.pta031.pta-syc3.xml",
+      "title": "Apocryphal Psalms B"
+    },
+    "pta031.pta-syc4": {
+      "book": "PS2",
+      "corpus": "peshitta-alt",
+      "file": "pta9999.pta031.pta-syc4.xml",
+      "title": "Apocryphal Psalms"
+    },
+    "pta032.pta-grc1": {
+      "book": "ODA",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta032.pta-grc1.xml",
+      "title": "ΩΔΑΙ"
+    },
+    "pta032.pta-syc1": {
+      "book": "ODA",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta032.pta-syc1.xml",
+      "title": "Odes"
+    },
+    "pta033.pta-grc1": {
+      "book": "PRO",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta033.pta-grc1.xml",
+      "title": "ΠΑΡΟΙΜΙΑΙ"
+    },
+    "pta033.pta-syc1": {
+      "book": "PRO",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta033.pta-syc1.xml",
+      "title": "Proverbs"
+    },
+    "pta034.pta-grc1": {
+      "book": "ECC",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta034.pta-grc1.xml",
+      "title": "ΕΚΚΛΗΣΙΑΣΤΗΣ"
+    },
+    "pta034.pta-syc1": {
+      "book": "ECC",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta034.pta-syc1.xml",
+      "title": "Ecclesiastes"
+    },
+    "pta035.pta-grc1": {
+      "book": "SNG",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta035.pta-grc1.xml",
+      "title": "ΑΣΜΑ"
+    },
+    "pta035.pta-syc1": {
+      "book": "SNG",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta035.pta-syc1.xml",
+      "title": "Song of Songs"
+    },
+    "pta036.pta-grc1": {
+      "book": "JOB",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta036.pta-grc1.xml",
+      "title": "ΙΩΒ"
+    },
+    "pta036.pta-syc1": {
+      "book": "JOB",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta036.pta-syc1.xml",
+      "title": "Job"
+    },
+    "pta037.pta-grc1": {
+      "book": "WIS",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta037.pta-grc1.xml",
+      "title": "ΣΟΦΙΑ ΣΑΛΩΜΩΝΟΣ"
+    },
+    "pta037.pta-syc1": {
+      "book": "WIS",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta037.pta-syc1.xml",
+      "title": "Wisdom of Solomon"
+    },
+    "pta038.pta-grc1": {
+      "book": "SIR",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta038.pta-grc1.xml",
+      "title": "Siracides"
+    },
+    "pta038.pta-syc1": {
+      "book": "SIR",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta038.pta-syc1.xml",
+      "title": "Sirach"
+    },
+    "pta039.pta-grc1": {
+      "book": "PSS",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta039.pta-grc1.xml",
+      "title": "ΨΑΛΜΟΙ ΣΟΛΟΜΩΝΤΟΣ"
+    },
+    "pta039.pta-syc1": {
+      "book": "PSS",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta039.pta-syc1.xml",
+      "title": "Psalms of Solomon"
+    },
+    "pta040.pta-grc1": {
+      "book": "HOS",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta040.pta-grc1.xml",
+      "title": "ΩΣΗΕ"
+    },
+    "pta040.pta-syc1": {
+      "book": "HOS",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta040.pta-syc1.xml",
+      "title": "Hosea"
+    },
+    "pta041.pta-grc1": {
+      "book": "AMO",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta041.pta-grc1.xml",
+      "title": "ΑΜΩΣ"
+    },
+    "pta041.pta-syc1": {
+      "book": "AMO",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta041.pta-syc1.xml",
+      "title": "Amos"
+    },
+    "pta042.pta-grc1": {
+      "book": "MIC",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta042.pta-grc1.xml",
+      "title": "ΜΙΧΑΙΑΣ"
+    },
+    "pta042.pta-syc1": {
+      "book": "MIC",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta042.pta-syc1.xml",
+      "title": "Micah"
+    },
+    "pta043.pta-grc1": {
+      "book": "JOL",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta043.pta-grc1.xml",
+      "title": "ΙΩΗΛ"
+    },
+    "pta043.pta-syc1": {
+      "book": "JOL",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta043.pta-syc1.xml",
+      "title": "Joel"
+    },
+    "pta044.pta-grc1": {
+      "book": "OBA",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta044.pta-grc1.xml",
+      "title": "ΑΒΔΙΟΥ"
+    },
+    "pta044.pta-syc1": {
+      "book": "OBA",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta044.pta-syc1.xml",
+      "title": "Obadiah"
+    },
+    "pta045.pta-grc1": {
+      "book": "JON",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta045.pta-grc1.xml",
+      "title": "ΙΩΝΑΣ"
+    },
+    "pta045.pta-syc1": {
+      "book": "JON",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta045.pta-syc1.xml",
+      "title": "Jonah"
+    },
+    "pta046.pta-grc1": {
+      "book": "NAM",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta046.pta-grc1.xml",
+      "title": "ΝΑΟΥΜ"
+    },
+    "pta046.pta-syc1": {
+      "book": "NAM",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta046.pta-syc1.xml",
+      "title": "Nahum"
+    },
+    "pta047.pta-grc1": {
+      "book": "HAB",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta047.pta-grc1.xml",
+      "title": "ΑΜΒΑΚΟΥΜ"
+    },
+    "pta047.pta-syc1": {
+      "book": "HAB",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta047.pta-syc1.xml",
+      "title": "Habakkuk"
+    },
+    "pta048.pta-grc1": {
+      "book": "ZEP",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta048.pta-grc1.xml",
+      "title": "ΣΟΦΟΝΙΑΣ"
+    },
+    "pta048.pta-syc1": {
+      "book": "ZEP",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta048.pta-syc1.xml",
+      "title": "Zephaniah"
+    },
+    "pta049.pta-grc1": {
+      "book": "HAG",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta049.pta-grc1.xml",
+      "title": "ΑΓΓΑΙΟΣ"
+    },
+    "pta049.pta-syc1": {
+      "book": "HAG",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta049.pta-syc1.xml",
+      "title": "Haggai"
+    },
+    "pta050.pta-grc1": {
+      "book": "ZEC",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta050.pta-grc1.xml",
+      "title": "ΖΑΧΑΡΙΑΣ"
+    },
+    "pta050.pta-syc1": {
+      "book": "ZEC",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta050.pta-syc1.xml",
+      "title": "Zechariah"
+    },
+    "pta051.pta-grc1": {
+      "book": "MAL",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta051.pta-grc1.xml",
+      "title": "Malachias"
+    },
+    "pta051.pta-syc1": {
+      "book": "MAL",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta051.pta-syc1.xml",
+      "title": "Malachi"
+    },
+    "pta052.pta-grc1": {
+      "book": "ISA",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta052.pta-grc1.xml",
+      "title": "ΗΣΑΙΑΣ"
+    },
+    "pta052.pta-syc1": {
+      "book": "ISA",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta052.pta-syc1.xml",
+      "title": "Isaiah"
+    },
+    "pta053.pta-grc1": {
+      "book": "JER",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta053.pta-grc1.xml",
+      "title": "ΙΕΡΕΜΙΑΣ"
+    },
+    "pta053.pta-syc1": {
+      "book": "JER",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta053.pta-syc1.xml",
+      "title": "Jeremiah"
+    },
+    "pta054.pta-grc1": {
+      "book": "BAR",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta054.pta-grc1.xml",
+      "title": "ΒΑΡΟΥΧ"
+    },
+    "pta054.pta-syc1": {
+      "book": "BAR",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta054.pta-syc1.xml",
+      "title": "Baruch"
+    },
+    "pta055.pta-grc1": {
+      "book": "LAM",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta055.pta-grc1.xml",
+      "title": "ΘΡΗΝΟΙ"
+    },
+    "pta055.pta-syc1": {
+      "book": "LAM",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta055.pta-syc1.xml",
+      "title": "Lamentations"
+    },
+    "pta056.pta-grc1": {
+      "book": "LJE",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta056.pta-grc1.xml",
+      "title": "ΕΠΙΣΤΟΛΗ ΙΕΡΕΜΙΟΥ"
+    },
+    "pta056.pta-syc1": {
+      "book": "LJE",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta056.pta-syc1.xml",
+      "title": "Letter of Jeremiah"
+    },
+    "pta057.pta-syc1": {
+      "book": null,
+      "corpus": null,
+      "file": "pta9999.pta057.pta-syc1.xml",
+      "title": "Letter of Baruch A"
+    },
+    "pta057.pta-syc2": {
+      "book": null,
+      "corpus": null,
+      "file": "pta9999.pta057.pta-syc2.xml",
+      "title": "Letter of Baruch B"
+    },
+    "pta058.pta-syc1": {
+      "book": null,
+      "corpus": null,
+      "file": "pta9999.pta058.pta-syc1.xml",
+      "title": "Apocalypse of Baruch"
+    },
+    "pta059.pta-grc1": {
+      "book": "EZK",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta059.pta-grc1.xml",
+      "title": "ΙΕΖΕΚΙΗΛ"
+    },
+    "pta059.pta-syc1": {
+      "book": "EZK",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta059.pta-syc1.xml",
+      "title": "Ezekiel"
+    },
+    "pta060.pta-grc1": {
+      "book": "SUS",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta060.pta-grc1.xml",
+      "title": "ΣΟΥΣΑΝΝΑ"
+    },
+    "pta060.pta-grc2": {
+      "book": "SUS",
+      "corpus": "rahlfs-alt",
+      "file": "pta9999.pta060.pta-grc2.xml",
+      "title": "ΣΟΥΣΑΝΝΑ"
+    },
+    "pta060.pta-syc1": {
+      "book": "SUS",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta060.pta-syc1.xml",
+      "title": "Susanna"
+    },
+    "pta061.pta-grc1": {
+      "book": "DAN",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta061.pta-grc1.xml",
+      "title": "ΔΑΝΙΗΛ"
+    },
+    "pta061.pta-grc2": {
+      "book": "DAN",
+      "corpus": "rahlfs-alt",
+      "file": "pta9999.pta061.pta-grc2.xml",
+      "title": "ΔΑΝΙΗΛ"
+    },
+    "pta061.pta-syc1": {
+      "book": "DAN",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta061.pta-syc1.xml",
+      "title": "Daniel"
+    },
+    "pta062.pta-grc1": {
+      "book": "BLT",
+      "corpus": "rahlfs",
+      "file": "pta9999.pta062.pta-grc1.xml",
+      "title": "Bel et Draco (Theodotionis versio)"
+    },
+    "pta062.pta-grc2": {
+      "book": "BEL",
+      "corpus": "rahlfs-alt",
+      "file": "pta9999.pta062.pta-grc2.xml",
+      "title": "ΒΗΛ ΚΑΙ ΔΡΑΚΩΝ"
+    },
+    "pta062.pta-syc1": {
+      "book": "BEL",
+      "corpus": "peshitta-ot",
+      "file": "pta9999.pta062.pta-syc1.xml",
+      "title": "Bel and the Dragon"
+    },
+    "pta063.pta-grc1": {
+      "book": "MAT",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta063.pta-grc1.xml",
+      "title": "ΚΑΤΑ ΜΑΘΘΑΙΟΝ"
+    },
+    "pta063.pta-syc1": {
+      "book": "MAT",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta063.pta-syc1.xml",
+      "title": "ܐܘܢܓܠܝܘܢ ܕܡܬܝ"
+    },
+    "pta064.pta-grc1": {
+      "book": "MRK",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta064.pta-grc1.xml",
+      "title": "ΚΑΤΑ ΜΑΡΚΟΝ"
+    },
+    "pta064.pta-syc1": {
+      "book": "MRK",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta064.pta-syc1.xml",
+      "title": "ܐܘܢܓܠܝܘܢ ܩܕܝܫܐ ܟܪܘܙܘܬܐ ܕܡܪܩܘܣ"
+    },
+    "pta065.pta-grc1": {
+      "book": "LUK",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta065.pta-grc1.xml",
+      "title": "ΚΑΤΑ ΛΟΥΚΑΝ"
+    },
+    "pta065.pta-syc1": {
+      "book": "LUK",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta065.pta-syc1.xml",
+      "title": "ܐܘܢܓܠܝܘܢ ܩܕܝܫܐ ܟܪܘܙܘܬܐ ܕܠܘܩܐ"
+    },
+    "pta066.pta-grc1": {
+      "book": "JHN",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta066.pta-grc1.xml",
+      "title": "ΚΑΤΑ ΙΩΑΝΝΗΝ"
+    },
+    "pta066.pta-syc1": {
+      "book": "JHN",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta066.pta-syc1.xml",
+      "title": "ܐܘܢܓܠܝܘܢ ܩܕܝܫܐ ܟܪܘܙܘܬܐ ܕܝܘܚܢܢ"
+    },
+    "pta067.pta-grc1": {
+      "book": "ACT",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta067.pta-grc1.xml",
+      "title": "ΠΡΑΞΕΙΣ ΑΠΟΣΤΟΛΩΝ"
+    },
+    "pta067.pta-syc1": {
+      "book": "ACT",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta067.pta-syc1.xml",
+      "title": "ܦܪܟܣܣ ܕܬܪܥܣܪ ܫܠܝ̈ܚܐ ܛܘܒ̈ܢܐ"
+    },
+    "pta068.pta-grc1": {
+      "book": "ROM",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta068.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΡΩΜΑΙΟΥΣ"
+    },
+    "pta068.pta-syc1": {
+      "book": "ROM",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta068.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܪ̈ܗܘܡܝܐ"
+    },
+    "pta069.pta-grc1": {
+      "book": "1CO",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta069.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΚΟΡΙΝΘΙΟΥΣ Α"
+    },
+    "pta069.pta-syc1": {
+      "book": "1CO",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta069.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܩܘܪ̈ܝܢܬܝܐ ܩܕܡܝܬܐ"
+    },
+    "pta070.pta-grc1": {
+      "book": "2CO",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta070.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΚΟΡΙΝΘΙΟΥΣ Β"
+    },
+    "pta070.pta-syc1": {
+      "book": "2CO",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta070.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܩܘܪ̈ܝܢܬܝܐ ܕܬܪܬܝܢ"
+    },
+    "pta071.pta-grc1": {
+      "book": "GAL",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta071.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΓΑΛΑΤΑΣ"
+    },
+    "pta071.pta-syc1": {
+      "book": "GAL",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta071.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܓܠܛܝ̈ܐ"
+    },
+    "pta072.pta-grc1": {
+      "book": "EPH",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta072.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΕΦΕΣΙΟΥΣ"
+    },
+    "pta072.pta-syc1": {
+      "book": "EPH",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta072.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܐܦܣܝ̈ܐ"
+    },
+    "pta073.pta-grc1": {
+      "book": "PHP",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta073.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΦΙΛΙΠΠΗΣΙΟΥΣ"
+    },
+    "pta073.pta-syc1": {
+      "book": "PHP",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta073.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܦܝܠܝܦܣܝ̈ܐ"
+    },
+    "pta074.pta-grc1": {
+      "book": "COL",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta074.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΚΟΛΟΣΣΑΕΙΣ"
+    },
+    "pta074.pta-syc1": {
+      "book": "COL",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta074.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܩܘܠ̈ܣܝܐ"
+    },
+    "pta075.pta-grc1": {
+      "book": "1TH",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta075.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΘΕΣΣΑΛΟΝΙΚΕΙΣ Α"
+    },
+    "pta075.pta-syc1": {
+      "book": "1TH",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta075.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܬܣܠ̈ܘܢܝܩܝܐ ܩܕܡܝܬܐ"
+    },
+    "pta076.pta-grc1": {
+      "book": "2TH",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta076.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΘΕΣΣΑΛΟΝΙΚΕΙΣ Β"
+    },
+    "pta076.pta-syc1": {
+      "book": "2TH",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta076.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܬܣܠ̈ܘܢܝܩܝܐ ܕܬܪܬܝܢ"
+    },
+    "pta077.pta-grc1": {
+      "book": "1TI",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta077.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΤΙΜΟΘΕΟΝ Α"
+    },
+    "pta077.pta-syc1": {
+      "book": "1TI",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta077.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܛܝܡܬܐܘܣ ܩܕܡܝܬܐ"
+    },
+    "pta078.pta-grc1": {
+      "book": "2TI",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta078.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΤΙΜΟΘΕΟΝ Β"
+    },
+    "pta078.pta-syc1": {
+      "book": "2TI",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta078.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܛܝܡܬܐܘܣ ܕܬܪܬܝܢ"
+    },
+    "pta079.pta-grc1": {
+      "book": "TIT",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta079.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΤΙΤΟΝ"
+    },
+    "pta079.pta-syc1": {
+      "book": "TIT",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta079.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܛܝܛܘܣ"
+    },
+    "pta080.pta-grc1": {
+      "book": "PHM",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta080.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΦΙΛΗΜΟΝΑ"
+    },
+    "pta080.pta-syc1": {
+      "book": "PHM",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta080.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܘܠܘܣ ܕܠܘܬ ܦܝܠܝܡܘܢ"
+    },
+    "pta081.pta-grc1": {
+      "book": "HEB",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta081.pta-grc1.xml",
+      "title": "ΠΡΟΣ ΕΒΡΑΙΟΥΣ"
+    },
+    "pta081.pta-syc1": {
+      "book": "HEB",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta081.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܠܘܬ ܥܒܪ̈ܝܐ"
+    },
+    "pta082.pta-grc1": {
+      "book": "JAS",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta082.pta-grc1.xml",
+      "title": "ΙΑΚΩΒΟΥ"
+    },
+    "pta082.pta-syc1": {
+      "book": "JAS",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta082.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܝܥܩܘܒ ܫܠܝܚܐ"
+    },
+    "pta083.pta-grc1": {
+      "book": "1PE",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta083.pta-grc1.xml",
+      "title": "ΠΕΤΡΟΥ Α"
+    },
+    "pta083.pta-syc1": {
+      "book": "1PE",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta083.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܦܛܪܘܣ ܫܠܝܚܐ"
+    },
+    "pta084.pta-grc1": {
+      "book": "2PE",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta084.pta-grc1.xml",
+      "title": "ΠΕΤΡΟΥ Β"
+    },
+    "pta084.pta-syc1": {
+      "book": "2PE",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta084.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܬܪ̈ܬܝܢ ܕܦܛܪܘܣ ܫܠܝܚܐ"
+    },
+    "pta085.pta-grc1": {
+      "book": "1JN",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta085.pta-grc1.xml",
+      "title": "ΙΩΑΝΝΟΥ Α"
+    },
+    "pta085.pta-syc1": {
+      "book": "1JN",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta085.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܝܘܚܢܢ ܫܠܝܚܐ"
+    },
+    "pta086.pta-grc1": {
+      "book": "2JN",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta086.pta-grc1.xml",
+      "title": "ΙΩΑΝΝΟΥ Β"
+    },
+    "pta086.pta-syc1": {
+      "book": "2JN",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta086.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܬܪ̈ܬܝܢ ܕܝܘܚܢܢ ܫܠܝܚܐ"
+    },
+    "pta087.pta-grc1": {
+      "book": "3JN",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta087.pta-grc1.xml",
+      "title": "ΙΩΑΝΝΟΥ Γ"
+    },
+    "pta087.pta-syc1": {
+      "book": "3JN",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta087.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܬܠܬ ܕܝܘܚܢܢ ܫܠܝܚܐ"
+    },
+    "pta088.pta-grc1": {
+      "book": "JUD",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta088.pta-grc1.xml",
+      "title": "ΙΟΥΔΑ"
+    },
+    "pta088.pta-syc1": {
+      "book": "JUD",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta088.pta-syc1.xml",
+      "title": "ܐܓܪܬܐ ܕܝܗܘܕܐ ܫܠܝܚܐ"
+    },
+    "pta089.pta-grc1": {
+      "book": "REV",
+      "corpus": "sblgnt",
+      "file": "pta9999.pta089.pta-grc1.xml",
+      "title": "ΑΠΟΚΑΛΥΨΙΣ ΙΩΑΝΝΟΥ"
+    },
+    "pta089.pta-syc1": {
+      "book": "REV",
+      "corpus": "peshitta-nt",
+      "file": "pta9999.pta089.pta-syc1.xml",
+      "title": "ܓܠܝܢܐ ܕܝܘܚܢܢ"
+    }
+  }
+}

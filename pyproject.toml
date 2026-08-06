@@ -59,3 +59,11 @@ packages = ["biblereference"]
 mypy_path = "src"
 strict = true
 warn_return_any = true
+
+# lxml ships no type information and `lxml-stubs` is unmaintained and incomplete. Three
+# modules parse XML with it, and each was reporting the same missing-stubs error, which is
+# noise rather than a finding: saying so once here is better than three ignore comments
+# that would have to be kept in step.
+[[tool.mypy.overrides]]
+module = ["lxml.*"]
+ignore_missing_imports = true

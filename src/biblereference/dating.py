@@ -45,6 +45,14 @@ TRANSLATED: Final[dict[str, int | None]] = {
     "n1904": None,  # Nestle 1904: a critical edition of the Greek New Testament
     "swete": None,  # Swete: a critical edition of the Septuagint
     "swete-daniel": None,  # Theodotion's Greek Daniel, likewise
+    "rahlfs": None,  # Rahlfs 1935: another critical edition of the same ancient Greek
+    "rahlfs-alt": None,  # the second text where Rahlfs prints two
+    "sblgnt": None,  # the SBL Greek New Testament: a critical edition, ancient wording
+    # The Peshitta is a translation, but a second-century one, so its wording is as
+    # ancient as anything else in this section and nothing here can be anachronistic to it.
+    "peshitta-ot": None,
+    "peshitta-nt": None,
+    "peshitta-alt": None,
     "latvuc": 405,  # Jerome's Vulgate; the Clementine of 1592 is an edition of it
     "novavulgata": 1979,  # a new Latin translation, not an edition of Jerome
     # -- English, in order of when the wording was made -----------------------------------

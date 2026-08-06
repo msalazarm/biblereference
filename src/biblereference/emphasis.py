@@ -37,8 +37,33 @@ _HEBREW_PUNCTUATION: Final = {
     "׆",  # nun hafukha
 }
 
+#: Syriac punctuation, which separates words rather than belonging to them. Alongside
+#: these, Serto pointing is handled for free by the NFD pass below -- every vowel and
+#: qushshaya mark is a combining character, so it drops with the Hebrew's.
+#:
+#: That is load-bearing rather than incidental. The Patristic Text Archive's Peshitta is
+#: unpointed and the Digital Syriac Corpus's is fully pointed, and folding is the only
+#: reason the two can be compared at all.
+_SYRIAC_PUNCTUATION: Final = {
+    "܀",  # end of section
+    "܂",  # full stop
+    "܃",  # supralinear colon
+    "܄",  # sublinear colon
+    "܅",
+    "܆",
+    "܇",
+    "܈",
+    "܉",
+    "܊",
+    "܋",
+    "܌",
+}
+
 #: Ligatures NFD does not decompose. The Clementine writes *flammæ*, an anchor will not.
 _LIGATURES: Final[dict[str, str]] = {"æ": "ae", "œ": "oe", "ﬁ": "fi", "ﬂ": "fl"}
+
+#: Everything that separates one word from the next without being part of either.
+_WORD_SEPARATORS: Final = _HEBREW_PUNCTUATION | _SYRIAC_PUNCTUATION
 
 #: Latin only. The Clementine writes *Jesus*, *justitia*, *ejus*; the Nova Vulgata writes
 #: *Iesus*, *iustitia*, *eius*. The letters are the same letters -- j and v are late
@@ -147,7 +172,7 @@ def _fold(text: str, language: str | None = None, *, orthographic: bool = False)
     pending_space = False
 
     for index, character in enumerate(text):
-        if character.isspace() or character in _HEBREW_PUNCTUATION:
+        if character.isspace() or character in _WORD_SEPARATORS:
             pending_space = bool(out)
             continue
         if latin and character in _LATIN_PUNCTUATION:

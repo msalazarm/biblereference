@@ -148,3 +148,30 @@ def test_lxx_follows_brenton_rather_than_swete(
 
     assert for_brenton > 5 * for_swete
     assert len(disagreements(vrs, swete, "lxx")) > 100
+
+
+def test_every_corpus_declares_a_versification_this_library_ships() -> None:
+    """An unshipped versification does not crash, and that is the problem.
+
+    `write_corpus` does not validate it, `search` and `families` never convert, and both
+    `render` and `compare` catch `VersificationError` -- so a corpus declaring `rahlfs`
+    would build, index and search perfectly well while being *silently invisible to the
+    renderer*. Nothing would say so. This does.
+    """
+    import sqlite3
+    from pathlib import Path
+
+    from biblereference.versification import AVAILABLE_SYSTEMS
+
+    database = Path.home() / ".local/share/biblereference/db/corpus.sqlite"
+    if not database.exists():
+        pytest.skip("corpus not built; run `biblereference sync`")
+    with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
+        declared = {
+            (row[0], row[1])
+            for row in connection.execute("SELECT corpus, versification FROM source_meta")
+        }
+    unknown = sorted(
+        f"{corpus} -> {system}" for corpus, system in declared if system not in AVAILABLE_SYSTEMS
+    )
+    assert unknown == []

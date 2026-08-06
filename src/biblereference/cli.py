@@ -702,8 +702,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     held = [terms for item in meta if (terms := item.terms) is not None]
     restricted = [terms for terms in held if terms.restricted]
     if restricted:
-        forbids = sum(1 for terms in restricted if not terms.commercial)
-        viral = sum(1 for terms in restricted if terms.share_alike)
+        forbids = sum(1 for terms in restricted if not terms.effective.commercial)
+        viral = sum(1 for terms in restricted if terms.effective.share_alike)
         _say("")
         if forbids:
             _say(f"{forbids} corpus/corpora may not be used commercially.")

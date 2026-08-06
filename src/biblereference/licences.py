@@ -67,21 +67,39 @@ class Licence:
     """Where the file's declared licence is not the edition's own terms."""
 
     @property
+    def effective(self) -> Licence:
+        """What actually governs use, where the file and the edition disagree.
+
+        The stricter of the two, always. The Patristic Text Archive publishes the SBL
+        Greek New Testament under a CC BY 4.0 header, and CC BY permits commercial use;
+        the SBLGNT's own terms do not. Answering with the header would tell a user they
+        may do something they may not, which is the one direction this must never round.
+        """
+        if self.underlying is None:
+            return self
+        return strictest([self, self.underlying])
+
+    @property
     def restricted(self) -> bool:
         """Whether anything here needs a reader's attention beyond a credit line."""
-        return not self.commercial or self.share_alike or self.underlying is not None
+        governing = self.effective
+        return not governing.commercial or governing.share_alike or self.underlying is not None
 
     def describe(self) -> str:
-        """One line for ``doctor``."""
+        """One line for ``doctor``, saying what actually governs rather than what is
+        printed on the file."""
+        governing = self.effective
         obliges = []
-        if not self.commercial:
+        if not governing.commercial:
             obliges.append("non-commercial")
-        if self.share_alike:
+        if governing.share_alike:
             obliges.append("share-alike")
-        if self.attribution:
+        if governing.attribution:
             obliges.append("attribution required")
         tail = f" -- {', '.join(obliges)}" if obliges else ""
-        return f"{self.name}{tail}"
+        if self.underlying is None:
+            return f"{self.name}{tail}"
+        return f"{self.name} as declared, but governed by {governing.name}{tail}"
 
 
 def _cc(

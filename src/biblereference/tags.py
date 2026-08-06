@@ -58,6 +58,10 @@ _LANGUAGES: Final[Mapping[str, str]] = {
     "heb": "hbo",
     "la": "la",
     "latin": "la",
+    "syc": "syc",
+    "syriac": "syc",
+    "cop": "cop",
+    "coptic": "cop",
 }
 
 #: What ``original=`` accepts. See :class:`~biblereference.canon.Canon` for how ``auto``
