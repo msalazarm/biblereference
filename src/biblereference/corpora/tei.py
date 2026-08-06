@@ -231,41 +231,45 @@ def cts_verses(
     without a word. They are chapter 1, which is how the canon and every citation of them
     already works.
 
-    The orphans are found by asking each verse whether it has a chapter above it, not by
-    asking whether the file has chapters anywhere. The difference matters: Greek Proverbs
-    has chapters ``24a``, ``30a`` and ``31a`` that no versification declares, and the
+    **Every verse asks which chapter is above it**, rather than every chapter gathering the
+    verses beneath it, and the difference is not stylistic. Ottley's Isaiah *nests* two of
+    its chapter divisions -- 23 contains 24 onwards, and 53 contains 54 onwards -- so a
+    reader that descended from each chapter attributed every nested chapter's verses to the
+    outer one as well: 1,309 verses out of a file holding 1,283, with Isaiah 66 sitting at
+    chapter 53. One archived file of 203 is built that way, which is exactly the sort of
+    thing a reader should survive rather than trust.
+
+    It also settles the two cases that would otherwise need their own passes. A verse with
+    no chapter above it is chapter 1 -- Obadiah, Jude, the Letter of Jeremiah, Susanna and
+    Bel all print no chapter division, and insisting on one dropped every one of them
+    without a word. And a verse under a chapter no versification declares is dropped, not
+    promoted: Greek Proverbs really has chapters ``24a``, ``30a`` and ``31a``, and the
     cheaper test would sweep their verses into chapter 1 of Proverbs.
     """
-    for chapter in root.iter(f"{{{TEI_NS}}}div"):
-        if chapter.get("subtype") != "chapter":
-            continue
-        number = _chapter_of(chapter)
-        if number is None:
-            continue
-        for verse in chapter.iter(f"{{{TEI_NS}}}div"):
-            if verse.get("subtype") not in {"verse", "section"}:
-                continue
-            place = _numbered(verse)
-            if place is None:
-                continue
-            text = flatten(verse)
-            if text:
-                yield (number, place[0], place[1], text)
-
     for verse in root.iter(f"{{{TEI_NS}}}div"):
         if verse.get("subtype") not in {"verse", "section"}:
-            continue
-        if any(
-            ancestor.get("subtype") == "chapter"
-            for ancestor in verse.iterancestors(f"{{{TEI_NS}}}div")
-        ):
             continue
         place = _numbered(verse)
         if place is None:
             continue
+        enclosing = next(
+            (
+                ancestor
+                for ancestor in verse.iterancestors(f"{{{TEI_NS}}}div")
+                if ancestor.get("subtype") == "chapter"
+            ),
+            None,
+        )
+        if enclosing is None:
+            number = 1
+        else:
+            found = _chapter_of(enclosing)
+            if found is None:
+                continue
+            number = found
         text = flatten(verse)
         if text:
-            yield (1, place[0], place[1], text)
+            yield (number, place[0], place[1], text)
 
 
 def ab_verses(root: etree._Element | etree._ElementTree) -> Iterator[tuple[int, int, str, str]]:

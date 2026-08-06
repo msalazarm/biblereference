@@ -296,3 +296,27 @@ def test_verses_under_a_chapter_nobody_declares_are_not_swept_into_chapter_one()
         "</div></body>"
     )
     assert list(cts_verses(root)) == [(24, 1, "", "real")]
+
+
+def test_a_nested_chapter_belongs_to_itself_and_not_also_to_the_one_around_it() -> None:
+    """Ottley's Isaiah nests two of its chapter divisions -- 23 contains 24 onwards, and 53
+    contains 54 onwards. A reader that descended from each chapter attributed every nested
+    chapter's verses to the outer one as well, producing 1,309 verses from a file holding
+    1,283 and putting Isaiah 66 at chapter 53.
+
+    Asking each verse which chapter is above it is what makes that impossible. One archived
+    file of 203 is built this way, which is the sort of thing a reader should survive rather
+    than trust.
+    """
+    root = parse(
+        '<body><div type="translation">'
+        '<div type="textpart" subtype="chapter" n="23">'
+        '<div type="textpart" subtype="verse" n="1"><p>belongs to 23</p></div>'
+        '<div type="textpart" subtype="chapter" n="24">'
+        '<div type="textpart" subtype="verse" n="1"><p>belongs to 24</p></div>'
+        "</div></div></div></body>"
+    )
+    assert sorted(cts_verses(root)) == [
+        (23, 1, "", "belongs to 23"),
+        (24, 1, "", "belongs to 24"),
+    ]
