@@ -144,6 +144,29 @@ Three Greek New Testaments do the same for the New Testament. Against Nestle 190
 the SBLGNT differs in 19% of verses at 99% mean similarity, Westcott–Hort in 28% at 98%. One
 text is a claim; three make a variant visible.
 
+### And it found something about a corpus that was already here
+
+First1KGreek's `tlg0527` is Swete, which the library has held all along from a different
+digitisation. Comparing the two over 23,713 shared verses, folded so that accent and case do
+not count: **46% differ**. That is not two hands copying one book — Rahlfs against Rahlfs was
+4% — and reading a sample says why. Three causes, in rising order of interest:
+
+1. **Elision apostrophes.** One writes `καθ᾽` with U+1FBD and the other `καθ’` with U+2019.
+2. **Editorial sigla in the stored text.** Ours has `⸂⸆⸃` where the other has `§`:
+
+   > `swete 2SA 2:7` … ὅτι τέθνηκεν ὁ **⸂⸆⸃** κύριος ὑμῶν Σαούλ …
+
+   Measured across the Greek corpora, `swete` carries such sigla in **389 verses (1.4%)** and
+   `swete-daniel` in 13 (3.1%). Rahlfs, Brenton, Nestle 1904, the SBLGNT and Westcott–Hort
+   carry none at all. Those characters are in the text that gets searched, folded and
+   quote-checked, and nothing else here does that.
+3. **Real textual variants** — `ἐκεῖ οὗ ἐστιν τὸ χρυσίον` against `ἐκεῖ ἐστιν τὸ χρυσίον` at
+   Genesis 2:11, and hundreds like it.
+
+The first two are ours to fix and the third is not. It is recorded here rather than acted on
+immediately because changing `swete` while an audit is running would move the instrument
+under the measurement.
+
 ---
 
 ## What the new witnesses are worth
@@ -246,8 +269,8 @@ terms is recorded as a note on each corpus rather than passed over.
   `<rdg type="corr">` and no `<lem>` at all, so this reader would take its structure and none
   of its words. 754 words is not worth a fourth shape.
 * **Most of First1KGreek** — its `tlg0527` *is* Swete, which the library already holds, and
-  the overlap is exact: Judges 618 verses against 618, Susanna 64 against 64. A digest
-  comparison of the two digitisations is still worth doing and has not been done.
+  the verse counts are exact: Judges 618 against 618, Susanna 64 against 64. The texts are
+  not, and the comparison above is what came of looking.
 * **The Old Latin gospels** (Corpus Corporum idno 343) — no verse markup at all. Verse
   numbers are bare `N.` at line starts among 6,770 runs of spaced dots marking lacunae, which
   are also full stops, and the four manuscripts are distinguished only by `<head>` text

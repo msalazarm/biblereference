@@ -248,6 +248,21 @@ obstacle is that the transcription has 49 headings for 150 psalms and the headin
 superscriptions rather than numbers: segmenting it is an alignment job against a psalter of
 known divisions, not a parse.
 
+### 10. `swete` carries editorial sigla in its stored text
+
+389 of its 28,443 verses (1.4%) contain characters like `⸂⸆⸃`, and 13 of `swete-daniel`'s
+422 (3.1%). No other Greek corpus here carries any: Rahlfs, Brenton, Nestle 1904, the SBLGNT
+and Westcott-Hort are all at zero.
+
+They are in the text that gets searched, folded and quote-checked. Found by diffing our
+digitisation of Swete against First1KGreek's, which is what having two copies is for — see
+`docs/tei-corpora.md`. The other differences that diff turned up are elision apostrophes
+(U+1FBD against U+2019) and real textual variants; the first two are ours to fix and the
+third is not.
+
+Not done yet only because changing an `lxx` witness while an audit is running would move the
+instrument under the measurement.
+
 ### 9. A book cannot be told it got longer
 
 `org` declares 42 chapters of `ENO`. 1 Enoch conventionally has 108, and the texts on hand
