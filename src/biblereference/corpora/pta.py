@@ -124,7 +124,14 @@ NOTES: Final[Mapping[str, str]] = {
     ),
     "peshitta-ot": (
         "CC BY-NC: this may not be used commercially, unlike the Peshitta New Testament "
-        "beside it in the same repository."
+        "beside it in the same repository.\n\n"
+        "A caveat for anyone using it as a witness. In the protocanon it is a strong one -- "
+        "a second-century translation from the Hebrew, agreeing with org's divisions in all "
+        "but twelve chapters. In the deuterocanon it is a *different and shorter recension*, "
+        "and its disagreements there are about the text rather than the numbering: at 1 "
+        "Maccabees 10:44 every Latin, Greek and English witness has the clause about the "
+        "expense from the king's revenue and the Peshitta does not. Weigh a deuterocanon "
+        "flag that rests on this corpus accordingly."
     ),
 }
 
