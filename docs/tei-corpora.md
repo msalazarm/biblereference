@@ -140,7 +140,15 @@ swete  vs rahlfs       14,446 of 26,899 verses differ (54%)
 The first is two hands copying one book. The second is two different editions, and the gap
 between the two numbers is what makes the identification safe rather than assumed.
 
-Sorted, the 1,022 are: 1,019 differing only in punctuation, 691 where the length differs by
+**They also land in different families**, which is the structural half of the same story.
+Fifteen complete chapters end at a different verse, and every one is a place Rahlfs prints
+lettered pluses: `lxx` declares Job 42 at verse 17, Joshua 24 at 33 and Greek Esther 10 at 3,
+and PTA keeps the letters — 17a–17e, 33a and 33b, 3a–3l — while Corpus Corporum renumbers
+them as plain verses running to 19, 62 and 11. **PTA's numbering is the one `lxx` declares**,
+so Corpus Corporum's extra verses are outside every shipped system and cannot be cited or
+validated. Prefer `rahlfs` for anything that has to resolve; `rahlfs-cc` is here for the diff.
+
+Sorted, the 1,022 textual differences are: 1,019 differing only in punctuation, 691 where the length differs by
 more than three words, and 381 where the wording does. The last are mostly Corpus Corporum
 splitting a word across a line and leaving the space in — `παι δεύεται`, `αὐ τὸν` — which is
 in its source rather than in this reader.

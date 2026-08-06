@@ -346,3 +346,39 @@ def test_the_peshitta_parts_from_org_almost_only_where_no_edition_agrees(
         "SIR",
         "SIR",
     ]
+
+
+def test_the_two_rahlfs_transcriptions_differ_over_lettered_pluses(vrs: Versification) -> None:
+    """Why two copies of one edition land in different families.
+
+    Rahlfs prints material the Hebrew has not — Job's epilogue, the end of Joshua, Esther's
+    Greek additions — and numbers it with letters. The Patristic Text Archive keeps the
+    letters and Corpus Corporum renumbers them as plain verses running on from the last.
+
+    `lxx` declares the lettered form, so PTA's numbering is the one that resolves and
+    Corpus Corporum's extra verses are outside every shipped system. Worth pinning because
+    it decides which of the two may be a witness: `rahlfs` can, `rahlfs-cc` cannot.
+    """
+    import sqlite3
+    from pathlib import Path
+
+    database = Path.home() / ".local/share/biblereference/db/corpus.sqlite"
+    if not database.exists():
+        pytest.skip("corpus not built; run `biblereference sync`")
+    with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
+
+        def top(corpus: str, book: str, chapter: int) -> tuple[int, int]:
+            rows = connection.execute(
+                "SELECT verse, subverse FROM verse WHERE corpus = ? AND book = ? AND chapter = ?",
+                (corpus, book, chapter),
+            ).fetchall()
+            return max(v for v, _ in rows), sum(1 for _, s in rows if s)
+
+    for book, chapter in (("JOB", 42), ("JOS", 24), ("ESG", 10)):
+        declared = vrs.max_verse("lxx", book, chapter)
+        pta_top, pta_letters = top("rahlfs", book, chapter)
+        cc_top, cc_letters = top("rahlfs-cc", book, chapter)
+        assert pta_top == declared, f"{book} {chapter}: PTA should match what lxx declares"
+        assert pta_letters > 0, f"{book} {chapter}: PTA should keep the letters"
+        assert cc_top > declared, f"{book} {chapter}: Corpus Corporum should run past it"
+        assert cc_letters == 0, f"{book} {chapter}: Corpus Corporum should have no letters"

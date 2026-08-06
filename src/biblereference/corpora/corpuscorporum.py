@@ -178,6 +178,17 @@ def build(archive: Path) -> Iterator[BuiltCorpus]:
             "edition behind it is out of copyright in its own right, so a copy obtained "
             "elsewhere may be freer."
         ]
+        if corpus == "rahlfs-cc":
+            notes.append(
+                "This transcription renumbers Rahlfs's lettered pluses as plain verses "
+                "where the Patristic Text Archive's keeps the letters. Job 42 runs to 19 "
+                "rather than 17 with 17a-17e, Joshua 24 to 62 rather than 33 with 33a and "
+                "33b, Esther 10 to 11 rather than 3 with 3a-3l. `lxx` declares the lettered "
+                "form, so those extra verses are outside what any shipped system has and "
+                "cannot be cited or validated -- fifteen chapters in all, and the reason "
+                "this corpus seeds its own family rather than joining `rahlfs`. Prefer "
+                "`rahlfs` for anything that has to resolve; this one is here for the diff."
+            )
         if unknown:
             notes.append(
                 f"divisions with no book mapping, not indexed: {', '.join(sorted(unknown))}"
