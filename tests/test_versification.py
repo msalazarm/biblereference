@@ -920,3 +920,28 @@ def test_the_nova_vulgata_joins_verses_of_sirach(vrs: Versification) -> None:
     # "Omnis caro sicut vestimentum veterascet" is org 14:17 and it is what the exact map
     # returns; the leaves of the green tree that follow in the same Latin verse are 14:18.
     assert convert(vrs, "Sir 14:18", "nvl", "org") == "SIR 14:17"
+
+
+def test_the_greek_jeremiah_swears_by_the_heavens_first(vrs: Versification) -> None:
+    """Three verses, a cycle, inside a chapter upstream maps with one range.
+
+    The Greek Jeremiah's chapter 38 is the Hebrew's 31, and that is right for 37 of its 40
+    verses. For three it is not: after the new covenant the Hebrew gives the ordinances of
+    sun and moon, then the oath that Israel will not cease while they last, then the oath
+    about measuring the heavens. The Greek puts the heavens first.
+
+    Swete's Greek and Brenton's translation of it agree against the Leningrad Codex, and the
+    Orthodox Jewish Bible cannot arbitrate -- it has 39 verses here where the Hebrew and the
+    English both have 40, so `faithful_chapters` rightly refuses it and the deterministic
+    walk had no witness at all. This is a verse the model found because nothing else could.
+    """
+    assert convert(vrs, "Jer 38:34", "lxx", "org") == "JER 31:34"  # the new covenant, in step
+    assert convert(vrs, "Jer 38:35", "lxx", "org") == "JER 31:37"  # if the heavens be measured
+    assert convert(vrs, "Jer 38:36", "lxx", "org") == "JER 31:35"  # sun by day, moon by night
+    assert convert(vrs, "Jer 38:37", "lxx", "org") == "JER 31:36"  # if those ordinances depart
+    assert convert(vrs, "Jer 38:38", "lxx", "org") == "JER 31:38"  # and level again
+
+    # A cycle, so nothing is lost and nothing is doubled.
+    assert sorted(
+        vrs.convert_all(VerseRef("JER", 38, n, vrs="lxx"), "org")[0].verse for n in (35, 36, 37)
+    ) == [35, 36, 37]

@@ -74,6 +74,12 @@
           "EXO 36:38"
         ],
         "reason": "Fifteen verses of the Greek vestment account resolved one verse early, and the cause is a single verse upstream never mapped. The Septuagint tells the tabernacle story in a different order from the Hebrew, and upstream expresses that by sending its chapter 36 into org's chapter 39 verse by verse -- correctly as far as 36:23. It then leaves 36:24 unmapped, as though it were a Greek plus with no Hebrew counterpart. It is not: 'and they put the golden wreaths on the rings on both sides of the oracle' is org 39:17, 'they put the two braided chains of gold in the two rings at the ends of the breastplate'. Because the extra verse was never accounted for, everything after it was written one low, so 36:29 'the tunic under the ephod, woven work, all of blue' pointed at 'they bound the breastplate by its rings' when org 39:22 is 'he made the robe of the ephod of woven work, all of blue' -- the same sentence. The run holds to the end: 36:38 'they put it on the border of blue, so that it should be on the mitre above' is org 39:31, 'they tied to it a lace of blue, to fasten it on the turban above'. Found by putting the corpus to a language model, which flagged six of these; reading the chapter beside org showed the run was twice that and gave the boundary."
+      },
+      {
+        "keys": [
+          "JER 38:1-40"
+        ],
+        "reason": "Replaced by the pieces below. The Greek Jeremiah's chapter 38 is the Hebrew's 31 and upstream says so with a single range, which is right for 37 of its 40 verses and wrong for three: the Greek reorders the oath about the heavens and the ordinances of sun and moon. The range has to go so the three can be written out."
       }
     ],
     "vul": [
@@ -600,6 +606,26 @@
       "NUM 26:46-47": {
         "to": "NUM 26:42-43",
         "reason": "Dan, the last of the moved blocks, after which Naphtali stands at 26:48 in both and the chapter is in step to its end. 'All the families of Samei according to their numbering, sixty-four thousand and four hundred' is org 26:43, and the count agrees to the man."
+      },
+      "JER 38:1-34": {
+        "to": "JER 31:1-34",
+        "reason": "Unchanged from the range this replaces, up to and including the new covenant -- 'they shall not at all teach every one his fellow citizen ... saying, Know the Lord' is org 31:34."
+      },
+      "JER 38:35": {
+        "to": "JER 31:37",
+        "reason": "'ἐὰν ὑψωθῇ ὁ οὐρανὸς εἰς τὸ μετέωρον ... καὶ ἐὰν ταπεινωθῇ τὸ ἔδαφος τῆς γῆς κάτω' is org 31:37, אִם־יִמַּדּוּ שָׁמַיִם מִלְמַעְלָה וְיֵחָקְרוּ מוֹסְדֵי־אֶרֶץ לְמָטָּה -- if the heavens above can be measured and the foundations of the earth searched out beneath. The Greek puts this oath first of the three where the Hebrew puts it last."
+      },
+      "JER 38:36": {
+        "to": "JER 31:35",
+        "reason": "'ὁ δοὺς τὸν ἥλιον εἰς φῶς τῆς ἡμέρας, σελήνην καὶ ἀστέρας εἰς φῶς τῆς νυκτός' is org 31:35, who gives the sun for a light by day and the ordinances of the moon and the stars for a light by night."
+      },
+      "JER 38:37": {
+        "to": "JER 31:36",
+        "reason": "'Ἐὰν παύσωνται οἱ νόμοι οὗτοι ἀπὸ προσώπου μου ... καὶ τὸ γένος Ἰσραὴλ παύσεται' is org 31:36, if those ordinances depart from before Me then the seed of Israel also shall cease from being a nation. A three-cycle, so nothing is lost and nothing is doubled: 35 goes to 37, 36 to 35, 37 to 36, and the chapter is level again at 38."
+      },
+      "JER 38:38-40": {
+        "to": "JER 31:38-40",
+        "reason": "Unchanged: the city built from the tower of Hananel, the measuring line to the hill Gareb, and the whole valley of the dead bodies and of the ashes."
       }
     },
     "rsc": {
