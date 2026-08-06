@@ -158,6 +158,23 @@ def _read_starts(path: Path) -> list[tuple[int, str]]:
     return starts
 
 
+#: Critical-apparatus markers, not text. Swete brackets a substituted reading with U+2E02
+#: and U+2E03 and marks an interpolation with U+2E06, and this digitisation keeps them --
+#: 634 of them across 402 verses, where Rahlfs, Brenton, Nestle 1904, the SBLGNT and
+#: Westcott-Hort carry none at all.
+#:
+#: They matter because they are in the text that gets searched, folded and quote-checked: a
+#: reader looking for ὅτι τέθνηκεν ὁ κύριος ὑμῶν Σαούλ does not expect ⸂⸆⸃ in the middle of
+#: it. Found by diffing this digitisation against First1KGreek's of the same edition, which
+#: is what holding two copies is for.
+_SIGLA: Final = str.maketrans("", "", "\u2e02\u2e03\u2e06")
+
+
+def _without_sigla(word: str) -> str:
+    """One word with its apparatus markers removed, or empty if it was only markers."""
+    return word.translate(_SIGLA)
+
+
 def build(archive: Path) -> Iterator[BuiltCorpus]:
     """Parse a fetched archive into the Septuagint corpora."""
     words = _read_words(archive / _WORDS_FILE)
@@ -186,7 +203,11 @@ def build(archive: Path) -> Iterator[BuiltCorpus]:
             continue
 
         last = starts[index + 1][0] - 1 if index + 1 < len(starts) else last_word
-        text = " ".join(words[k] for k in range(first, last + 1) if k in words).strip()
+        text = " ".join(
+            cleaned
+            for k in range(first, last + 1)
+            if k in words and (cleaned := _without_sigla(words[k]))
+        ).strip()
         if not text:
             continue
         into.append(

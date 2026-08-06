@@ -990,3 +990,28 @@ def test_the_vulgate_splits_and_rejoins_around_the_shema(vrs: Versification) -> 
     }
     got = vrs.convert_all(VerseRef("DEU", 6, 13, vrs="vul"), "org", covering=True)
     assert [str(r) for r in got] == ["DEU 6:12", "DEU 6:13"]
+
+
+def test_the_psalms_of_solomon_and_the_odes_can_be_cited_in_english(vrs: Versification) -> None:
+    """`asvbt` prints 293 verses of the Psalms of Solomon and `eng` had no slot for one of
+    them, so none could be cited, validated or rendered -- the same argument as the
+    `fix_max_verses` entries, and the same evidence: the corpus is here.
+
+    Counts are org's, which lxx's match chapter for chapter. These are Greek books whose
+    numbering nobody disputes, and the three systems agreeing is what lets the conversion
+    be the identity rather than a guess.
+    """
+    from biblereference.refs import parse_reference
+
+    for reference in ("Psalms of Solomon 17:21", "Odes 14:1"):
+        span = parse_reference(reference, vrs="eng")
+        vrs.validate(span)  # would raise before this
+    assert vrs.chapter_count("eng", "PSS") == 18
+    assert vrs.chapter_count("eng", "ODA") == 14
+    assert convert(vrs, "Psalms of Solomon 17:21", "eng", "org") == "PSS 17:21"
+    assert convert(vrs, "Odes 14:1", "eng", "org") == "ODA 14:1"
+
+    # Not added to `vul`: no Vulgate corpus here prints either book, and absence of
+    # evidence is not evidence.
+    assert not vrs.has_book("vul", "PSS")
+    assert not vrs.has_book("vul", "ODA")

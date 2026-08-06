@@ -382,3 +382,27 @@ def test_the_two_rahlfs_transcriptions_differ_over_lettered_pluses(vrs: Versific
         assert pta_letters > 0, f"{book} {chapter}: PTA should keep the letters"
         assert cc_top > declared, f"{book} {chapter}: Corpus Corporum should run past it"
         assert cc_letters == 0, f"{book} {chapter}: Corpus Corporum should have no letters"
+
+
+def test_swete_carries_no_apparatus_markers_in_its_text() -> None:
+    """Swete brackets a substituted reading and marks an interpolation, and this
+    digitisation kept the marks: 634 of them across 402 verses, where Rahlfs, Brenton,
+    Nestle 1904, the SBLGNT and Westcott-Hort carry none.
+
+    They are in the text that gets searched, folded and quote-checked -- a reader looking
+    for ὅτι τέθνηκεν ὁ κύριος ὑμῶν Σαούλ does not expect ⸂⸆⸃ in the middle of it. Found by
+    diffing this digitisation against First1KGreek's of the same edition, which is the
+    whole reason for holding two copies.
+    """
+    import sqlite3
+    from pathlib import Path
+
+    database = Path.home() / ".local/share/biblereference/db/corpus.sqlite"
+    if not database.exists():
+        pytest.skip("corpus not built; run `biblereference sync`")
+    with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
+        offenders = connection.execute(
+            "SELECT corpus, COUNT(*) FROM verse "
+            "WHERE text LIKE '%⸂%' OR text LIKE '%⸃%' OR text LIKE '%⸆%' GROUP BY corpus"
+        ).fetchall()
+    assert offenders == []

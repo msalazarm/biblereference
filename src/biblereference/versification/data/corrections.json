@@ -762,6 +762,50 @@
         ],
         "reason": "The Vulgate has no Esther at all upstream: vul.json carries only ESG, given the Septuagint's ten chapters and verse counts byte-identical to org's. That is not the book the Vulgate prints. The Clementine Esther runs to sixteen chapters, keeping the Hebrew text in 1:1-10:3 and appending the six Greek additions as 10:4-16:24, and it is the book the Douay-Rheims translates. Verse counts are those of the Douay-Rheims text itself, so a citation written in Vulgate numbering can at least be checked and looked up. Conversion to the original-language numbering is declared unmappable below rather than guessed: see esther_additions.json for the correspondence that *is* established, between Vulgate numbering and the A-F letter chapters."
       }
+    },
+    "eng": {
+      "PSS": {
+        "maxVerses": [
+          8,
+          37,
+          12,
+          25,
+          19,
+          6,
+          10,
+          34,
+          11,
+          8,
+          9,
+          6,
+          12,
+          10,
+          13,
+          15,
+          46,
+          12
+        ],
+        "reason": "The English family declares neither the Psalms of Solomon nor the Odes, and one of its corpora prints both -- asvbt, the American Standard with the apocrypha, carries 293 verses of the Psalms of Solomon. A verse an edition prints and the system has no slot for cannot be cited, validated or rendered, which is the same argument as the fix_max_verses entries above and the same evidence: the corpus is here and the counts are the ones it uses.\n\nCounts are org's, which lxx's are identical to chapter for chapter -- these are Greek books whose numbering nobody has ever disputed, and having the three systems agree is what lets the conversion be the identity rather than a guess. Nothing is added to vul, because no Vulgate corpus here prints either book and absence of evidence is not evidence."
+      },
+      "ODA": {
+        "maxVerses": [
+          19,
+          43,
+          10,
+          19,
+          12,
+          8,
+          20,
+          37,
+          22,
+          9,
+          11,
+          15,
+          4,
+          46
+        ],
+        "reason": "See PSS above; the Odes are the same case, and swete, rahlfs and the Peshitta all print them."
+      }
     }
   },
   "fix_max_verses": {
