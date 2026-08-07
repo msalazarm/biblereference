@@ -792,6 +792,70 @@ def _verify_archive(home: DataHome) -> tuple[int, list[str], list[str]]:
     return checked, wrong, absent
 
 
+#: Largest request body the server accepts, in bytes. Patristic passages run to 100,000
+#: words; this is a few times that, and going over is refused rather than truncated.
+_MAX_BODY: Final = 64 * 1024 * 1024
+
+
+def _serve_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to accept from the network")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument(
+        "--token",
+        default=os.environ.get("BIBLEREFERENCE_TOKEN"),
+        help="require this bearer token; also read from $BIBLEREFERENCE_TOKEN",
+    )
+    parser.add_argument(
+        "--max-body",
+        type=int,
+        default=_MAX_BODY,
+        metavar="BYTES",
+        help=f"largest request body accepted (default {_MAX_BODY // 1024 // 1024} MB)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=max(1, (os.cpu_count() or 2) - 1),
+        help="processes for the long jobs (default: cores - 1)",
+    )
+    parser.add_argument(
+        "--interactive-workers",
+        type=int,
+        default=4,
+        metavar="N",
+        help="processes kept for single search and scan requests, so a running batch "
+        "cannot starve them (default 4)",
+    )
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Serve until interrupted.
+
+    Imported here rather than at the top of the module: the server pulls in the store and
+    the versification tables, and ``biblereference --help`` should not pay for them.
+    """
+    import contextlib
+
+    from .web.server import serve
+
+    # Ctrl-C is how a server is stopped, not how it fails, so it exits 0 rather than
+    # letting `main` report it as an interruption.
+    with contextlib.suppress(KeyboardInterrupt):
+        serve(
+            host=args.host,
+            port=args.port,
+            token=args.token,
+            max_body=args.max_body,
+            workers=args.workers,
+            interactive_workers=args.interactive_workers,
+            # `_home` reads the global --data-home; passing the resolved root rather than
+            # the raw string means `~` is already expanded when the spawned workers read it
+            # back out of the environment.
+            data_home=_home(args).root if args.data_home else None,
+        )
+    return 0
+
+
 def _silent(_: str) -> None:
     return None
 
@@ -1001,6 +1065,15 @@ def build_parser() -> argparse.ArgumentParser:
         "be trusted before it is rebuilt from",
     )
     doctor.set_defaults(func=cmd_doctor)
+
+    serve = subparsers.add_parser(
+        "serve",
+        help="serve the library over HTTP: the reader, the API and the job queue",
+        description="Serve the library over HTTP. Local-only by default; give it a "
+        "--token before letting it listen on the network.",
+    )
+    _serve_arguments(serve)
+    serve.set_defaults(func=cmd_serve)
 
     return parser
 

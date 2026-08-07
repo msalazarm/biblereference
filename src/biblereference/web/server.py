@@ -15,12 +15,12 @@ See the README for setting it up on another machine.
 
 from __future__ import annotations
 
-import argparse
 import hmac
 import json
 import os
+import sys
 import traceback
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -538,51 +538,16 @@ def serve(
     Server((host, port), Handler).serve_forever()
 
 
-def add_arguments(parser: argparse.ArgumentParser) -> None:
-    """The options, shared between ``biblereference serve`` and running this directly."""
-    parser.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to accept from the network")
-    parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument(
-        "--token",
-        default=os.environ.get("BIBLEREFERENCE_TOKEN"),
-        help="require this bearer token; also read from $BIBLEREFERENCE_TOKEN",
-    )
-    parser.add_argument(
-        "--max-body",
-        type=int,
-        default=MAX_BODY,
-        metavar="BYTES",
-        help=f"largest request body accepted (default {MAX_BODY // 1024 // 1024} MB)",
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=max(1, (os.cpu_count() or 2) - 1),
-        help="processes for the long jobs (default: cores - 1)",
-    )
-    parser.add_argument(
-        "--interactive-workers",
-        type=int,
-        default=4,
-        metavar="N",
-        help="processes kept for single search and scan requests, so a running batch "
-        "cannot starve them (default 4)",
-    )
+def main(argv: Sequence[str] | None = None) -> int:
+    """``python -m biblereference.web.server`` and ``python tools/serve.py``.
 
+    Delegates to the CLI rather than parsing again, so the options have one definition and
+    cannot drift between the two ways of starting the same server.
+    """
+    from ..cli import main as cli
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Serve biblereference over HTTP.")
-    add_arguments(parser)
-    args = parser.parse_args()
-    serve(
-        host=args.host,
-        port=args.port,
-        token=args.token,
-        max_body=args.max_body,
-        workers=args.workers,
-        interactive_workers=args.interactive_workers,
-    )
+    return cli(["serve", *(sys.argv[1:] if argv is None else argv)])
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
