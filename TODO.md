@@ -294,6 +294,63 @@ for verified.
 
 Still true after the TEI import, which added Syriac and Coptic but nothing Slavonic.
 
+### ~~8. `nvl` still has no same-language pivot partner~~ — MEASURED, and the answer is no
+
+Both candidates have now been read, and `nvl` stays at 0% for a reason rather than for want
+of trying.
+
+**Castellio** (1551, from the Hebrew and Greek, owing nothing to the Vulgate) measured at
+about 90% against every shipped system with `eng` winning narrowly, and its Genesis 31/32 is
+55 verses and 32 — the English tradition's division where the Hebrew has 54 and 33.
+
+**Jerome's *Psalterium iuxta Hebraeos*** is Corpus Corporum work 656, text **7213** — the
+work idno does not download, which is the two-step this catalogue is easy to get wrong on.
+`tools/psalter_segment.py` segments and measures it.
+
+The obstacle turned out not to be the one expected. The entry below says the transcription
+has 49 headings for 150 psalms and that segmenting is an alignment job — but **the psalm
+numbers are in the text**, set as Roman numerals in brackets, so 149 of the 150 boundaries
+are *printed* rather than inferred. (The missing one is Psalm 33, which has no Hebrew
+superscription, so Migne set neither a head nor a number and its first verse runs on from
+Psalm 32's last.) That is 99.3% by a stronger signal than the 95% gate asked for.
+
+**And it is an `org`-family psalter, decisively.** Every psalm where the Hebrew and the Greek
+divide differently comes out Hebrew:
+
+| psalm | this | org | eng | vul | lxx |
+|---|---:|---:|---:|---:|---:|
+| 9 | 17 | 21 | 21 | 40 | 39 |
+| 10 | 19 | 18 | 18 | 9 | 8 |
+| 116 | 19 | 19 | 19 | 3 | 3 |
+| 117 | 2 | 2 | 2 | 30 | 30 |
+| 147 | 20 | 20 | 20 | 20 | 10 |
+
+9 and 10 are separate where the Greek merges them; 116 and 117 are the Hebrew's, not the
+Greek's. This is the first Latin text in this library that numbers psalms the Hebrew way.
+
+**It still cannot be a witness, and the reason is verses.** Migne sets the psalter as poetry
+with no verse numbers at all — one colon per `<l>` — and the cola are not verses. Deriving
+verses from the indentation gets the count right for only 33.6% of psalms and within one for
+66.4%; Psalms 111 and 112 come out at 22 apiece, because they are acrostics set one line per
+Hebrew letter, where `org` has 10. Psalm 1 comes out at 7 against org's 6, splitting 1:3 at a
+line break.
+
+The only way to verse-divide it is to align against the Gallican psalter — Latin against
+Latin, and it aligns well (0.57–0.83 wording overlap, and on Psalm 1 it corrects the split
+exactly). **But that is circular.** A psalter whose verse boundaries are taken from `vul`
+cannot then be evidence about whether `org`'s verse boundaries are right, and verse
+boundaries are the only thing the coverage walk checks. It would be a witness that agrees
+with whatever it was aligned to.
+
+So: the text is found, identified, and worth having as a *reading* corpus some day. It is not
+a witness, and admitting it as one would corrupt the single measurement `nvl` has. Same shape
+as the 1 Enoch result in item 9 — the diagnosis was wrong, and knowing why is the result.
+
+The licence is Corpus Corporum's non-commercial; the underlying Migne is out of copyright,
+and PL 12 is on the Internet Archive if that matters.
+
+<details><summary>original entry</summary>
+
 ### 8. `nvl` still has no same-language pivot partner
 
 `nvl` is checked at 0% by the coverage walk because its only witness is Latin and `org` has
@@ -312,6 +369,9 @@ which is where `vul` and `nvl` diverge most, so it is worth more than its size s
 obstacle is that the transcription has 49 headings for 150 psalms and the headings are Hebrew
 superscriptions rather than numbers: segmenting it is an alignment job against a psalter of
 known divisions, not a parse.
+
+
+</details>
 
 ### ~~11. `faithful_chapters` has now been caught out three times~~ — DONE
 
