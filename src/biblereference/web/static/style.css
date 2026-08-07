@@ -475,6 +475,335 @@ thead small {
   color: var(--ink-faint);
 }
 
+td.num,
+th.num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------------------------------- */
+/* Chrome                                                                               */
+/* ----------------------------------------------------------------------------------- */
+
+.chrome {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: var(--s4);
+  align-items: center;
+  flex-wrap: wrap;
+  padding: var(--s3) var(--s5);
+  background: var(--ground-raised);
+  border-block-end: 1px solid var(--rule);
+}
+
+.wordmark {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.find {
+  display: flex;
+  gap: var(--s2);
+  flex: 1 1 22rem;
+  min-inline-size: 0;
+}
+
+.chrome-nav {
+  display: flex;
+  gap: var(--s3);
+  align-items: center;
+  font-size: var(--text-sm);
+}
+
+.chrome-foot {
+  padding: var(--s5);
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+  border-block-start: 1px solid var(--rule-soft);
+}
+
+.help {
+  margin: 0;
+  padding: 0 var(--s5);
+  background: var(--ground-sunk);
+  border-block-end: 1px solid var(--rule-soft);
+  font-size: var(--text-sm);
+}
+
+.help > summary {
+  padding: var(--s2) 0;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.help-body {
+  max-width: 52rem;
+  padding-block-end: var(--s4);
+}
+
+kbd {
+  padding: 0 var(--s1);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  background: var(--ground);
+}
+
+body.is-loading .app {
+  opacity: 0.55;
+  transition: opacity 120ms 90ms;
+}
+
+/* ----------------------------------------------------------------------------------- */
+/* Rail furniture                                                                       */
+/* ----------------------------------------------------------------------------------- */
+
+.field + .field {
+  margin-block-start: var(--s3);
+}
+
+.check {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  font-size: var(--text-sm);
+}
+
+.check input {
+  inline-size: auto;
+}
+
+.hint {
+  margin: var(--s2) 0 0;
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+}
+
+/* A chapter grid, not a chapter dropdown: the shape of a book is information -- Psalms is
+   150 and Obadiah is one -- and a select box hides it behind a click. */
+.chapters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.1rem, 1fr));
+  gap: 2px;
+  max-block-size: 16rem;
+  overflow-y: auto;
+}
+
+button.chapter {
+  padding: var(--s1) 0;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  border-color: transparent;
+  background: none;
+}
+
+button.chapter:hover {
+  background: var(--ground-sunk);
+  border-color: var(--rule);
+}
+
+/* ----------------------------------------------------------------------------------- */
+/* Columns                                                                              */
+/* ----------------------------------------------------------------------------------- */
+
+.column {
+  min-inline-size: 0;
+}
+
+.column-head {
+  margin: 0 0 var(--s3);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.passage-head {
+  display: flex;
+  gap: var(--s3);
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-block-end: var(--s4);
+}
+
+.passage-head h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.meta {
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+}
+
+.version-head {
+  display: flex;
+  gap: var(--s2);
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-block-end: var(--s3);
+  padding-block-end: var(--s2);
+  border-block-end: 1px solid var(--rule-soft);
+}
+
+.version-head h2 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.family {
+  margin-block-end: var(--s2);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--radius);
+}
+
+.family > summary {
+  display: flex;
+  gap: var(--s2);
+  align-items: baseline;
+  padding: var(--s2) var(--s3);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.version {
+  border-block-start: 1px solid var(--rule-soft);
+  padding: var(--s2) var(--s3);
+}
+
+.version-toggle {
+  display: flex;
+  gap: var(--s2);
+  align-items: baseline;
+  flex-wrap: wrap;
+  inline-size: 100%;
+  text-align: start;
+  border: none;
+  background: none;
+  padding: var(--s1) 0;
+  font-size: var(--text-sm);
+}
+
+.version.is-open {
+  background: var(--ground-raised);
+}
+
+.compare-text {
+  font-size: var(--text);
+  line-height: 1.6;
+  padding-block-start: var(--s2);
+}
+
+/* ----------------------------------------------------------------------------------- */
+/* Search results                                                                       */
+/* ----------------------------------------------------------------------------------- */
+
+.result + .result {
+  margin-block-start: var(--s3);
+}
+
+.result-head {
+  display: flex;
+  gap: var(--s2);
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.result-head h3 {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+blockquote {
+  margin: var(--s3) 0;
+  padding-inline-start: var(--s3);
+  border-inline-start: 3px solid var(--rule-strong);
+  color: var(--ink-soft);
+}
+
+.measure {
+  display: grid;
+  grid-template-columns: 6rem 1fr 3rem;
+  gap: var(--s2);
+  align-items: center;
+  font-size: var(--text-sm);
+  margin-block: var(--s1);
+}
+
+.measure-track {
+  block-size: 6px;
+  border-radius: 3px;
+  background: var(--ground-sunk);
+  overflow: hidden;
+}
+
+.measure-fill {
+  display: block;
+  block-size: 100%;
+}
+
+.measure-fill.is-accent {
+  background: var(--accent);
+}
+
+.measure-fill.is-agree {
+  background: var(--agree);
+}
+
+.measure-value {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+.translations,
+.families,
+.choices {
+  margin: var(--s2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.translations li,
+.families li {
+  display: flex;
+  gap: var(--s2);
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding: var(--s1) 0;
+  border-block-end: 1px solid var(--rule-soft);
+  font-size: var(--text-sm);
+}
+
+/* A wording that did not exist when the document was written. Struck through rather than
+   hidden: it is still the closest match, and why it cannot be the source is the point. */
+.translations li.is-anachronistic b {
+  text-decoration: line-through;
+  color: var(--ink-faint);
+}
+
+.reason {
+  font-size: var(--text-sm);
+}
+
+.reason > summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.reason p {
+  margin: var(--s1) 0 var(--s3);
+  max-inline-size: 44rem;
+}
+
 /* ----------------------------------------------------------------------------------- */
 /* Motion                                                                               */
 /* ----------------------------------------------------------------------------------- */

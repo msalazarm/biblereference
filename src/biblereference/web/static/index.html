@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>biblereference</title>
+    <!--
+      The theme is stamped on <html> before the stylesheet is fetched. Doing it from a
+      module would run after first paint, and a flash of the wrong background is the one
+      rendering fault a reader always notices.
+    -->
+    <script>
+      try {
+        const saved = JSON.parse(localStorage.getItem('br.theme') || '"auto"');
+        if (saved !== 'auto') document.documentElement.setAttribute('data-theme', saved);
+      } catch (_) {}
+    </script>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body data-screen="reader">
+    <header class="chrome">
+      <a class="wordmark" href="#/reader/JHN/3">biblereference</a>
+
+      <form id="find" class="find" autocomplete="off">
+        <label class="visually-hidden" for="q">Reference or quotation</label>
+        <input
+          id="q"
+          name="q"
+          type="search"
+          placeholder="John 3:16 · Matt 17:14 · or paste a quotation"
+        />
+        <button type="submit">go</button>
+      </form>
+
+      <nav class="chrome-nav">
+        <a href="#/reader/JHN/3">Read</a>
+        <a href="#/numbering/MAT/17:14">Numbering</a>
+        <a href="#/library">Library</a>
+        <a href="/plain">Plain</a>
+        <button id="theme" type="button" title="light or dark">◐</button>
+      </nav>
+    </header>
+
+    <details id="help" class="help">
+      <summary>Keys, and what the columns mean</summary>
+      <div class="help-body">
+        <p>
+          <kbd>/</kbd> search · <kbd>j</kbd> next chapter · <kbd>k</kbd> previous ·
+          <kbd>?</kbd> this
+        </p>
+        <p>
+          <b>Hover a verse</b> and every verse beside it that carries the same text lights
+          up. That is not a guess from verse numbers: each verse reports which verses of the
+          pivot it covers, and two correspond when those sets meet. Hover the Douay’s
+          Matthew 17:14 and two Greek verses light, because the one Latin verse holds both.
+        </p>
+        <p>
+          <b>Covering</b> answers with every verse needed to carry all of a verse’s text,
+          rather than the single verse it most corresponds to. Identical for almost every
+          verse here — where it differs is where one edition merges what another divides.
+        </p>
+        <p>
+          A <b>·</b> beside a book in the dropdown means the numbering system you have
+          chosen does not have that book, so its shape comes from the editions that hold it.
+        </p>
+      </div>
+    </details>
+
+    <main class="app">
+      <aside class="rail" data-slot="rail"></aside>
+      <section class="column reading-column" data-slot="reading"></section>
+      <section class="column compare-column" data-slot="compare"></section>
+    </main>
+
+    <footer class="chrome-foot">
+      <span>No JavaScript? <a href="/plain">The plain page</a> does the same in one round trip.</span>
+    </footer>
+
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>

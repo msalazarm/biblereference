@@ -233,7 +233,8 @@ def _job_params(params: dict[str, list[str]], body: str) -> dict[str, Any]:
 
 
 ROUTES = {
-    "GET  /": "the browsing page",
+    "GET  /": "the reader: four screens, routed on the fragment",
+    "GET  /plain": "the server-rendered page, for a browser with no JavaScript",
     "GET  /static/<name>": "one shipped asset, revalidated with an ETag",
     "GET  /api/health": "corpora count, fingerprint, cores, jobs running",
     "GET  /api/corpora": "every built corpus",
@@ -418,6 +419,11 @@ class Handler(BaseHTTPRequestHandler):
             elif path.startswith("/static/"):
                 self._static(path.removeprefix("/static/"))
             elif path == "/":
+                # The shell. Everything after this is `location.hash`, which the browser
+                # never sends, so deep links need no catch-all here and "anything else is a
+                # 404" stays literally true.
+                self._static("index.html", self._keep_the_token(params))
+            elif path == "/plain":
                 out = page(
                     (params.get("q") or [""])[0].strip(),
                     (params.get("vrs") or ["eng"])[0],
@@ -440,7 +446,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             self._json(500, {"error": traceback.format_exc()})
 
-    def _static(self, name: str) -> None:
+    def _static(self, name: str, extra: Mapping[str, str] | None = None) -> None:
         """One file from the package's own ``static/``, by name.
 
         A name, not a path: see :mod:`~biblereference.web.assets` for why that is the whole
@@ -457,7 +463,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("ETag", asset.etag)
             self.end_headers()
             return
-        self._send(200, asset.body, asset.type, {"ETag": asset.etag, "Cache-Control": "no-cache"})
+        headers = {"ETag": asset.etag, "Cache-Control": "no-cache", **(extra or {})}
+        self._send(200, asset.body, asset.type, headers)
 
     def _archive(self, wanted: str) -> None:
         """One archived file, by its manifest path.
