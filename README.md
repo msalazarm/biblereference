@@ -332,14 +332,24 @@ build their own `DataHome` from the environment, so the environment is what carr
 deep link needs nothing configured at either end.
 
 **Read** — pick a book from a dropdown grouped into the four parts of the canon, a chapter
-from a grid, and the version you prefer. That version reads at full size with its verse
-numbers hanging in the margin; every other version sits beside it, collapsed by
-versification family, and opens where you want it.
+from a grid, the version you read in, and any number of versions to set beside it. They
+appear as **aligned columns**: one row per verse of the passage, every version's answer to
+it on that row.
 
-> **Hover a verse and every verse beside it carrying the same text lights up.** Not a guess
-> from verse numbers: each verse reports which verses of the pivot its text covers, and two
-> correspond when those sets meet. Hover the Douay's Matthew 17:14 and *two* Greek verses
-> light, because that one Latin verse holds both.
+> **The rows are keyed on the pivot verse, not on verse numbers**, because verse numbers are
+> exactly what disagrees on the passages worth comparing. The Douay's Matthew 17:14 carries
+> what the Greek numbers 14 *and* 15, so it occupies both rows — marked ↕, the second muted —
+> and every Douay verse after it sits one row behind its own number. Hovering a row is the
+> correspondence; nothing has to be guessed from numbering.
+
+Four things the table will not pretend about. A verse two editions both print but the pivot
+divides differently gets **both** verses in one cell, stacked. A verse **no** open version
+prints still gets its row, rather than the table silently renumbering. Where an edition
+carries a passage somewhere else entirely — the Septuagint moves the tabernacle account from
+Exodus 36 to 39 — those rows are kept and captioned rather than dropped. And where a chapter
+cannot be converted at all (Acts 19 in the English numbering; most of the Vulgate's Sirach),
+a banner says so in the versification's own words, because columns lined up by shared
+numbering look exactly like columns lined up by correspondence.
 
 **Numbering** — `#/numbering/MAT/17:14?vrs=vul`. Exact beside covering, differing rows
 highlighted, and a third column saying **why**: the refusal in its own words where a system
@@ -392,7 +402,7 @@ curl -H "Authorization: Bearer $TOKEN" "$BR/api/health"
 | `GET /api/library` | every corpus in full: books, canon, date, licence, totals |
 | `GET /api/families` | versification families derived from where the chapter ends fall |
 | `GET /api/books` | `?vrs=eng&naming=dr` — every book, grouped, with its chapter shape |
-| `GET /api/reader` | `?book=&chapter=&corpus=&covering=` — a chapter across versions, with the covering links |
+| `GET /api/reader` | `?book=&chapter=&corpus=&covering=` — a chapter across versions, plus `rows`: one per verse of the passage, keyed on the pivot, each cell an index into that version's verses |
 | `GET /api/parse` | `?q=` — is this a reference or is it prose? **always 200**; it is a predicate |
 | `GET /api/alignment` | `?ref=&vrs=&to=` — exact beside covering, and why each is what it is |
 | `GET /api/corrections` | `?system=&book=&chapter=&verse=&kind=` — the recorded reasons, browsable |
@@ -403,7 +413,9 @@ curl -H "Authorization: Bearer $TOKEN" "$BR/api/health"
 
 `/api/reader` loads only the versions you name and answers for the rest from a cached
 inventory with no queries at all. That is not an optimisation: Psalm 119 in every version
-holding it is 740 KB.
+holding it is 1.5 MB, so the reader warns past six columns and refuses past twelve. Its
+`rows` carry *indices* rather than text, so a verse answering to three rows crosses the wire
+once.
 
 Two hundred corrections to the upstream versification data each carry a written reason, and
 until recently the loader consumed them and threw them away. `/api/corrections` and the

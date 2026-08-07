@@ -299,9 +299,12 @@ body[data-screen="reader"] .compare-column:empty {
   }
 }
 
-/* One column: everything stacks, in reading order. */
+/* One column: everything stacks, in reading order. A 15rem rail beside a table on a
+   phone leaves neither enough room, so the reader stacks here too. The rest of the narrow
+   rules are at the foot of this file, where they can win against the base ones. */
 @media (max-width: 60rem) {
-  .app {
+  .app,
+  body[data-screen="reader"] .app {
     grid-template-columns: minmax(0, 1fr);
     padding-inline: var(--s4);
   }
@@ -1094,5 +1097,49 @@ blockquote {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+
+/* ----------------------------------------------------------------------------------- */
+/* Narrow                                                                               */
+/* ----------------------------------------------------------------------------------- */
+/*
+ * Last in the file on purpose. These override base rules at the same specificity, and a
+ * media query does not raise specificity -- so the earlier placement lost silently, and
+ * the only symptom was a chapter grid nobody had asked to be 253 pixels tall.
+ */
+
+@media (max-width: 60rem) {
+  /* The rail stops being sticky and stops having its own scroll: it is the top of the page
+     now, and a nested scroller inside a scrolling page is a trap. */
+  .rail {
+    position: static;
+    max-block-size: none;
+    overflow: visible;
+  }
+
+  /* Psalms is 150 buttons and there are forty editions. Both bounded, so the text is one
+     screen down rather than two. */
+  .chapters {
+    max-block-size: 7rem;
+  }
+
+  .columns-pick {
+    max-block-size: 9rem;
+  }
+
+  /* The table gets the screen's height rather than the viewport minus a rail. */
+  .compare-scroll {
+    max-block-size: calc(100dvh - 6rem);
+  }
+
+  /* Narrower columns, so two fit before scrolling rather than one and a sliver. */
+  .compare col.text-col {
+    width: 17rem;
+  }
+
+  .compare col.key-col {
+    width: 5.5rem;
   }
 }

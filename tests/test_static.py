@@ -161,7 +161,7 @@ def test_the_page_never_scrolls_sideways() -> None:
     on a phone. They have to scroll inside themselves."""
     css = (STATIC / "style.css").read_text("utf-8")
     assert "overflow-x: auto" in css
-    for module in ("library.js", "numbering.js"):
+    for module in ("library.js", "numbering.js", "reader.js"):
         assert "scroll-x" in (STATIC / module).read_text("utf-8"), module
 
 
