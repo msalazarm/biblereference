@@ -183,10 +183,11 @@ few are not, and `doctor` says which — see [What the licences oblige](#what-th
 | English of the Vulgate | [Douay-Rheims 1899](https://ebible.org/find/details.php?id=engDRA) | for citations written in Vulgate numbering |
 | Latin | [Clementine Vulgate](https://ebible.org/find/details.php?id=latVUC) | Jerome as the Church received him; public domain |
 | Latin | [Nova Vulgata](https://www.vatican.va/archive/bible/nova_vulgata/documents/nova-vulgata_index_lt.html) | the official text since 1979, complete and in its own numbering; © Libreria Editrice Vaticana |
-| Latin | Castellio 1551, via [Corpus Corporum](https://mlat.uzh.ch) | translated from the originals owing nothing to Jerome — the only non-Vulgate Latin here; Genesis and the Gospels only |
+| Latin | Castellio 1551, via [Corpus Corporum](https://mlat.uzh.ch) | translated from the originals owing nothing to Jerome; Genesis and the Gospels only |
 | **Syriac** | Peshitta Old Testament (ETCBC) and New Testament, via [PTA](https://github.com/PatristicTextArchive/pta_data) | a complete Syriac Bible; the Old Testament is **CC BY-NC** |
 | Septuagint | [Rahlfs 1935](https://github.com/PatristicTextArchive/pta_data), twice — PTA and Corpus Corporum | the standard critical text, in two independent transcriptions that agree on 96% of verses |
 | Greek NT | [SBLGNT](https://github.com/PatristicTextArchive/pta_data) and [Westcott–Hort](https://github.com/PerseusDL/canonical-greekLit) | three Greek New Testaments now, so a variant is visible rather than merely arguable |
+| **Old Latin** | Codices Vercellensis and Veronensis, via [Corpus Corporum](https://mlat.uzh.ch) | the gospels *before* Jerome, from the two of Migne's four manuscripts that carry verse numbers; the holes in them are kept rather than closed |
 | **Coptic** | Mark 1 in Sahidic, via [First1KGreek](https://github.com/OpenGreekAndLatin/First1KGreek) | 45 verses; the seed of a language, not a coverage |
 | English of the LXX | Ottley's Isaiah 1904, via First1KGreek | the Septuagint *as one manuscript has it*, which Brenton is not |
 | Versification | [Copenhagen Alliance](https://github.com/Copenhagen-Alliance/versification-specification) | org / eng / lxx / vul maps |
