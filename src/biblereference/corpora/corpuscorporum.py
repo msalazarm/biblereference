@@ -81,7 +81,17 @@ SEPTUAGINT: Final[Mapping[str, str]] = {
     "Neh": "EZR",
     "Est": "ESG",
     "Idt": "JDT",
-    "Tob": "TOB",
+    # **Not TOB.** The heading says ΤΩΒΙΤ and the text says Τωβιθ, and the second is right:
+    # this is the long recension, GII, the one Rahlfs prints beside the short one. Measured
+    # against what the library already holds, over the verses the two share:
+    #
+    #     rahlfs-cc Tob vs rahlfs TOB (GI)      identical in   0.9% of 211
+    #     rahlfs-cc Tob vs rahlfs-alt TBS (GII) identical in  75.8% of 207
+    #
+    # Filed under TOB it was two different Greek texts under one coordinate, and it was
+    # 157 of the 691 "boundary disagreements" between the two Rahlfs transcriptions -- a
+    # quarter of that whole queue, none of it a boundary question.
+    "Tob": "TBS",
     "1Mac": "1MA",
     "2Mac": "2MA",
     "3Mac": "3MA",
@@ -154,6 +164,29 @@ TEXTS: Final[Mapping[str, tuple[str, Mapping[str, str], str, str, str]]] = {
 }
 
 
+def _chapter_for(book: str, chapter: int) -> int:
+    """The chapter this verse belongs to, where the file numbers itself wrong.
+
+    One case, found by asking every book in the file whether its chapters run 1..n: Tobit's
+    do not. The source prints ``<div2 n=...>`` as 1-10 and then 12-15, skipping 11 -- so its
+    last chapter is numbered 15 where the book has fourteen, and those verses sat outside
+    what any shipped system declares, unable to be cited or validated.
+
+    That the shift is exactly one from chapter 11 is not inferred from the gap. It was
+    checked against the recension the library already holds, matching first lines:
+
+        cc 12:1  is  rahlfs-alt TBS 11:1   (Καὶ ὡς ἤγγισαν εἰς Κασεριν…)
+        cc 13:1  is  TBS 12:1
+        cc 15:1  is  TBS 14:1              (καὶ συνετελέσθησαν οἱ λόγοι…)
+
+    Not a general mechanism. Every other book in the file numbers its chapters contiguously
+    and is taken as printed.
+    """
+    if book == "TBS" and chapter >= 12:
+        return chapter - 1
+    return chapter
+
+
 def build(archive: Path) -> Iterator[BuiltCorpus]:
     for corpus, (idno, mapping, label, language, versification) in TEXTS.items():
         path = archive / f"cc-{idno}.xml"
@@ -170,7 +203,7 @@ def build(archive: Path) -> Iterator[BuiltCorpus]:
                     unknown.add(identifier)
                 continue
             for chapter, verse, subverse, text in milestone_verses(division):
-                verses.append((VerseRef(book, chapter, verse, subverse), text))
+                verses.append((VerseRef(book, _chapter_for(book, chapter), verse, subverse), text))
 
         notes = [
             "The file declares no licence -- its <availability> element is empty -- so the "
@@ -179,6 +212,14 @@ def build(archive: Path) -> Iterator[BuiltCorpus]:
             "elsewhere may be freer."
         ]
         if corpus == "rahlfs-cc":
+            notes.append(
+                "Its Tobit is the long recension, GII, and is stored as TBS rather than "
+                "TOB. The file's heading says ΤΩΒΙΤ and its text says Τωβιθ; against what "
+                "the library already held it is 75.8% identical to the Peshitta-side GII "
+                "and 0.9% identical to the GI in `rahlfs`. Its chapters are also renumbered: "
+                "the source skips 11 and runs to 15, which put fourteen verses beyond what "
+                "any shipped system declares."
+            )
             notes.append(
                 "This transcription renumbers Rahlfs's lettered pluses as plain verses "
                 "where the Patristic Text Archive's keeps the letters. Job 42 runs to 19 "

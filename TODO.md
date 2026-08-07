@@ -221,6 +221,30 @@ corrected range.
 
 </details>
 
+### ~~13. The 691 Rahlfs boundary disagreements~~ — READ, and a quarter of them were not that
+
+Arbitrated all 691 against Swete and Brenton by word overlap rather than a sample of forty
+(`tools/rahlfs_boundaries.py`). Two results.
+
+**157 of them — 23% — were two different Greek texts under one coordinate.** Corpus
+Corporum's Tobit is the long recension GII, not the short GI it was filed as: 0.9% identical
+to `rahlfs` TOB, 75.8% to `rahlfs-alt` TBS. Its heading says ΤΩΒΙΤ and its text says Τωβιθ.
+It is `TBS` now, and the same comparison reads 97.8% — which is what two transcriptions of
+one book look like. Its chapters were upstream's fault as well: the file numbers them 1-10
+then 12-15, so fourteen verses sat at a chapter 15 no system declares. Every book in the
+file was checked for this; Tobit was the only one.
+
+**The remaining 534** are draw 270, Corpus Corporum 196, PTA 41, no arbiter 27. Neither
+transcription can be preferred wholesale, but the balance is far more lopsided than forty
+cases suggested — 20:15 in the sample, nearly 5:1 over the whole set. PTA's wins are
+concentrated rather than spread: eleven of the forty-one are Joshua 24 from verse 22, which
+is the lettered-plus renumbering already documented, seen from the other end.
+
+**None of the 534 implicates `lxx`.** They are two copies of one printed book disagreeing
+about where a clause sits, not two traditions disagreeing about how to number it, so nothing
+here becomes a versification correction. The half that are draws would need reading, not
+arbitrating; the tool prints them with `--list`. Written up in `docs/tei-corpora.md`.
+
 ### 12. A conversion can answer with a book the target system does not have
 
 Found while building the numbering screen, which raised on `Ps 151:1` in `lxx`.

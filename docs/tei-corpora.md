@@ -156,10 +156,69 @@ in its source rather than in this reader.
 The 691 are the interesting ones, and they are verse *boundaries*. At Exodus 18:25/26 the
 Patristic Text Archive ends verse 25 with καὶ ἐκρίνοσαν τὸν λαὸν πᾶσαν ὥραν and Corpus
 Corporum begins verse 26 with it; Swete and Brenton both agree with the second, so PTA is
-wrong there. **But it is not systematic.** Arbitrating forty of them against Swete by word
-overlap: Corpus Corporum wins 20, PTA 15, three are a draw and two have no arbiter. Neither
-transcription can be preferred wholesale, and the 691 are a queue of individually readable
-cases rather than a fault in one file.
+wrong there.
+
+### Reading all 691, and what a quarter of them turned out to be
+
+`tools/rahlfs_boundaries.py` arbitrates them all rather than a sample of forty. The method
+is the sample's: Swete and Brenton are independent editions of the same Greek — different
+text, same verse divisions — so "which transcription put this clause in the right verse"
+has a mechanical answer, whichever one's verse *n* accounts for more of the arbiter's verse
+*n*. Asymmetric on purpose: the disagreement is that one side has absorbed a clause it
+should not have, and a symmetric ratio would punish the correct side for the arbiter's own
+wording.
+
+**157 of the 691 — 23% — were not boundary disagreements at all.** They were Tobit, and
+they were two different Greek texts under one coordinate.
+
+Rahlfs prints Tobit twice, the short recension GI and the long GII, because they diverge
+too far to conflate. The library held PTA's GI as `rahlfs` TOB and PTA's GII as `rahlfs-alt`
+TBS. Corpus Corporum's Tobit was imported as TOB on the strength of its `div1/@id` and its
+heading, which reads ΤΩΒΙΤ — but its *text* reads Τωβιθ, and that is the one that is right:
+
+```
+rahlfs-cc Tobit vs rahlfs TOB      (GI)    identical in   0.9% of 211 shared verses
+rahlfs-cc Tobit vs rahlfs-alt TBS  (GII)   identical in  75.8% of 207 shared verses
+```
+
+It is GII, and it is now stored as `TBS`. Two things follow. The 0.9% is what comparing two
+recensions looks like and it should never have been in a boundary queue; and after the move
+the same comparison reads **97.8%**, which is what two hands copying one book looks like —
+the same figure Rahlfs-against-Rahlfs gives everywhere else.
+
+Its chapters were wrong too, and upstream's fault rather than this reader's: the file prints
+`<div2 n=…>` as 1–10 and then 12–15, skipping 11, so Tobit ended at a chapter 15 that no
+shipped system declares and fourteen verses could not be cited or validated. Asking every
+book in the file whether its chapters run 1..*n* found Tobit and nothing else. The offset is
+confirmed by alignment rather than inferred from the gap — cc 12:1 is word-for-word
+`rahlfs-alt` TBS 11:1, cc 15:1 is TBS 14:1 — and `corpuscorporum._chapter_for` shifts 12–15
+down by one. Zero uncitable verses remain.
+
+### The remaining 534
+
+| | |
+|---|---|
+| draw | 270 |
+| Corpus Corporum right | 196 |
+| Patristic Text Archive right | 41 |
+| no arbiter | 27 |
+
+**Neither can be preferred wholesale, but the balance is far more lopsided than forty cases
+suggested** — 20:15 in the sample, 196:41 over the whole set, so Corpus Corporum is right
+nearly five times as often. Half are draws, which is honest: where both transcriptions
+contain all of the arbiter's words, word overlap has nothing to say and only reading will
+settle it.
+
+PTA's 41 wins are concentrated rather than spread: twelve are in Joshua, and eleven of those
+are Joshua 24 from verse 22 onwards, where Swete scores PTA at 0.94–1.00 and Corpus Corporum
+at 0.04–0.17. That is not a new finding but the lettered-plus renumbering above, seen from
+the other end — `lxx` declares Joshua 24 at 33 verses with 33a and 33b, Corpus Corporum
+renumbers to 62, and everything after the divergence is offset.
+
+**None of the 534 implicates `lxx`.** They are two copies of one printed book disagreeing
+about where a clause sits, not two traditions disagreeing about how to number it, so nothing
+here becomes a versification correction. The library already prefers `rahlfs` for anything
+that has to resolve, because its numbering is the one `lxx` declares.
 
 Three Greek New Testaments do the same for the New Testament. Against Nestle 1904 over Luke:
 the SBLGNT differs in 19% of verses at 99% mean similarity, Westcott–Hort in 28% at 98%. One
