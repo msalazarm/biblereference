@@ -23,7 +23,7 @@ import hashlib
 import json
 import re
 from collections.abc import Iterable, Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from functools import cache
 from importlib import resources
 from typing import Final
@@ -34,12 +34,15 @@ from ..refs import VerseRange, VerseRef
 __all__ = [
     "DEFAULT_SYSTEMS",
     "PIVOT",
+    "Correction",
+    "Corrections",
     "UnknownVersificationError",
     "VerseOutOfRangeError",
     "Versification",
     "VersificationDataError",
     "VersificationError",
     "VersificationGapError",
+    "corrections",
     "fingerprint",
 ]
 
@@ -1108,3 +1111,240 @@ def fingerprint(systems: Iterable[str] = DEFAULT_SYSTEMS) -> str:
     digest.update(b"\x00systems\x00")
     digest.update(",".join(sorted(systems)).encode())
     return digest.hexdigest()
+
+
+# --------------------------------------------------------------------------------------
+# Why a mapping is where it is
+# --------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Correction:
+    """One documented departure from the vendored data, and why it was made."""
+
+    system: str
+    """The file that was corrected -- ``"vul"``, ``"eng"``, and so on."""
+    kind: str
+    """``drop_mapped`` | ``add_mapped`` | ``fix_mapped`` | ``covers`` | ``add_books`` |
+    ``fix_max_verses`` | ``extend_books`` | ``unreliable`` | ``deprioritize_books`` |
+    ``ignore_self_mapped``."""
+    key: str
+    """Exactly as the file writes it: ``"DAG 13:1-63"``, ``"SIR"``, ``"MAT 17:14"``."""
+    reason: str
+    scope: str = "verse"
+    """``verse`` | ``chapter`` | ``book`` | ``system`` -- how widely the entry reaches."""
+    detail: Mapping[str, object] = field(default_factory=dict)
+    """Whatever else the entry carries: ``from``, ``to``, ``chapters``, ``books``."""
+
+
+class Corrections:
+    """Every reason written down in ``corrections.json``, indexed by what it touches.
+
+    The file holds two hundred of these and the loader reads every one of them to apply the
+    corrections -- and keeps none of the prose. That is the richest thing this library knows
+    about its own data and the one thing it could not say. This makes it askable:
+
+        >>> corrections().at("vul", "MAT", 17, 14)   # doctest: +SKIP
+        (Correction(system='vul', kind='covers', key='MAT 17:14', ...),)
+
+    Built by reading the file a second time rather than by threading retention through
+    ``_build_system``, and that is deliberate. ``_build_system`` *validates* every correction
+    as it applies it and raises when one no longer does, so by the time any
+    :class:`Versification` exists every entry in the file is live and a separate index cannot
+    hold a stale one. Keeping it separate means this cannot introduce a fault into the
+    conversion path, which is the one path here that must not move.
+    """
+
+    __slots__ = ("_all", "_by_book", "_by_chapter", "_by_system", "_by_verse", "_malformed")
+
+    def __init__(self, raw: Mapping[str, object]) -> None:
+        self._all: list[Correction] = []
+        self._by_verse: dict[tuple[str, str, int, int], list[Correction]] = {}
+        self._by_chapter: dict[tuple[str, str, int], list[Correction]] = {}
+        self._by_book: dict[tuple[str, str], list[Correction]] = {}
+        self._by_system: dict[str, list[Correction]] = {}
+        self._malformed: list[tuple[str, str, str]] = []
+        self._read(raw)
+        self._all.sort(key=lambda c: (c.system, c.kind, c.key))
+
+    # -- building ----------------------------------------------------------------------
+
+    def _file(self, correction: Correction, book: str | None = None) -> None:
+        self._all.append(correction)
+        self._by_system.setdefault(correction.system, []).append(correction)
+        if correction.scope == "system":
+            return
+        if book is None:
+            book = correction.key.split(" ", 1)[0]
+        self._by_book.setdefault((correction.system, book), []).append(correction)
+
+    def _verse_entry(
+        self, system: str, kind: str, key: str, reason: str, detail: Mapping[str, object]
+    ) -> None:
+        """File a ``"BOOK C:V"`` or ``"BOOK C:V-V"`` key at every coordinate it names."""
+        correction = Correction(system, kind, key, reason, "verse", detail)
+        try:
+            coordinates = _parse_entry(key)
+        except VersificationDataError:
+            # One upstream key cannot be parsed and is in the file on purpose: vul's
+            # `DAG 3:52-23` is a transposed `3:52-53`, which `_apply_corrections` pops by
+            # string identity without ever parsing. File it at chapter scope so its reason
+            # is still reachable, and record it so that a *new* one is not silent.
+            self._malformed.append((system, kind, key))
+            loose = _REF_RE.match(key) or re.match(r"^(?P<book>\w+) (?P<chapter>\d+):", key)
+            if loose is None:
+                self._file(replace(correction, scope="book"))
+                return
+            book, chapter = loose["book"], int(loose["chapter"])
+            chaptered = replace(correction, scope="chapter")
+            self._by_chapter.setdefault((system, book, chapter), []).append(chaptered)
+            self._file(chaptered, book)
+            return
+        self._file(correction, coordinates[0][0])
+        for book, chapter, verse, _ in coordinates:
+            self._by_verse.setdefault((system, book, chapter, verse), []).append(correction)
+
+    def _read(self, raw: Mapping[str, object]) -> None:
+        for system, entries in _sub(dict(raw), "drop_mapped").items():
+            assert isinstance(entries, list)
+            for entry in entries:
+                for key in entry["keys"]:
+                    self._verse_entry(system, "drop_mapped", key, entry["reason"], {})
+
+        for kind in ("add_mapped", "fix_mapped", "covers"):
+            for system, entries in _sub(dict(raw), kind).items():
+                assert isinstance(entries, dict)
+                for key, spec in entries.items():
+                    detail = {k: v for k, v in spec.items() if k != "reason"}
+                    self._verse_entry(system, kind, key, spec["reason"], detail)
+
+        for system, entries in _sub(dict(raw), "add_books").items():
+            assert isinstance(entries, dict)
+            for book, spec in entries.items():
+                self._file(
+                    Correction(
+                        system,
+                        "add_books",
+                        book,
+                        spec["reason"],
+                        "book",
+                        {"maxVerses": spec["maxVerses"]},
+                    ),
+                    book,
+                )
+
+        for kind in ("fix_max_verses", "extend_books"):
+            for system, entries in _sub(dict(raw), kind).items():
+                assert isinstance(entries, dict)
+                for book, spec in entries.items():
+                    correction = Correction(
+                        system,
+                        kind,
+                        book,
+                        spec["reason"],
+                        "chapter",
+                        {"chapters": spec["chapters"]},
+                    )
+                    self._file(correction, book)
+                    for chapter in spec["chapters"]:
+                        self._by_chapter.setdefault((system, book, int(chapter)), []).append(
+                            correction
+                        )
+
+        for system, spec in _sub(dict(raw), "deprioritize_books").items():
+            assert isinstance(spec, dict)
+            for book in spec["books"]:
+                self._file(
+                    Correction(
+                        system,
+                        "deprioritize_books",
+                        book,
+                        spec["reason"],
+                        "book",
+                        {"books": spec["books"]},
+                    ),
+                    book,
+                )
+
+        for system, spec in _sub(dict(raw), "ignore_self_mapped").items():
+            assert isinstance(spec, dict)
+            self._file(
+                Correction(system, "ignore_self_mapped", system, spec["reason"], "system", {})
+            )
+
+        unreliable = raw.get("unreliable", [])
+        assert isinstance(unreliable, list)
+        for entry in unreliable:
+            detail = {k: v for k, v in entry.items() if k not in {"reason", "systems"}}
+            for system in entry["systems"]:
+                for book in entry["books"]:
+                    scope = "chapter" if entry.get("chapters") else "book"
+                    correction = Correction(
+                        system, "unreliable", book, entry["reason"], scope, detail
+                    )
+                    self._file(correction, book)
+                    for chapter in entry.get("chapters", ()):
+                        self._by_chapter.setdefault((system, book, int(chapter)), []).append(
+                            correction
+                        )
+
+    # -- asking ------------------------------------------------------------------------
+
+    @staticmethod
+    def _once(found: Iterable[Correction]) -> tuple[Correction, ...]:
+        """Order-preserving dedupe on identity.
+
+        One entry is filed in several indexes -- a ranged key at every verse it names, an
+        `unreliable` chapter under both its book and its chapter -- so a lookup can reach
+        the same object twice. Identity rather than equality because `detail` is a mapping,
+        which makes a `Correction` unhashable and comparing them a needless deep walk.
+        """
+        seen: dict[int, Correction] = {}
+        for correction in found:
+            seen.setdefault(id(correction), correction)
+        return tuple(seen.values())
+
+    def at(
+        self, system: str, book: str, chapter: int, verse: int | None = None
+    ) -> tuple[Correction, ...]:
+        """Every correction touching this coordinate, least specific first.
+
+        Book scope, then chapter, then verse, so a general refusal prints above the
+        particular entry it explains. Pass no ``verse`` to ask about the whole chapter.
+        """
+        found: list[Correction] = [
+            c for c in self._by_book.get((system, book), ()) if c.scope == "book"
+        ]
+        found += self._by_chapter.get((system, book, chapter), ())
+        if verse is not None:
+            found += self._by_verse.get((system, book, chapter, verse), ())
+        return self._once(found)
+
+    def for_book(self, system: str, book: str) -> tuple[Correction, ...]:
+        """Everything written about one book of one system, at any scope."""
+        return self._once(self._by_book.get((system, book), ()))
+
+    def for_system(self, system: str) -> tuple[Correction, ...]:
+        return self._once(self._by_system.get(system, ()))
+
+    def all(self) -> tuple[Correction, ...]:
+        return tuple(self._all)
+
+    @property
+    def malformed(self) -> tuple[tuple[str, str, str], ...]:
+        """``(system, kind, key)`` for every key that could not be parsed as a reference.
+
+        One today, and it is upstream's: see :meth:`_verse_entry`. A test pins the set, so a
+        new one is a failure rather than a reason nobody can reach.
+        """
+        return tuple(sorted(set(self._malformed)))
+
+
+@cache
+def corrections() -> Corrections:
+    """Every reason recorded in ``corrections.json``, read once.
+
+    Cached for the process, which is enough: the data is vendored and cannot change while
+    this runs. Over HTTP, key a cache on :func:`fingerprint` instead.
+    """
+    return Corrections(_load_json("corrections.json"))

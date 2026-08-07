@@ -41,6 +41,7 @@ from .tags import Citation, TagSyntaxError, find_citations
 from .versification import Versification, VersificationError
 
 __all__ = [
+    "RTL",
     "Config",
     "RenderReport",
     "Renderer",
@@ -65,7 +66,15 @@ _LANGUAGE_NAMES: Final[Mapping[str, str]] = {
 #:
 #: Syriac is one of them and Coptic is not, which is the whole reason this is a set rather
 #: than "anything not Latin script".
-_RTL: Final = frozenset({"hbo", "syc"})
+#: Languages written right to left. Public because more than one presentation needs it and
+#: two answers would drift: the Markdown renderer wraps these in U+2068/U+2069, and anything
+#: producing HTML has to set ``dir`` from the same list.
+#:
+#: Greek and Coptic are *not* here. "Ancient language" is not the criterion and treating it
+#: as one would reverse two of the six languages this library holds.
+RTL: Final = frozenset({"hbo", "syc"})
+
+_RTL: Final = RTL
 
 #: English versions that come from a fetched source rather than from ``pythonbible``,
 #: so that asking for one before building says so instead of reporting it as unknown.
