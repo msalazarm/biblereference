@@ -1,0 +1,489 @@
+"""The socket: routing, auth, parameter handling, and the globals everything else reads.
+
+``HOME``, ``JOBS``, ``TOKEN`` and ``MAX_BODY`` live here because they are the four things a
+run is configured with, and three of them cannot be known until :func:`serve` is called.
+Every other module in this package reads them at call time -- see the package docstring for
+why that is a rule rather than a style.
+
+Run it:
+
+    biblereference serve                        # http://localhost:8000, local only
+    biblereference serve --host 0.0.0.0 --token "$(openssl rand -hex 24)"
+
+See the README for setting it up on another machine.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hmac
+import json
+import os
+import traceback
+from collections.abc import Callable
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any, Final
+from urllib.parse import parse_qs, urlparse
+
+from ..store import DataHome
+from .api import (
+    api_convert,
+    api_corpora,
+    api_digest,
+    api_health,
+    api_manifest,
+    api_passage,
+    api_scan,
+    api_search,
+    api_sources,
+)
+from .jobs import BATCH_TASKS, TASKS, Jobs
+from .library import corpora, known_filters
+from .plain import page
+
+#: `Jobs`, `TASKS` and `BATCH_TASKS` are re-exported rather than merely imported: this
+#: module is what `tools/serve.py` resolves to, so a name that was on the old script has to
+#: still be reachable here.
+__all__ = ["BATCH_TASKS", "TASKS", "Handler", "Jobs", "Server", "main", "serve"]
+
+#: The store every reader here answers out of. Rebound by ``--data-home`` and by the test
+#: fixture, which is why nothing imports it at module level.
+HOME = DataHome()
+
+#: Built in :func:`serve`, which knows the worker count.
+JOBS: Jobs = None  # type: ignore[assignment]
+
+TOKEN: str | None = None
+
+#: Largest body accepted, in bytes. Patristic passages run to 100,000 words; this is a few
+#: times that, and going over is refused with a 413 rather than silently truncated.
+MAX_BODY: int = 64 * 1024 * 1024
+
+
+# --------------------------------------------------------------------------------------
+# Parameters: refused, not ignored
+# --------------------------------------------------------------------------------------
+
+#: Everything `Searcher` takes that can survive a query string, with how to read it.
+#: Anything not here is refused rather than ignored -- see :func:`search_options`.
+_SCORES: Final = {"quotation": None, "coverage": None, "identified": None}
+_FILTERS: Final = {"languages", "corpora", "families"}
+_OTHER: Final = {"q", "limit", "token", "min_run", "min_query", "window", "stride"}
+
+#: Query parameters the job endpoint owns. Named explicitly rather than folded into the
+#: general allow-list, so that `/api/search?task=scan` is still the error it ought to be.
+JOB_PARAMS: Final = frozenset({"task", "book", "left", "right", "covering"})
+
+
+def _fraction(name: str, raw: str) -> float:
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be a number between 0 and 1, not {raw!r}") from None
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"{name} must be between 0 and 1, not {value}")
+    return value
+
+
+def _min_run(raw: str) -> int | Callable[[int], int]:
+    """A fixed word count, or ``scaled:<floor>`` for one proportional to the query.
+
+    A callable cannot cross a query string, and the proportional form is the one that was
+    measured -- it took short Greek quotations from 9% found to 72% -- so it needs a
+    spelling. ``scaled:4`` is :class:`~biblereference.search.ScaledRun`, which is a class
+    and not a closure precisely so that it survives the pickle into a worker process.
+    """
+    from ..search import ScaledRun
+
+    if not raw.startswith("scaled:"):
+        try:
+            fixed = int(raw)
+        except ValueError:
+            raise ValueError(f"min_run must be an integer or scaled:<floor>, not {raw!r}") from None
+        if fixed < 1:
+            raise ValueError(f"min_run must be at least 1, not {fixed}")
+        return fixed
+    try:
+        floor = int(raw.removeprefix("scaled:"))
+    except ValueError:
+        raise ValueError(f"scaled: needs a floor, as in scaled:4, not {raw!r}") from None
+    try:
+        return ScaledRun(floor)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from None
+
+
+def _listed(params: dict[str, list[str]], name: str) -> list[str] | None:
+    """A repeatable, comma-separated parameter. ``None`` when absent, meaning no filter."""
+    values = [
+        piece.strip() for raw in params.get(name, ()) for piece in raw.split(",") if piece.strip()
+    ]
+    return values or None
+
+
+def search_options(
+    params: dict[str, list[str]], extra: frozenset[str] = frozenset()
+) -> dict[str, Any]:
+    """Turn a query string into `Searcher` keyword arguments, refusing what it cannot.
+
+    Silently ignoring a parameter is how a caller comes to believe it configured something
+    it did not: the answer looks like a genuine absence of matches and there is nothing to
+    tell the two apart. So an unknown name, an unreadable value and an out-of-range one are
+    all 400s, and only the parameters actually applied are accepted.
+    """
+    allowed = set(_SCORES) | _FILTERS | _OTHER | set(extra)
+    unknown = set(params) - allowed
+    if unknown:
+        raise ValueError(
+            f"unknown parameter(s): {', '.join(sorted(unknown))}. "
+            f"Known: {', '.join(sorted(allowed - {'token'}))}"
+        )
+
+    options: dict[str, Any] = {}
+    for name in _SCORES:
+        if params.get(name):
+            options[name] = _fraction(name, params[name][0])
+    if params.get("min_run"):
+        options["min_run"] = _min_run(params["min_run"][0])
+    if params.get("min_query"):
+        raw = params["min_query"][0]
+        try:
+            options["min_query"] = int(raw)
+        except ValueError:
+            raise ValueError(f"min_query must be an integer, not {raw!r}") from None
+
+    known = known_filters()
+    for name in _FILTERS:
+        chosen = _listed(params, name)
+        if chosen is None:
+            continue
+        strange = [value for value in chosen if value not in known[name]]
+        if strange:
+            # Not an empty result: that would be indistinguishable from nothing matching,
+            # which is the failure this whole function exists to prevent.
+            raise LookupError(
+                f"unknown {name}: {', '.join(strange)}. "
+                f"This machine has: {', '.join(sorted(known[name]))}"
+            )
+        options[name] = chosen
+    return options
+
+
+def _batch_work(body: str) -> list[Any]:
+    """The documents of a batch scan: a JSON array of ``{"id": ..., "text": ...}``.
+
+    Ids are the caller's, so results come back matched to them rather than to a position
+    in a list that a partial failure would shift.
+    """
+    if not body.strip():
+        return []
+    parsed = json.loads(body)
+    if not isinstance(parsed, list):
+        raise ValueError("a scan batch must be a JSON array of {id, text} objects")
+    for item in parsed:
+        if not isinstance(item, dict) or "id" not in item:
+            raise ValueError(f"every document needs an id: {item!r}")
+    return parsed
+
+
+def _job_params(params: dict[str, list[str]], body: str) -> dict[str, Any]:
+    """Job arguments from the query string, or from a JSON body if one was sent."""
+    if body.strip():
+        parsed = json.loads(body)
+        if not isinstance(parsed, dict):
+            raise ValueError("a job body must be a JSON object of arguments")
+        return parsed
+    out: dict[str, Any] = {}
+    for key in ("book", "left", "right"):
+        if params.get(key):
+            out[key] = params[key][0]
+    if params.get("covering"):
+        out["covering"] = True
+    return out
+
+
+# --------------------------------------------------------------------------------------
+# The socket
+# --------------------------------------------------------------------------------------
+
+
+ROUTES = {
+    "GET  /": "the browsing page",
+    "GET  /api/health": "corpora count, fingerprint, cores, jobs running",
+    "GET  /api/corpora": "every built corpus",
+    "GET  /api/digest": "fingerprint of this machine's library, for comparing with another",
+    "GET  /api/sources": "per-source checksums, for running a mismatched digest to ground",
+    "GET  /api/manifest": "every archive manifest line, for mirroring this machine",
+    "GET  /api/archive": "?path=<manifest path> -- one archived file, raw",
+    "GET  /api/convert": "?ref=&from=eng&to=vul&covering=1 (repeat to=, or omit for all)",
+    "GET  /api/passage": "?ref=&vrs=eng&covering=1 -- the text in every corpus",
+    "POST /api/search": "body is the quotation; ?limit=5 and any scoring or filter option",
+    "POST /api/scan": "body is a document; finds the quotations in it and where they sit",
+    "POST /api/jobs": "?task=coverage|audit|compare (&book=&left=&right=&covering=1)",
+    "POST /api/jobs?task=scan": "body is [{id, text}, ...]; scans them all across the pool",
+    "GET  /api/jobs": "every job, without results",
+    "GET  /api/jobs/<id>": "one job, with its result once done",
+}
+
+
+class Server(ThreadingHTTPServer):
+    """`ThreadingHTTPServer`, minus the traceback when a client hangs up.
+
+    A caller that times out and disconnects mid-response is ordinary, and printing a
+    BrokenPipeError stack for it is noise that hides real errors among it.
+    """
+
+    daemon_threads = True
+
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        import sys
+
+        if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError)):
+            return
+        super().handle_error(request, client_address)
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "biblereference"
+
+    # -- plumbing ----------------------------------------------------------------------
+
+    def _send(self, status: int, body: bytes, content_type: str) -> None:
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            # The caller gave up before the answer arrived -- a timeout on their side, or
+            # a killed client. Their business, not a fault here, and reporting it as one
+            # buries whatever the request was actually doing under a second traceback.
+            self.close_connection = True
+
+    def _json(self, status: int, payload: Any) -> None:
+        # default=str so that one unforeseen object in a result cannot turn a completed
+        # job into a 500 when you go to collect it. Better a repr than a lost answer.
+        body = json.dumps(payload, ensure_ascii=False, indent=1, default=str).encode("utf-8")
+        self._send(status, body, "application/json; charset=utf-8")
+
+    def _authorised(self, params: dict[str, list[str]]) -> bool:
+        if TOKEN is None:
+            return True
+        header = self.headers.get("Authorization", "")
+        offered = header[7:] if header.startswith("Bearer ") else (params.get("token") or [""])[0]
+        # compare_digest rather than ==, so a wrong token cannot be found one byte at a
+        # time by watching how long the answer takes.
+        return hmac.compare_digest(offered, TOKEN)
+
+    def log_message(self, *args: object) -> None:
+        return  # the console is for tracebacks, not a line per request
+
+    # -- routing -----------------------------------------------------------------------
+
+    def do_GET(self) -> None:
+        self._route()
+
+    def do_HEAD(self) -> None:
+        self._route()
+
+    def do_POST(self) -> None:
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > MAX_BODY:
+            # Said rather than truncated. A document cut short here would read as a father
+            # quoting less than he did, and nothing downstream could tell.
+            self._json(
+                413,
+                {
+                    "error": f"body is {length:,} bytes; the limit is {MAX_BODY:,}. "
+                    f"Split the document, or raise --max-body."
+                },
+            )
+            return
+        self._route(self.rfile.read(length).decode("utf-8", "replace") if length else "")
+
+    def _route(self, body: str = "") -> None:
+        url = urlparse(self.path)
+        params = parse_qs(url.query)
+        path = url.path.rstrip("/") or "/"
+
+        if not self._authorised(params):
+            self._json(401, {"error": "a token is required: Authorization: Bearer <token>"})
+            return
+
+        try:
+            if path.startswith("/api"):
+                self._api(path, params, body)
+            elif path == "/":
+                out = page(
+                    (params.get("q") or [""])[0].strip(),
+                    (params.get("vrs") or ["eng"])[0],
+                    bool(params.get("covering")),
+                    # Carried in a hidden field, so following the form does not drop it.
+                    (params.get("token") or [""])[0],
+                )
+                self._send(200, out.encode("utf-8"), "text/html; charset=utf-8")
+            else:
+                self._json(404, {"error": f"no route {path!r}"})
+        except (ValueError, LookupError) as exc:
+            # What a person gets wrong: a mistyped reference, an unbuilt corpus, an
+            # unknown task. Their fault to fix, so name it rather than dumping a stack.
+            self._json(400, {"error": f"{type(exc).__name__}: {exc}"})
+        except Exception:
+            self._json(500, {"error": traceback.format_exc()})
+
+    def _archive(self, wanted: str) -> None:
+        """One archived file, by its manifest path.
+
+        The path comes from a client, so it is resolved and checked to be *inside* the
+        archive rather than merely starting with its name -- `..` segments and symlinks
+        both resolve away, and neither should be able to read this machine's disk.
+        """
+        root = HOME.sources.resolve()
+        target = (root / wanted).resolve()
+        if not wanted or root not in target.parents or not target.is_file():
+            self._json(404, {"error": f"not in the archive: {wanted!r}"})
+            return
+        self._send(200, target.read_bytes(), "application/octet-stream")
+
+    def _api(self, path: str, params: dict[str, list[str]], body: str) -> None:
+        if path == "/api/health":
+            self._json(200, api_health())
+        elif path == "/api/corpora":
+            self._json(200, api_corpora())
+        elif path == "/api/digest":
+            self._json(200, api_digest())
+        elif path == "/api/sources":
+            self._json(200, api_sources())
+        elif path == "/api/manifest":
+            self._json(200, api_manifest())
+        elif path == "/api/archive":
+            self._archive((params.get("path") or [""])[0])
+        elif path == "/api/convert":
+            self._json(200, api_convert(params))
+        elif path == "/api/passage":
+            self._json(200, api_passage(params))
+        elif path == "/api/search":
+            self._json(200, api_search(params, body))
+        elif path == "/api/scan":
+            self._json(200, api_scan(params, body))
+        elif path == "/api/jobs":
+            if self.command == "POST":
+                task = (params.get("task") or [""])[0]
+                if task in BATCH_TASKS:
+                    options = search_options(params, JOB_PARAMS)
+                    self._json(202, JOBS.submit_batch(task, _batch_work(body), options))
+                else:
+                    self._json(202, JOBS.submit(task, _job_params(params, body)))
+            else:
+                self._json(200, {"jobs": JOBS.all()})
+        elif path.startswith("/api/jobs/"):
+            job = JOBS.get(path.rsplit("/", 1)[-1])
+            self._json(200 if job else 404, job or {"error": "no such job"})
+        else:
+            self._json(404, {"error": f"no route {path!r}", "routes": sorted(ROUTES)})
+
+
+# --------------------------------------------------------------------------------------
+# Starting it
+# --------------------------------------------------------------------------------------
+
+
+def serve(
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    token: str | None = None,
+    max_body: int | None = None,
+    workers: int | None = None,
+    interactive_workers: int = 4,
+    data_home: Path | None = None,
+    announce: bool = True,
+) -> None:
+    """Configure the globals, build the pools, and serve until interrupted."""
+    global HOME, JOBS, TOKEN, MAX_BODY
+
+    if data_home is not None:
+        # Set the *environment*, not only `HOME`. The job pool is spawned, and a spawned
+        # worker builds its own `DataHome()` -- it cannot be handed this one and does not
+        # inherit the assignment. Setting only `HOME` would apply `--data-home` to reads
+        # and silently not to jobs, which is the shape of bug that takes an afternoon.
+        from ..store import ENV_VAR
+
+        os.environ[ENV_VAR] = str(data_home)
+        HOME = DataHome(data_home)
+
+    TOKEN = token or None
+    if max_body is not None:
+        MAX_BODY = max_body
+    if workers is None:
+        workers = max(1, (os.cpu_count() or 2) - 1)
+    # After the environment, so the spawned workers see it.
+    JOBS = Jobs(workers, interactive_workers)
+
+    if announce:
+        print(
+            f"{len(corpora())} corpora · {workers} job workers + "
+            f"{interactive_workers} interactive, of {os.cpu_count()} cores\n"
+            f"http://{host}:{port}  (ctrl-c to stop)",
+            flush=True,
+        )
+        if host != "127.0.0.1" and TOKEN is None:
+            print(
+                "  WARNING: listening on the network with no --token. Anyone who can reach "
+                "this port can run jobs on this machine.",
+                flush=True,
+            )
+    Server((host, port), Handler).serve_forever()
+
+
+def add_arguments(parser: argparse.ArgumentParser) -> None:
+    """The options, shared between ``biblereference serve`` and running this directly."""
+    parser.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to accept from the network")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument(
+        "--token",
+        default=os.environ.get("BIBLEREFERENCE_TOKEN"),
+        help="require this bearer token; also read from $BIBLEREFERENCE_TOKEN",
+    )
+    parser.add_argument(
+        "--max-body",
+        type=int,
+        default=MAX_BODY,
+        metavar="BYTES",
+        help=f"largest request body accepted (default {MAX_BODY // 1024 // 1024} MB)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=max(1, (os.cpu_count() or 2) - 1),
+        help="processes for the long jobs (default: cores - 1)",
+    )
+    parser.add_argument(
+        "--interactive-workers",
+        type=int,
+        default=4,
+        metavar="N",
+        help="processes kept for single search and scan requests, so a running batch "
+        "cannot starve them (default 4)",
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Serve biblereference over HTTP.")
+    add_arguments(parser)
+    args = parser.parse_args()
+    serve(
+        host=args.host,
+        port=args.port,
+        token=args.token,
+        max_body=args.max_body,
+        workers=args.workers,
+        interactive_workers=args.interactive_workers,
+    )
+
+
+if __name__ == "__main__":
+    main()
