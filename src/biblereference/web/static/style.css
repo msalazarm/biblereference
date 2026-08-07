@@ -744,6 +744,10 @@ button.chapter:hover {
   overflow: auto;
   overscroll-behavior: contain;
   max-block-size: calc(100dvh - 13rem);
+  /* Hug the table rather than the track: with one column open the border would otherwise
+     run the width of the screen around a column of prose, which reads as a missing panel. */
+  inline-size: fit-content;
+  max-inline-size: 100%;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   background: var(--ground-raised);

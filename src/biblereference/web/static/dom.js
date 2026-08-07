@@ -57,7 +57,12 @@ export function slot(name) {
   return document.querySelector(`[data-slot="${name}"]`);
 }
 
-/** A short message in place of a screen: an error, or nothing found. */
+/**
+ * A short message in place of a screen: an error, or nothing found.
+ *
+ * `role="alert"` because these replace the thing you asked for, and a reader who cannot see
+ * the page would otherwise be told nothing at all -- the screen would simply go quiet.
+ */
 export function notice(message, kind = 'note-gap') {
-  return el('p', { class: kind }, message);
+  return el('p', { class: kind, role: 'alert' }, message);
 }

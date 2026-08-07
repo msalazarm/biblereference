@@ -49,6 +49,9 @@ function translations(match) {
 
 function result(match) {
   const [book, rest] = match.passage.split(' ');
+  // The match was found in *its* numbering. A link without it opens whatever the reader
+  // happens to be set to, which for a `vul` match read under `eng` is a different verse.
+  const where = `#/reader/${book}/${rest}?vrs=${match.vrs}`;
   return el(
     'article',
     { class: 'panel result' },
@@ -57,7 +60,7 @@ function result(match) {
       { class: 'result-head' },
       el(
         'a',
-        { href: `#/reader/${book}/${rest}` },
+        { href: where },
         el('h3', {}, match.pretty),
       ),
       el('code', {}, match.vrs),
@@ -78,7 +81,11 @@ function result(match) {
           'It could also be ',
           match.alternates.map((one, index) => [
             index ? ', ' : null,
-            el('a', { href: `#/reader/${one.split(' ')[0]}/${one.split(' ')[1]}` }, one),
+            el(
+              'a',
+              { href: `#/reader/${one.split(' ')[0]}/${one.split(' ')[1]}?vrs=${match.vrs}` },
+              one,
+            ),
           ]),
           '.',
         )
@@ -91,6 +98,9 @@ function result(match) {
 export async function render(state, match, signal) {
   const query = state.q ?? '';
   document.title = query ? `${query} — search` : 'search — biblereference';
+  // Reloading `#/search?q=…` showed results for a query the box was empty of.
+  const box = document.querySelector('#q');
+  if (box && !box.value) box.value = query;
 
   fill(
     slot('rail'),

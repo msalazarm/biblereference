@@ -57,10 +57,11 @@ export async function render(state, match, signal) {
     el(
       'div',
       { class: 'panel' },
-      el('div', { class: 'field' }, el('label', {}, 'Written in'),
+      el('div', { class: 'field' }, el('label', { for: 'vrs' }, 'Written in'),
         el(
           'select',
-          { onchange: (event) => write({ vrs: event.target.value }) },
+          { id: 'vrs', dataset: { keep: 'vrs' },
+            onchange: (event) => write({ vrs: event.target.value }) },
           ['org', 'eng', 'lxx', 'vul', 'nvl'].map((s) =>
             el('option', { value: s, selected: s === state.vrs }, s),
           ),
@@ -100,10 +101,10 @@ export async function render(state, match, signal) {
           el(
             'tr',
             {},
-            el('th', {}, 'system'),
-            el('th', {}, 'exact', el('small', {}, 'which verse it is')),
-            el('th', {}, 'covering', el('small', {}, 'every verse it needs')),
-            el('th', {}, 'why', el('small', {}, 'refusals, and recorded corrections')),
+            el('th', { scope: 'col' }, 'system'),
+            el('th', { scope: 'col' }, 'exact', el('small', {}, 'which verse it is')),
+            el('th', { scope: 'col' }, 'covering', el('small', {}, 'every verse it needs')),
+            el('th', { scope: 'col' }, 'why', el('small', {}, 'refusals, and recorded corrections')),
           ),
         ),
         el(
@@ -113,7 +114,7 @@ export async function render(state, match, signal) {
             el(
               'tr',
               { class: row.differs ? 'differs' : null },
-              el('th', {}, row.label),
+              el('th', { scope: 'row' }, row.label),
               cell(row.exact, false),
               cell(row.covering, row.differs),
               why(row.why),
@@ -134,11 +135,6 @@ export async function render(state, match, signal) {
           { class: 'panel' },
           el('p', {}, 'The mappings here were corrected by hand. Kinds involved:'),
           el('ul', {}, [...kinds].sort().map((kind) => el('li', {}, el('code', {}, kind)))),
-          el(
-            'a',
-            { href: `#/numbering/${book}/${rest ?? '1'}` },
-            '',
-          ),
         )
       : notice('Nothing here was corrected — every system maps this verse as upstream had it.', 'hint'),
   );

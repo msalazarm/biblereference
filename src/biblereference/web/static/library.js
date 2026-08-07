@@ -39,7 +39,7 @@ function row(entry) {
     {},
     el(
       'th',
-      {},
+      { scope: 'row' },
       entry.label,
       el('code', {}, entry.corpus),
       entry.attribution ? el('span', { class: 'meta' }, entry.attribution) : null,
@@ -69,7 +69,7 @@ function filters(state, payload) {
       el('label', { for: 'lang' }, 'Language'),
       el(
         'select',
-        { id: 'lang', onchange: (event) => write({ lang: event.target.value || null }) },
+        { id: 'lang', dataset: { keep: 'lang' }, onchange: (event) => write({ lang: event.target.value || null }) },
         el('option', { value: '' }, `all (${payload.totals.corpora})`),
         languages.map((code) =>
           el(
@@ -86,7 +86,7 @@ function filters(state, payload) {
       el('label', { for: 'family' }, 'Numbering'),
       el(
         'select',
-        { id: 'family', onchange: (event) => write({ family: event.target.value || null }) },
+        { id: 'family', dataset: { keep: 'family' }, onchange: (event) => write({ family: event.target.value || null }) },
         el('option', { value: '' }, 'all'),
         families.map((code) =>
           el(
@@ -99,11 +99,13 @@ function filters(state, payload) {
     ),
     el(
       'label',
-      { class: 'check' },
+      { class: 'check', for: 'restricted' },
       el('input', {
         type: 'checkbox',
-        checked: state.restricted === '1',
-        onchange: (event) => write({ restricted: event.target.checked ? '1' : null }),
+        id: 'restricted',
+        dataset: { keep: 'restricted' },
+        checked: state.restricted === true,
+        onchange: (event) => write({ restricted: event.target.checked }),
       }),
       'needs attention before reuse',
     ),
@@ -157,7 +159,7 @@ export async function render(state, match, signal) {
   let rows = payload.corpora;
   if (state.lang) rows = rows.filter((r) => r.language === state.lang);
   if (state.family) rows = rows.filter((r) => r.versification === state.family);
-  if (state.restricted === '1') {
+  if (state.restricted === true) {
     rows = rows.filter((r) => r.licence.restricted || r.licence.unrecorded);
   }
 
@@ -203,13 +205,13 @@ export async function render(state, match, signal) {
               el(
                 'tr',
                 {},
-                el('th', {}, 'edition'),
-                el('th', {}, 'lang'),
-                el('th', {}, 'numbers'),
-                el('th', { class: 'num' }, 'verses'),
-                el('th', { class: 'num' }, 'books'),
-                el('th', {}, 'wording'),
-                el('th', {}, 'licence'),
+                el('th', { scope: 'col' }, 'edition'),
+                el('th', { scope: 'col' }, 'lang'),
+                el('th', { scope: 'col' }, 'numbers'),
+                el('th', { scope: 'col', class: 'num' }, 'verses'),
+                el('th', { scope: 'col', class: 'num' }, 'books'),
+                el('th', { scope: 'col' }, 'wording'),
+                el('th', { scope: 'col' }, 'licence'),
               ),
             ),
             el('tbody', {}, rows.map(row)),

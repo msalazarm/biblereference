@@ -12,7 +12,7 @@
 
 import * as api from './api.js';
 import { el, fill, notice, slot } from './dom.js';
-import { write } from './state.js';
+import { chapters, write } from './state.js';
 
 /** Past this many columns the page is worth a word of warning. */
 const BUSY = 6;
@@ -512,6 +512,9 @@ export async function render(state, match, signal) {
     .filter((v) => v && v.loaded);
 
   document.title = `${payload.asked.ref} — biblereference`;
+  // So `j` stops at the last chapter instead of navigating to a refusal.
+  chapters.book = book;
+  chapters.count = entry ? entry.chapters : 0;
 
   fill(
     slot('rail'),

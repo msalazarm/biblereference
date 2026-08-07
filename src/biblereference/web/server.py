@@ -444,7 +444,12 @@ class Handler(BaseHTTPRequestHandler):
             # unknown task. Their fault to fix, so name it rather than dumping a stack.
             self._json(400, {"error": f"{type(exc).__name__}: {exc}"})
         except Exception:
-            self._json(500, {"error": traceback.format_exc()})
+            # The traceback goes to the console, where the person running the server can
+            # read it. It does not go to the client: file paths and source lines in a
+            # browser are of no use to whoever is reading and of some use to whoever is
+            # not, and this server is meant to be put on a network.
+            traceback.print_exc()
+            self._json(500, {"error": "something here failed; the traceback is on the server"})
 
     def _static(self, name: str, extra: Mapping[str, str] | None = None) -> None:
         """One file from the package's own ``static/``, by name.

@@ -18,6 +18,7 @@ the pivot the whole library is built around already says it.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import replace
 from typing import Any
 
@@ -68,18 +69,28 @@ def system_of(params: dict[str, list[str]], name: str = "vrs") -> str:
     return asked
 
 
+_CARRIERS: dict[str, Any] = {}
+_CARRIERS_LOCK = threading.Lock()
+
+
 def _carriers() -> dict[str, dict[str, dict[int, int]]]:
     """``book -> corpus -> chapter -> verses held``, off the process-wide inventory.
 
     Inverted from the cache's ``corpus -> book`` shape because every question the reader
-    asks starts from a book. Cheap either way; this is a few thousand dictionary writes
-    over data already in memory, and no query at all.
+    asks starts from a book. It is 57,000 dictionary writes over data already in memory --
+    no query, but not free either, and it was being rebuilt twice per screen. Held against
+    the same key as the inventory it inverts, so a rebuilt database replaces it.
     """
-    out: dict[str, dict[str, dict[int, int]]] = {}
-    for corpus, books in library().chapters.items():
-        for book, chapters in books.items():
-            out.setdefault(book, {})[corpus] = dict(chapters)
-    return out
+    held = library()
+    with _CARRIERS_LOCK:
+        if _CARRIERS.get("key") != held.key:
+            out: dict[str, dict[str, dict[int, int]]] = {}
+            for corpus, books in held.chapters.items():
+                for book, chapters in books.items():
+                    out.setdefault(book, {})[corpus] = dict(chapters)
+            _CARRIERS.update(key=held.key, value=out)
+        found: dict[str, dict[str, dict[int, int]]] = _CARRIERS["value"]
+        return found
 
 
 # --------------------------------------------------------------------------------------
@@ -487,14 +498,23 @@ def _asked_span(params: dict[str, list[str]], system: str, naming: NamingScheme)
     string for the server to parse back apart.
     """
     if params.get("ref"):
-        return parse_reference(params["ref"][0], vrs=system, naming=naming, allow_chapter=True)
+        span = parse_reference(params["ref"][0], vrs=system, naming=naming, allow_chapter=True)
+        VRS.validate(span)
+        return span
     book = (params.get("book") or [""])[0]
     if not book:
         raise ValueError("give either ref= or book= and chapter=")
     code = resolve_book(book, naming)
     chapter = (params.get("chapter") or ["1"])[0]
     verse = (params.get("verse") or [""])[0]
-    asked = f"{code} {chapter}:{verse}" if verse else f"{code} {chapter}"
+    if not verse and code in SINGLE_CHAPTER_BOOKS:
+        # `Jude 5` means Jude 1:5, which is right for a citation and wrong for a reader
+        # asking to see the book: `SUS 1` came back as one verse of Susanna rather than the
+        # sixty-four it has. Where the reader gives no verse it wants the chapter, and for
+        # these books that has to be said in full.
+        asked = f"{code} 1:1-{VRS.max_verse(system, code, 1)}"
+    else:
+        asked = f"{code} {chapter}:{verse}" if verse else f"{code} {chapter}"
     span = parse_reference(asked, vrs=system, naming=naming, allow_chapter=True)
     # `parse_reference` validates a chapter-only reference against the system and a
     # `chapter:verse` one only for shape, so `Habakkuk 99:1` parses. Asking here means the

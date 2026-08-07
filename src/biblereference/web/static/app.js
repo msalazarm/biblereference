@@ -8,7 +8,7 @@
 import { ApiError } from './api.js';
 import * as api from './api.js';
 import { el, fill, notice, slot } from './dom.js';
-import { applyScale, applyTheme, read, subscribe, write } from './state.js';
+import { applyTheme, chapters, read, subscribe, theme, write } from './state.js';
 import * as reader from './reader.js';
 import * as numbering from './numbering.js';
 import * as search from './search.js';
@@ -25,39 +25,66 @@ const ROUTES = [
 // after you have moved on and paint itself over the screen you are now looking at.
 let inflight = null;
 
+/**
+ * What had the keyboard, so it can have it back.
+ *
+ * Every control is destroyed by the render it causes -- `fill` replaces the rail wholesale
+ * -- so tabbing to the covering checkbox and pressing Space left focus on `<body>`, and
+ * the next Space scrolled the page. The controls carry a `data-keep` naming what they are
+ * rather than which element they are, and the replacement with the same name gets it back.
+ */
+function held() {
+  const active = document.activeElement;
+  return active && active.dataset && active.dataset.keep ? active.dataset.keep : null;
+}
+
+function restore(keep) {
+  if (!keep) return;
+  const found = document.querySelector(`[data-keep="${CSS.escape(keep)}"]`);
+  if (found && found !== document.activeElement) found.focus({ preventScroll: true });
+}
+
 async function route() {
   const state = read();
+  const keep = held();
   for (const [pattern, screen] of ROUTES) {
     const match = pattern.exec(state.path);
     if (!match) continue;
 
     inflight?.abort();
     inflight = new AbortController();
-    const { signal } = inflight;
+    const current = inflight;
     document.body.dataset.screen = state.path.split('/')[1] ?? 'reader';
     document.body.classList.add('is-loading');
     try {
-      await screen(state, match, signal);
+      await screen(state, match, current.signal);
+      restore(keep);
     } catch (error) {
-      if (error.name === 'AbortError') return;
+      if (error.name === 'AbortError' || current.signal.aborted) return;
       // The server writes its refusals as sentences for a person. Showing them is the whole
       // benefit of having written them that way.
-      fill(
-        slot('reading'),
-        notice(error instanceof ApiError ? error.message : `${error}`),
-      );
+      fill(slot('reading'), notice(error instanceof ApiError ? error.message : `${error}`));
       fill(slot('compare'));
     } finally {
-      document.body.classList.remove('is-loading');
+      // Only the newest navigation may clear it; an aborted one must not say the page has
+      // settled while its replacement is still fetching.
+      if (inflight === current) document.body.classList.remove('is-loading');
     }
     return;
   }
+  document.body.dataset.screen = 'none';
   fill(slot('reading'), notice(`No screen for ${state.path}`));
+  fill(slot('rail'));
+  fill(slot('compare'));
 }
 
 // --------------------------------------------------------------------------------------
 // The one box
 // --------------------------------------------------------------------------------------
+
+// Its own controller: two quick submissions would otherwise race, and the slower answer
+// would navigate you away from where the faster one had already taken you.
+let asking = null;
 
 async function submitted(event) {
   event.preventDefault();
@@ -66,14 +93,19 @@ async function submitted(event) {
   if (!query) return;
 
   const state = read();
+  asking?.abort();
+  asking = new AbortController();
+  const mine = asking;
   // Ask the server what it is rather than guessing here. It knows the book names of four
   // traditions and this does not.
   let verdict;
   try {
-    verdict = await api.parse({ q: query, vrs: state.vrs, naming: state.naming });
-  } catch {
+    verdict = await api.parse({ q: query, vrs: state.vrs, naming: state.naming }, mine.signal);
+  } catch (error) {
+    if (error.name === 'AbortError') return;
     verdict = { ok: false, kind: 'text' };
   }
+  if (mine.signal.aborted) return;
 
   if (verdict.ok) {
     const tail = verdict.single ? `${verdict.chapter}:${verdict.verse}` : String(verdict.chapter);
@@ -135,8 +167,10 @@ function key(event) {
     if (event.key === 'Escape') event.target.blur();
     return;
   }
-  const state = read();
-  const match = /^\/reader\/([A-Z0-9]{3})(?:\/(.+))?$/.exec(state.path);
+  // Read the address rather than the whole state: this runs on every keystroke, and
+  // `read()` touches localStorage six times.
+  const path = (window.location.hash.replace(/^#/, '').split('?')[0] || '/reader/JHN/3');
+  const match = /^\/reader\/([A-Z0-9]{3})(?:\/(.+))?$/.exec(path);
   switch (event.key) {
     case '/':
       event.preventDefault();
@@ -146,8 +180,12 @@ function key(event) {
     case 'k': {
       if (!match) return;
       const chapter = Number((match[2] ?? '1').split(':')[0]);
+      if (!Number.isFinite(chapter)) return; // Esther's lettered chapters
       const next = event.key === 'j' ? chapter + 1 : chapter - 1;
-      if (next >= 1) write({ path: `/reader/${match[1]}/${next}` }, { push: true });
+      const last = chapters.book === match[1] ? chapters.count : Infinity;
+      if (next >= 1 && next <= last) {
+        write({ path: `/reader/${match[1]}/${next}` }, { push: true });
+      }
       break;
     }
     case '?':
@@ -162,16 +200,28 @@ function key(event) {
 // Start
 // --------------------------------------------------------------------------------------
 
+//: auto -> light -> dark -> auto. `auto` has to be reachable again: it is the only setting
+//: that follows the reader's own machine, and a toggle that could only leave it is a
+//: preference you can lose by accident.
+const THEMES = ['auto', 'light', 'dark'];
+
 function start() {
-  const state = read();
-  applyTheme(state.theme);
-  applyScale(state.scale);
+  applyTheme(theme());
 
   document.querySelector('#find').addEventListener('submit', submitted);
-  document.querySelector('#theme').addEventListener('click', () => {
-    const now = document.documentElement.getAttribute('data-theme');
-    applyTheme(now === 'dark' ? 'light' : 'dark');
+  const toggle = document.querySelector('#theme');
+  const label = () => {
+    const now = theme();
+    toggle.setAttribute('aria-label', `Theme: ${now}. Click for the next.`);
+    toggle.textContent = now === 'light' ? '☀' : now === 'dark' ? '☾' : '◐';
+  };
+  toggle.addEventListener('click', () => {
+    const next = THEMES[(THEMES.indexOf(theme()) + 1) % THEMES.length];
+    applyTheme(next, { save: true });
+    label();
   });
+  label();
+
   document.addEventListener('keydown', key);
   window.addEventListener('hashchange', route);
   subscribe(route);

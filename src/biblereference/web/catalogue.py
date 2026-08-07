@@ -61,6 +61,7 @@ def _licence(terms: Licence | None) -> dict[str, Any]:
 
 def api_library(params: dict[str, list[str]]) -> Any:
     """Every built corpus, with what it holds and what may be done with it."""
+    _nothing_asked(params)
     held = library()
     inventory = held.chapters
     rows: list[dict[str, Any]] = []
@@ -132,6 +133,19 @@ def api_library(params: dict[str, list[str]]) -> Any:
 # What the chapter divisions actually show
 # --------------------------------------------------------------------------------------
 
+
+def _nothing_asked(params: dict[str, list[str]]) -> None:
+    """These two take no parameters, and say so rather than ignoring one.
+
+    The same rule `search_options` is built around: a parameter quietly dropped is a caller
+    believing it filtered something, and an unfiltered answer is indistinguishable from a
+    filter that matched everything.
+    """
+    unknown = sorted(set(params) - {"token"})
+    if unknown:
+        raise ValueError(f"this endpoint takes no parameters; got {', '.join(unknown)}")
+
+
 _FAMILIES: dict[str, Any] = {}
 _FAMILIES_LOCK = threading.Lock()
 
@@ -149,6 +163,7 @@ def api_families(params: dict[str, list[str]]) -> Any:
     """
     from ..families import declared_systems, derive, read_signatures, to_json
 
+    _nothing_asked(params)
     key = library().key
     with _FAMILIES_LOCK:
         if _FAMILIES.get("key") != key:
