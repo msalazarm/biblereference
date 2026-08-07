@@ -1,0 +1,491 @@
+/* biblereference — a reading surface, not a dashboard.
+ *
+ * Two rules govern everything below.
+ *
+ * ONE MEANING PER COLOUR. There are five, and each says exactly one thing: --accent for
+ * the version you chose and for anything you can act on; --gap where a system refuses or
+ * an edition does not carry the verse; --differs where exact and covering disagree;
+ * --agree where witnesses corroborate; --restricted where a licence needs reading before
+ * you reuse the text. A sixth colour, or a fifth used for a second purpose, and the page
+ * stops being readable at a glance -- which is the only thing it is for.
+ *
+ * NO WEB FONTS. A decision, not an omission. There is no build step, and the good Hebrew,
+ * Syriac and Coptic faces are not ours to redistribute; a stylesheet reaching a CDN would
+ * also break the one property this library insists on, which is that it works with the
+ * network off. So: deep local stacks per language, and the README names what to install.
+ */
+
+/* ----------------------------------------------------------------------------------- */
+/* Tokens                                                                               */
+/* ----------------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light dark;
+
+  /* Ground and ink in three steps each: the page, a raised panel, a sunken well; and
+     body text, secondary text, the faintest a label may go and still be read. */
+  --ground: #fbfaf7;
+  --ground-raised: #ffffff;
+  --ground-sunk: #f2efe9;
+  --ink: #23201c;
+  --ink-soft: #5c554c;
+  --ink-faint: #8b8377;
+  --rule: #ddd7cc;
+  --rule-soft: #eae5db;
+  --rule-strong: #c3bbab;
+
+  /* The five meanings. */
+  --accent: #7a4a1e;
+  --accent-soft: #f0e4d6;
+  --gap: #9c2f22;
+  --gap-soft: #f7e4e1;
+  --differs: #8a6212;
+  --differs-soft: #f8eed6;
+  --agree: #2f6b45;
+  --agree-soft: #e2efe6;
+  --restricted: #6b3a8f;
+  --restricted-soft: #efe6f6;
+
+  /* A 1.25 minor third, from a 16px base. */
+  --text-xs: 0.64rem;
+  --text-sm: 0.8rem;
+  --text: 1rem;
+  --text-md: 1.25rem;
+  --text-lg: 1.563rem;
+  --text-xl: 1.953rem;
+
+  /* Space, in fours. */
+  --s1: 0.25rem;
+  --s2: 0.5rem;
+  --s3: 0.75rem;
+  --s4: 1rem;
+  --s5: 1.5rem;
+  --s6: 2rem;
+  --s7: 3rem;
+
+  /* About sixty-six characters, which is what the reading column is for. */
+  --measure: 34rem;
+  --rail: 15rem;
+  --radius: 0.375rem;
+  --reading-scale: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #171614;
+    --ground-raised: #201e1b;
+    --ground-sunk: #100f0e;
+    --ink: #e8e3da;
+    --ink-soft: #b0a89b;
+    --ink-faint: #7d766a;
+    --rule: #35322c;
+    --rule-soft: #282520;
+    --rule-strong: #4d4840;
+
+    --accent: #d5a06a;
+    --accent-soft: #33261a;
+    --gap: #e07a6c;
+    --gap-soft: #331d1a;
+    --differs: #d8ad57;
+    --differs-soft: #2f2716;
+    --agree: #77bd92;
+    --agree-soft: #1a2a20;
+    --restricted: #bd9ad8;
+    --restricted-soft: #261c30;
+  }
+}
+
+/* The toggle beats the system preference, in both directions. Stamped on <html> by an
+   inline script before this file is fetched, so there is no flash of the wrong theme. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ground: #fbfaf7;
+  --ground-raised: #ffffff;
+  --ground-sunk: #f2efe9;
+  --ink: #23201c;
+  --ink-soft: #5c554c;
+  --ink-faint: #8b8377;
+  --rule: #ddd7cc;
+  --rule-soft: #eae5db;
+  --rule-strong: #c3bbab;
+  --accent: #7a4a1e;
+  --accent-soft: #f0e4d6;
+  --gap: #9c2f22;
+  --gap-soft: #f7e4e1;
+  --differs: #8a6212;
+  --differs-soft: #f8eed6;
+  --agree: #2f6b45;
+  --agree-soft: #e2efe6;
+  --restricted: #6b3a8f;
+  --restricted-soft: #efe6f6;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #171614;
+  --ground-raised: #201e1b;
+  --ground-sunk: #100f0e;
+  --ink: #e8e3da;
+  --ink-soft: #b0a89b;
+  --ink-faint: #7d766a;
+  --rule: #35322c;
+  --rule-soft: #282520;
+  --rule-strong: #4d4840;
+  --accent: #d5a06a;
+  --accent-soft: #33261a;
+  --gap: #e07a6c;
+  --gap-soft: #331d1a;
+  --differs: #d8ad57;
+  --differs-soft: #2f2716;
+  --agree: #77bd92;
+  --agree-soft: #1a2a20;
+  --restricted: #bd9ad8;
+  --restricted-soft: #261c30;
+}
+
+/* ----------------------------------------------------------------------------------- */
+/* Ground                                                                               */
+/* ----------------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: var(--text);
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+}
+
+a {
+  color: var(--accent);
+  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  text-decoration-color: currentColor;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+button,
+select,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+code,
+kbd,
+.mono {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+/* Wide things scroll inside themselves. The page body never scrolls sideways. */
+.scroll-x {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ----------------------------------------------------------------------------------- */
+/* Languages                                                                            */
+/* ----------------------------------------------------------------------------------- */
+/*
+ * Keyed on [lang], never on "ancient". Greek and Coptic read left to right and Hebrew and
+ * Syriac do not, so one rule for "old languages" would reverse two of the six this library
+ * holds. Direction is set on the element by the server, from `render.RTL`, so that there is
+ * one list rather than two that can drift.
+ */
+
+[lang="hbo"] {
+  /* The Leningrad Codex carries niqqud *and* te'amim -- two levels of mark above and below
+     every consonant -- so it needs both the size and the leading that most stacks do not
+     give it. */
+  font-family: "SBL Hebrew", "Taamey Frank CLM", "Ezra SIL", "Times New Roman", serif;
+  font-size: 1.12em;
+  line-height: 2;
+}
+
+[lang="syc"] {
+  font-family: "Noto Sans Syriac", "Estrangelo Edessa", "Serto Jerusalem", "East Syriac Adiabene",
+    sans-serif;
+  font-size: 1.08em;
+  line-height: 1.9;
+}
+
+[lang="grc"] {
+  /* Polytonic: a stack without it renders every breathing and circumflex as tofu. */
+  font-family: "Gentium Plus", "New Athena Unicode", Cardo, "GFS Didot", "Times New Roman", serif;
+  line-height: 1.7;
+}
+
+[lang="cop"] {
+  font-family: Antinoou, "New Athena Unicode", "Noto Sans Coptic", "Segoe UI Historic", serif;
+  line-height: 1.75;
+}
+
+[lang="la"] {
+  font-family: "Gentium Plus", Cardo, Palatino, "Palatino Linotype", Georgia, serif;
+}
+
+[dir="rtl"] {
+  text-align: start;
+}
+
+/* Every verse is its own bidi island. Without this an RTL verse next to a Latin reference
+   drags the punctuation across -- which is `render._isolate`'s job in Markdown, and this is
+   the same rule in the DOM. */
+.verse {
+  unicode-bidi: isolate;
+}
+
+/* ----------------------------------------------------------------------------------- */
+/* The frame                                                                            */
+/* ----------------------------------------------------------------------------------- */
+
+.app {
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, var(--measure)) minmax(0, 1fr);
+  gap: var(--s5);
+  align-items: start;
+  max-width: 96rem;
+  margin-inline: auto;
+  padding: var(--s4) var(--s5) var(--s7);
+}
+
+/* Two columns: the rail folds into the reading column's header. */
+@media (max-width: 90rem) {
+  .app {
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+  }
+}
+
+/* One column: everything stacks, in reading order. */
+@media (max-width: 60rem) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: var(--s4);
+  }
+}
+
+.rail {
+  position: sticky;
+  top: var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+@media (max-width: 60rem) {
+  .rail {
+    position: static;
+  }
+}
+
+.panel {
+  background: var(--ground-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: var(--s3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.field > label {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+select,
+input[type="text"],
+input[type="search"] {
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  background: var(--ground);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+}
+
+button {
+  padding: var(--s2) var(--s3);
+  background: var(--ground-sunk);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button[aria-pressed="true"],
+button.is-on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ----------------------------------------------------------------------------------- */
+/* Reading                                                                              */
+/* ----------------------------------------------------------------------------------- */
+
+.reading {
+  font-size: calc(var(--text-md) * var(--reading-scale));
+  line-height: 1.7;
+}
+
+/* Verse numbers hang in the margin, so the text edge stays straight -- which is what makes
+   a column of prose read as prose rather than as a numbered list. */
+.verse {
+  display: block;
+  position: relative;
+  padding-inline-start: var(--s6);
+  margin-block: var(--s1);
+  scroll-margin-block-start: var(--s6);
+}
+
+.verse > .n {
+  position: absolute;
+  inset-inline-start: 0;
+  width: var(--s5);
+  text-align: end;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  user-select: none;
+}
+
+/* Set by the reader when a verse in the other column covers this one. */
+.verse.is-linked {
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+}
+
+/* ----------------------------------------------------------------------------------- */
+/* Meanings                                                                             */
+/* ----------------------------------------------------------------------------------- */
+
+.gap {
+  color: var(--gap);
+}
+
+.note-gap {
+  background: var(--gap-soft);
+  border-inline-start: 3px solid var(--gap);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+}
+
+.differs {
+  color: var(--differs);
+  font-weight: 600;
+}
+
+tr.differs > th {
+  font-weight: 700;
+}
+
+.agree {
+  color: var(--agree);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 0 var(--s2);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.badge-open {
+  color: var(--agree);
+  background: var(--agree-soft);
+}
+
+.badge-restricted {
+  color: var(--restricted);
+  background: var(--restricted-soft);
+}
+
+/* A licence nobody has read is not a licence to do anything, so it is louder than a
+   restrictive one rather than blank. */
+.badge-unrecorded {
+  color: var(--gap);
+  background: var(--gap-soft);
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------------------------------- */
+/* Tables                                                                               */
+/* ----------------------------------------------------------------------------------- */
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--text-sm);
+}
+
+th,
+td {
+  text-align: start;
+  padding: var(--s2) var(--s3);
+  border-block-end: 1px solid var(--rule-soft);
+  vertical-align: top;
+}
+
+thead th {
+  color: var(--ink-soft);
+  font-weight: 600;
+  border-block-end-color: var(--rule);
+}
+
+thead small {
+  display: block;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+/* ----------------------------------------------------------------------------------- */
+/* Motion                                                                               */
+/* ----------------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -20,7 +20,8 @@ import hmac
 import json
 import os
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
@@ -38,6 +39,7 @@ from .api import (
     api_search,
     api_sources,
 )
+from .assets import assets
 from .jobs import BATCH_TASKS, TASKS, Jobs
 from .library import corpora, known_filters, prewarm
 from .plain import page
@@ -210,6 +212,7 @@ def _job_params(params: dict[str, list[str]], body: str) -> dict[str, Any]:
 
 ROUTES = {
     "GET  /": "the browsing page",
+    "GET  /static/<name>": "one shipped asset, revalidated with an ETag",
     "GET  /api/health": "corpora count, fingerprint, cores, jobs running",
     "GET  /api/corpora": "every built corpus",
     "GET  /api/digest": "fingerprint of this machine's library, for comparing with another",
@@ -244,16 +247,39 @@ class Server(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
+#: The cookie a browser carries the token in. A `<link>` or a `<script src>` cannot send an
+#: `Authorization` header, so a token-in-JavaScript scheme would 401 the page's own assets.
+COOKIE: Final = "br_token"
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "biblereference"
 
+    #: Keep-alive. A page is a document plus its assets, which is several requests in a
+    #: burst, and a fresh TCP connection for each is a handshake apiece for nothing. Safe
+    #: because every response here sends an accurate Content-Length -- which is also why
+    #: the 413 path below has to close: it never read the body it refused.
+    protocol_version = "HTTP/1.1"
+
+    #: How long an idle kept-alive connection may hold a thread. Without this a client that
+    #: opens a connection and says nothing holds one until the process ends.
+    timeout = 30
+
     # -- plumbing ----------------------------------------------------------------------
 
-    def _send(self, status: int, body: bytes, content_type: str) -> None:
+    def _send(
+        self,
+        status: int,
+        body: bytes,
+        content_type: str,
+        extra: Mapping[str, str] | None = None,
+    ) -> None:
         try:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
+            for name, value in (extra or {}).items():
+                self.send_header(name, value)
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(body)
@@ -263,20 +289,57 @@ class Handler(BaseHTTPRequestHandler):
             # buries whatever the request was actually doing under a second traceback.
             self.close_connection = True
 
-    def _json(self, status: int, payload: Any) -> None:
+    def _json(self, status: int, payload: Any, extra: Mapping[str, str] | None = None) -> None:
         # default=str so that one unforeseen object in a result cannot turn a completed
         # job into a 500 when you go to collect it. Better a repr than a lost answer.
         body = json.dumps(payload, ensure_ascii=False, indent=1, default=str).encode("utf-8")
-        self._send(status, body, "application/json; charset=utf-8")
+        self._send(status, body, "application/json; charset=utf-8", extra)
+
+    # -- who is asking -----------------------------------------------------------------
+
+    def _cookies(self) -> dict[str, str]:
+        jar = SimpleCookie()
+        try:
+            jar.load(self.headers.get("Cookie", ""))
+        except CookieError:
+            return {}  # a malformed jar is an unauthenticated one, not a 500
+        return {name: morsel.value for name, morsel in jar.items()}
+
+    def _offered(self, params: dict[str, list[str]]) -> str:
+        """The token this request carries, from whichever of the three places has it.
+
+        Header first, because that is what a script uses and it is the most deliberate.
+        Then the query string, which is how a person arrives from a link. Then the cookie,
+        which is how they stay once they have.
+        """
+        header = self.headers.get("Authorization", "")
+        if header.startswith("Bearer "):
+            return header[7:]
+        if params.get("token"):
+            return params["token"][0]
+        return self._cookies().get(COOKIE, "")
 
     def _authorised(self, params: dict[str, list[str]]) -> bool:
         if TOKEN is None:
             return True
-        header = self.headers.get("Authorization", "")
-        offered = header[7:] if header.startswith("Bearer ") else (params.get("token") or [""])[0]
         # compare_digest rather than ==, so a wrong token cannot be found one byte at a
-        # time by watching how long the answer takes.
-        return hmac.compare_digest(offered, TOKEN)
+        # time by watching how long the answer takes. Bytes rather than str, because the
+        # str form rejects non-ASCII with a TypeError and a token is caller-supplied.
+        return hmac.compare_digest(
+            self._offered(params).encode("utf-8", "replace"), TOKEN.encode("utf-8")
+        )
+
+    def _keep_the_token(self, params: dict[str, list[str]]) -> Mapping[str, str]:
+        """Set the cookie when a person arrives with a valid ``?token=`` on a page.
+
+        ``SameSite=Strict`` is the whole CSRF answer: a cross-site page cannot make the
+        browser send it at all, so there is no state-changing request to forge. ``HttpOnly``
+        because nothing in the page needs to read it -- the browser attaches it to the
+        asset and API requests by itself, which is the point.
+        """
+        if TOKEN is None or not params.get("token"):
+            return {}
+        return {"Set-Cookie": f"{COOKIE}={TOKEN}; Path=/; SameSite=Strict; HttpOnly"}
 
     def log_message(self, *args: object) -> None:
         return  # the console is for tracebacks, not a line per request
@@ -294,12 +357,19 @@ class Handler(BaseHTTPRequestHandler):
         if length > MAX_BODY:
             # Said rather than truncated. A document cut short here would read as a father
             # quoting less than he did, and nothing downstream could tell.
+            # The body was refused, which means it was never read off the socket. Under
+            # keep-alive the next read would start partway through a rejected document and
+            # parse it as a request line -- the client and the server would disagree about
+            # where every subsequent request began, and the failure would surface as a
+            # nonsensical answer to some later, innocent request. So: say `close`, which
+            # `send_header` also takes as the instruction to actually close.
             self._json(
                 413,
                 {
                     "error": f"body is {length:,} bytes; the limit is {MAX_BODY:,}. "
                     f"Split the document, or raise --max-body."
                 },
+                {"Connection": "close"},
             )
             return
         self._route(self.rfile.read(length).decode("utf-8", "replace") if length else "")
@@ -316,6 +386,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path.startswith("/api"):
                 self._api(path, params, body)
+            elif path.startswith("/static/"):
+                self._static(path.removeprefix("/static/"))
             elif path == "/":
                 out = page(
                     (params.get("q") or [""])[0].strip(),
@@ -324,7 +396,12 @@ class Handler(BaseHTTPRequestHandler):
                     # Carried in a hidden field, so following the form does not drop it.
                     (params.get("token") or [""])[0],
                 )
-                self._send(200, out.encode("utf-8"), "text/html; charset=utf-8")
+                self._send(
+                    200,
+                    out.encode("utf-8"),
+                    "text/html; charset=utf-8",
+                    self._keep_the_token(params),
+                )
             else:
                 self._json(404, {"error": f"no route {path!r}"})
         except (ValueError, LookupError) as exc:
@@ -333,6 +410,25 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": f"{type(exc).__name__}: {exc}"})
         except Exception:
             self._json(500, {"error": traceback.format_exc()})
+
+    def _static(self, name: str) -> None:
+        """One file from the package's own ``static/``, by name.
+
+        A name, not a path: see :mod:`~biblereference.web.assets` for why that is the whole
+        traversal defence. Revalidated rather than cached outright -- the assets change
+        whenever the package does, and a stale stylesheet served from a browser cache is a
+        confusing thing to debug -- so an unchanged file costs one 304 and no body.
+        """
+        asset = assets().get(name)
+        if asset is None:
+            self._json(404, {"error": f"no such asset {name!r}", "assets": sorted(assets())})
+            return
+        if self.headers.get("If-None-Match") == asset.etag:
+            self.send_response(304)
+            self.send_header("ETag", asset.etag)
+            self.end_headers()
+            return
+        self._send(200, asset.body, asset.type, {"ETag": asset.etag, "Cache-Control": "no-cache"})
 
     def _archive(self, wanted: str) -> None:
         """One archived file, by its manifest path.
