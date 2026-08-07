@@ -39,7 +39,7 @@ from .api import (
     api_sources,
 )
 from .jobs import BATCH_TASKS, TASKS, Jobs
-from .library import corpora, known_filters
+from .library import corpora, known_filters, prewarm
 from .plain import page
 
 #: `Jobs`, `TASKS` and `BATCH_TASKS` are re-exported rather than merely imported: this
@@ -422,6 +422,9 @@ def serve(
         workers = max(1, (os.cpu_count() or 2) - 1)
     # After the environment, so the spawned workers see it.
     JOBS = Jobs(workers, interactive_workers)
+    # And before the socket opens, so the half-second of whole-table queries is spent while
+    # nobody is waiting rather than by whoever asks first.
+    prewarm()
 
     if announce:
         print(

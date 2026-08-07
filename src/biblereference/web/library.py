@@ -1,17 +1,35 @@
-"""What this machine holds, and which library produced an answer.
+"""What this machine holds: read once for the process, not once per request.
 
-Everything here is derived from the built database rather than asked of it per request, so
-that a page rendering sixty-odd corpora is not sixty-odd table scans. The corpora
-themselves are per *thread*, because a SQLite connection belongs to the thread that opened
-it and :class:`~http.server.ThreadingHTTPServer` hands each request to a new one.
+Two different lifetimes live here, and confusing them is what made the page slow.
+
+**The derived facts** -- which corpus holds which book, how long each chapter is, what each
+edition is called and licensed under -- come from three whole-table queries and cannot
+change until the database is rebuilt. They belong to the *process*, and :class:`Library`
+holds them behind a key of the database's path, size and mtime, so a rebuild or a chapter
+resolved from the web replaces them and nothing else can.
+
+**The connections** cannot be shared: a SQLite connection belongs to the thread that opened
+it and :class:`~http.server.ThreadingHTTPServer` hands each request to a new thread. So the
+corpora stay per-thread -- but seeded from the process-wide table, which is the whole point.
+Opening sixty-odd connections is 5 ms; finding out what they hold is 194 ms, and a browser
+opening six connections used to pay it six times.
 """
 
 from __future__ import annotations
 
 import threading
+from collections.abc import Mapping
 from typing import Any, Final
 
-from ..store import DataHome, SqliteCorpus, all_books, library_digest
+from ..store import (
+    DataHome,
+    SourceMeta,
+    SqliteCorpus,
+    all_books,
+    chapter_index,
+    library_digest,
+    read_meta,
+)
 from ..versification import Versification
 
 #: The shipped numbering systems. Bound at import, unlike ``HOME``, because it is built
@@ -19,10 +37,6 @@ from ..versification import Versification
 #: cached anyway, so a second caller gets this same object.
 VRS: Final = Versification.load()
 
-# SQLite connections belong to the thread that opened them and the server hands each
-# request to a new one, so every thread gets its own set. Opening sixty-odd corpora costs
-# a few milliseconds; finding out what each one holds costs a quarter of a second, which is
-# why `all_books` seeds them rather than each corpus asking for itself.
 _local = threading.local()
 
 
@@ -39,37 +53,121 @@ def home() -> DataHome:
     return HOME
 
 
+def _key(where: DataHome) -> tuple[str, int, int]:
+    """What identifies a build of the database: where it is, how big, how old.
+
+    A rebuild moves both the size and the mtime, and so does a chapter resolved from the
+    web, so the cache cannot go stale without being noticed. The path is in the key too,
+    because ``HOME`` is rebindable and two data homes in one process would otherwise be
+    able to collide on the other two.
+    """
+    try:
+        stat = where.database.stat()
+        return (str(where.database), stat.st_size, stat.st_mtime_ns)
+    except OSError:
+        return (str(where.database), 0, 0)
+
+
+class Library:
+    """The derived, read-only facts about one build of the database.
+
+    Built under a lock and shared by every thread. Nothing here is mutated after
+    construction except :attr:`chapters`, which is memoised on first ask because it is the
+    expensive one and only the reader needs it.
+    """
+
+    __slots__ = ("_chapters", "_lock", "books", "filters", "home", "key", "meta")
+
+    def __init__(self, where: DataHome, key: tuple[str, int, int]) -> None:
+        self.home = where
+        self.key = key
+        #: ``corpus -> the books it holds``. One query; seeds every thread's corpora.
+        self.books: Mapping[str, frozenset[str]] = all_books(where)
+        #: ``corpus -> SourceMeta``, in the database's own order.
+        self.meta: Mapping[str, SourceMeta] = {row.corpus: row for row in read_meta(where)}
+        #: What a filter may name. Derived from the metadata rather than from open corpora,
+        #: so asking costs nothing.
+        self.filters: Mapping[str, set[str]] = {
+            "corpora": {row.corpus for row in self.meta.values()},
+            "languages": {row.language for row in self.meta.values()},
+            "families": {row.versification for row in self.meta.values()},
+        }
+        self._chapters: dict[str, dict[str, dict[int, int]]] | None = None
+        self._lock = threading.Lock()
+
+    @property
+    def chapters(self) -> Mapping[str, Mapping[str, Mapping[int, int]]]:
+        """``corpus -> book -> chapter -> verses held``, for the whole library.
+
+        A third of a second and about three megabytes, which is why it is not built with
+        the rest: every request needs :attr:`books`, and only the reader needs this. The
+        pre-warm thread asks for it at startup so that the first reader does not.
+        """
+        with self._lock:
+            if self._chapters is None:
+                self._chapters = chapter_index(self.home)
+            return self._chapters
+
+
+_LIBRARY: Library | None = None
+_LIBRARY_LOCK = threading.Lock()
+
+
+def library() -> Library:
+    """The process-wide facts, rebuilt only when the database underneath them changes.
+
+    The build happens *inside* the lock on purpose. It is 200 ms, and a browser opening six
+    connections at once would otherwise do it six times over; one thread doing it while five
+    wait is the same 200 ms rather than six times it.
+    """
+    global _LIBRARY
+    where = home()
+    key = _key(where)
+    with _LIBRARY_LOCK:
+        if _LIBRARY is None or _LIBRARY.key != key:
+            _LIBRARY = Library(where, key)
+        return _LIBRARY
+
+
+def prewarm() -> threading.Thread:
+    """Build the process-wide facts in the background, so the first request does not.
+
+    A daemon thread: if the server is stopped while this is still running there is nothing
+    to wait for, and everything it computes is recomputable.
+    """
+    thread = threading.Thread(target=lambda: library().chapters, name="prewarm", daemon=True)
+    thread.start()
+    return thread
+
+
 def corpora() -> dict[str, SqliteCorpus]:
-    """Every built corpus, opened once for this thread."""
-    if not hasattr(_local, "corpora"):
-        where = home()
-        _local.corpora = SqliteCorpus.load_all(where, books=all_books(where))
+    """Every built corpus, opened once for this thread and seeded from the process cache."""
+    held = library()
+    if getattr(_local, "key", None) != held.key:
+        for corpus in getattr(_local, "corpora", {}).values():
+            corpus.close()
+        _local.corpora = SqliteCorpus.load_all(held.home, books=held.books)
+        _local.by_system = None
+        _local.key = held.key
     built: dict[str, SqliteCorpus] = _local.corpora
     return built
 
 
 def by_system() -> dict[str, list[SqliteCorpus]]:
     """Corpora grouped by the versification they number in."""
-    if not hasattr(_local, "by_system"):
+    held = corpora()  # first, so a rebuild clears the grouping below
+    if getattr(_local, "by_system", None) is None:
         grouped: dict[str, list[SqliteCorpus]] = {}
-        for corpus in sorted(corpora().values(), key=lambda c: (c.language, c.id)):
+        for corpus in sorted(held.values(), key=lambda c: (c.language, c.id)):
             grouped.setdefault(corpus.versification, []).append(corpus)
         _local.by_system = grouped
     groups: dict[str, list[SqliteCorpus]] = _local.by_system
     return groups
 
 
-def known_filters() -> dict[str, set[str]]:
+def known_filters() -> Mapping[str, set[str]]:
     """What this machine actually holds, so a filter naming anything else can be refused."""
-    if not hasattr(_local, "filters"):
-        held = corpora().values()
-        _local.filters = {
-            "corpora": {c.id for c in held},
-            "languages": {c.language for c in held},
-            "families": {c.versification for c in held},
-        }
-    filters: dict[str, set[str]] = _local.filters
-    return filters
+    return library().filters
 
 
 _STAMP: dict[str, Any] = {}
@@ -83,18 +181,11 @@ def library_stamp() -> Any:
     only recorded a version would not notice one. Asking ``/api/digest`` separately and
     hoping nothing changed in between is the same gap in slower motion.
 
-    Cached against the database's size and mtime, because the full digest walks 1.4 million
-    verses at about three seconds and this rides on every search. A rebuild or a chapter
-    resolved from the web moves both, so the cache cannot go stale without being noticed.
+    Cached against :func:`_key`, because the full digest walks 1.4 million verses at about
+    three seconds and this rides on every search.
     """
     where = home()
-    try:
-        stat = where.database.stat()
-        # The path is in the key as well as the size and mtime, because `HOME` is rebindable
-        # and two data homes in one process could otherwise collide on both.
-        key = (str(where.database), stat.st_size, stat.st_mtime_ns)
-    except OSError:
-        key = (str(where.database), 0, 0)
+    key = _key(where)
     with _STAMP_LOCK:
         if _STAMP.get("key") != key:
             digest = library_digest(where)
