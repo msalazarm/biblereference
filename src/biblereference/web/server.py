@@ -41,6 +41,7 @@ from .api import (
     api_sources,
 )
 from .assets import assets
+from .catalogue import api_families, api_library
 from .jobs import BATCH_TASKS, TASKS, Jobs
 from .library import corpora, known_filters, prewarm
 from .plain import page
@@ -247,6 +248,8 @@ ROUTES = {
     "GET  /api/parse": "?q= -- is this a reference or is it prose? always 200",
     "GET  /api/alignment": "?ref=&vrs=&to= -- exact beside covering, and why each is what it is",
     "GET  /api/corrections": "?system=&book=&chapter=&verse=&kind= -- the recorded reasons",
+    "GET  /api/library": "every corpus: what it holds, when it was written, its licence",
+    "GET  /api/families": "versification families derived from where the chapter ends fall",
     "POST /api/search": "body is the quotation; ?limit=5 and any scoring or filter option",
     "POST /api/scan": "body is a document; finds the quotations in it and where they sit",
     "POST /api/jobs": "?task=coverage|audit|compare (&book=&left=&right=&covering=1)",
@@ -497,6 +500,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, api_alignment(params))
         elif path == "/api/corrections":
             self._json(200, api_corrections(params))
+        elif path == "/api/library":
+            self._json(200, api_library(params))
+        elif path == "/api/families":
+            self._json(200, api_families(params))
         elif path == "/api/search":
             self._json(200, api_search(params, body))
         elif path == "/api/scan":
