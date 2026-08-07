@@ -69,14 +69,17 @@ def api_passage(params: dict[str, list[str]]) -> Any:
             out.append({"corpus": corpus.id, "refused": str(exc)})
             continue
         verses: list[dict[str, str]] = []
+        asked = 0
         for segment in segments:
             if not corpus.has_book(segment.book):
                 continue
             # `available`, not a verse-at-a-time `fetch`: same tolerance for a verse this
             # edition does not print, one query per chapter instead of one per verse.
+            expected = VRS.expand(segment)
+            asked += len(expected)
             verses.extend(
                 {"ref": verse.ref.pretty(), "text": verse.text}
-                for verse in corpus.available(VRS.expand(segment))
+                for verse in corpus.available(expected)
             )
         if verses:
             out.append(
@@ -86,9 +89,19 @@ def api_passage(params: dict[str, list[str]]) -> Any:
                     "language": corpus.language,
                     "versification": corpus.versification,
                     "ref": ", ".join(s.pretty() for s in segments),
+                    # Said rather than left to be counted. "This edition does not print
+                    # verse 37" and "the passage is shorter in this numbering" produce the
+                    # same short array, and they are not the same fact.
+                    "asked": asked,
+                    "missing": asked - len(verses),
+                    "partial": asked > len(verses),
                     "verses": verses,
                 }
             )
+        elif asked:
+            # It has the book and prints none of these verses. Worth saying: silence here
+            # reads as "not built" when it is really "this edition ends earlier".
+            out.append({"corpus": corpus.id, "absent": True, "asked": asked})
     return {"asked": {"ref": span.pretty(), "covering": covering}, "found": out}
 
 

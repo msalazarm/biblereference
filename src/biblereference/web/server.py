@@ -43,6 +43,7 @@ from .assets import assets
 from .jobs import BATCH_TASKS, TASKS, Jobs
 from .library import corpora, known_filters, prewarm
 from .plain import page
+from .reader import api_books, api_parse, api_reader
 
 #: `Jobs`, `TASKS` and `BATCH_TASKS` are re-exported rather than merely imported: this
 #: module is what `tools/serve.py` resolves to, so a name that was on the old script has to
@@ -221,6 +222,9 @@ ROUTES = {
     "GET  /api/archive": "?path=<manifest path> -- one archived file, raw",
     "GET  /api/convert": "?ref=&from=eng&to=vul&covering=1 (repeat to=, or omit for all)",
     "GET  /api/passage": "?ref=&vrs=eng&covering=1 -- the text in every corpus",
+    "GET  /api/books": "?vrs=eng&naming=modern -- every book, grouped, with its shape",
+    "GET  /api/reader": "?book=&chapter=&vrs=&corpus=&covering= -- a chapter across versions",
+    "GET  /api/parse": "?q= -- is this a reference or is it prose? always 200",
     "POST /api/search": "body is the quotation; ?limit=5 and any scoring or filter option",
     "POST /api/scan": "body is a document; finds the quotations in it and where they sit",
     "POST /api/jobs": "?task=coverage|audit|compare (&book=&left=&right=&covering=1)",
@@ -461,6 +465,12 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, api_convert(params))
         elif path == "/api/passage":
             self._json(200, api_passage(params))
+        elif path == "/api/books":
+            self._json(200, api_books(params))
+        elif path == "/api/reader":
+            self._json(200, api_reader(params))
+        elif path == "/api/parse":
+            self._json(200, api_parse(params))
         elif path == "/api/search":
             self._json(200, api_search(params, body))
         elif path == "/api/scan":
