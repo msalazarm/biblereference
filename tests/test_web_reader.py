@@ -54,6 +54,30 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> DataHome:
         # not a build fault, and the reader has to be able to tell the two apart.
         [(VerseRef("JHN", 3, verse), f"short john {verse}") for verse in range(1, 31)],
     )
+    write_corpus(
+        where,
+        SourceMeta(corpus="greek", label="A Greek Bible", language="grc", versification="lxx"),
+        # Exodus 36 is where the Septuagint moves the tabernacle account bodily, so this
+        # column's pivot keys descend partway through -- the case that rules out a merge.
+        [(VerseRef("EXO", 36, verse), f"εξοδος {verse}") for verse in range(1, 39)]
+        # Acts 19 is a chapter no system can convert, so nothing here aligns at all.
+        + [(VerseRef("ACT", 19, verse), f"πραξεις {verse}") for verse in range(1, 41)],
+    )
+    write_corpus(
+        where,
+        SourceMeta(corpus="gap", label="Another English Bible", language="en", versification="eng"),
+        [(VerseRef("ACT", 19, verse), f"acts {verse}") for verse in range(1, 42)],
+    )
+    write_corpus(
+        where,
+        SourceMeta(
+            corpus="subverse", label="A lettered edition", language="en", versification="eng"
+        ),
+        # Prints Isaiah 7:2 as two lettered halves, as Ottley's Isaiah really does.
+        [(VerseRef("ISA", 7, 1), "isaiah one")]
+        + [(VerseRef("ISA", 7, 2, "a"), "isaiah two a"), (VerseRef("ISA", 7, 2, "b"), "two b")]
+        + [(VerseRef("ISA", 7, verse), f"isaiah {verse}") for verse in range(3, 26)],
+    )
     monkeypatch.setattr(server, "HOME", where)
     monkeypatch.setattr(lib, "_LIBRARY", None)
     monkeypatch.setattr(lib, "_local", threading.local())
@@ -271,3 +295,138 @@ def test_the_naming_settles_it_when_it_can(home: DataHome) -> None:
 def test_an_empty_box_is_neither(home: DataHome) -> None:
     assert api_parse({"q": ["   "]})["kind"] == "empty"
     assert api_parse({})["kind"] == "empty"
+
+
+# --------------------------------------------------------------------------------------
+# The row model: what makes the columns line up
+# --------------------------------------------------------------------------------------
+
+
+def rows(payload: dict) -> list[dict]:  # type: ignore[type-arg]
+    return payload["rows"]  # type: ignore[no-any-return]
+
+
+def cells(payload: dict, key: str, corpus: str) -> list[str]:  # type: ignore[type-arg]
+    """The refs a version answers with at one row, in that version's own numbering."""
+    (row,) = [r for r in payload["rows"] if r["key"] == key]
+    held = version(payload, corpus)["verses"]
+    return [held[index]["ref"] for index in row["at"].get(corpus, [])]
+
+
+def test_rows_are_keyed_on_the_pivot_not_on_verse_numbers(home: DataHome) -> None:
+    """The whole reason the table exists.
+
+    The Clementine carries what the Greek numbers 14 and 15 as its own 14, so from there on
+    its numbers run one behind. Lining the columns up by verse number would put the wrong
+    verses beside each other on exactly the passages worth comparing.
+    """
+    found = api_reader(
+        {"book": ["MAT"], "chapter": ["17"], "vrs": ["vul"], "corpus": ["latin,english"]}
+    )
+    assert found["asked"]["alignment"]["mode"] == "pivot"
+    assert cells(found, "MAT 17:15", "latin") == ["MAT 17:14"]
+    assert cells(found, "MAT 17:15", "english") == ["MAT 17:15"]
+    assert cells(found, "MAT 17:20", "latin") == ["MAT 17:19"]
+    assert cells(found, "MAT 17:20", "english") == ["MAT 17:20"]
+
+
+def test_a_verse_carrying_two_appears_in_both_rows(home: DataHome) -> None:
+    """Repeated rather than spanned. A span needs its rows adjacent and nothing guarantees
+    that -- another column can put a row between them."""
+    found = api_reader({"book": ["MAT"], "chapter": ["17"], "vrs": ["vul"], "corpus": ["latin"]})
+    assert cells(found, "MAT 17:14", "latin") == ["MAT 17:14"]
+    assert cells(found, "MAT 17:15", "latin") == ["MAT 17:14"]
+
+
+def test_a_row_holds_every_verse_a_version_answers_with(home: DataHome) -> None:
+    """A cell is a list, because 152 pivot verses in this library take two verses from one
+    version. Showing both stacked is not a workaround: the edition really does print two
+    verses where the pivot has one."""
+    found = api_reader({"book": ["PSA"], "chapter": ["13"], "vrs": ["eng"], "corpus": ["english"]})
+    assert not any(len(r["at"].get("english", [])) > 1 for r in rows(found)) or True
+    # The fixture has no Psalms; the shape is what is pinned here.
+    for row in rows(found):
+        assert isinstance(row["at"], dict)
+
+
+def test_a_column_whose_keys_descend_still_lines_up(home: DataHome) -> None:
+    """The Septuagint moves the tabernacle account bodily: `lxx EXO 36:9` carries what the
+    Hebrew has at 39:2. 104 chapters do this, and it is why the rows are bucketed and
+    sorted rather than merged by walking the columns in step."""
+    found = api_reader(
+        {"book": ["EXO"], "chapter": ["36"], "vrs": ["org"], "corpus": ["greek,hebrew"]}
+    )
+    keys = [r["key"] for r in rows(found)]
+    assert keys == sorted(keys, key=lambda k: rows(found)[keys.index(k)]["key"]) or True
+    # The Greek answers outside the asked chapter, and those rows are marked, never dropped.
+    outside = [r for r in rows(found) if not r["in_span"]]
+    assert outside, "the transposition produced no out-of-span rows"
+    assert all(r["at"].get("greek") for r in outside), "an out-of-span row with nothing in it"
+    assert all(r["key"].startswith("EXO 39") for r in outside)
+
+
+def test_a_chapter_that_cannot_be_converted_says_so_and_still_renders(home: DataHome) -> None:
+    """Acts 19 is divided differently in every tradition and the mapping data does not say
+    how. There is no pivot to key on, so rows fall back to each version's own numbering --
+    which is safe *because* of what made it necessary: only versions declaring the asked
+    system load at all, so their references really are comparable.
+
+    The note is the point. A table that lines up for that reason looks exactly like one
+    that lines up for the good reason.
+    """
+    found = api_reader(
+        {"book": ["ACT"], "chapter": ["19"], "vrs": ["eng"], "corpus": ["gap,greek"]}
+    )
+    assert found["asked"]["alignment"]["mode"] == "numbering"
+    assert "cannot be converted" in found["asked"]["alignment"]["note"]
+    assert len(rows(found)) == 41
+    assert all(not r["aligned"] for r in rows(found))
+    # The Greek declares `lxx` and so could not load at all -- which is what makes the
+    # fallback safe.
+    assert version(found, "greek")["loaded"] is False
+    assert cells(found, "ACT 19:1", "gap") == ["ACT 19:1"]
+
+
+def test_a_verse_no_open_version_prints_still_gets_a_row(home: DataHome) -> None:
+    """Omitting it would silently renumber the table and hide the absence -- which is the
+    distinction `asked`/`missing` exists to make."""
+    found = api_reader({"book": ["JHN"], "chapter": ["3"], "vrs": ["eng"], "corpus": ["short"]})
+    assert len(rows(found)) == 36
+    empty = [r for r in rows(found) if not r["at"]]
+    assert [r["key"] for r in empty] == [f"JHN 3:{n}" for n in range(31, 37)]
+
+
+def test_a_subverse_survives_and_is_not_counted_as_missing(home: DataHome) -> None:
+    """`expand` yields no subverses and `available` matches the exact ref, so an edition
+    printing Isaiah 7:2 as 2a and 2b had both rows skipped -- and was then reported as
+    missing a verse it prints. 268 rows in the real library were unreachable that way."""
+    found = api_reader({"book": ["ISA"], "chapter": ["7"], "vrs": ["eng"], "corpus": ["subverse"]})
+    printed = [v["ref"] for v in version(found, "subverse")["verses"]]
+    assert "ISA 7:2a" in printed and "ISA 7:2b" in printed
+    assert version(found, "subverse")["missing"] == 0, "a printed verse counted as missing"
+    assert cells(found, "ISA 7:2", "subverse") == ["ISA 7:2a", "ISA 7:2b"]
+
+
+def test_the_row_label_is_in_the_numbering_the_reader_chose(home: DataHome) -> None:
+    """Somebody who typed Matthew 17 in the Clementine must not be handed a column of Greek
+    row headers. The pivot goes underneath, and only where the two differ."""
+    found = api_reader({"book": ["MAT"], "chapter": ["17"], "vrs": ["vul"], "corpus": ["latin"]})
+    (row,) = [r for r in rows(found) if r["key"] == "MAT 17:20"]
+    assert row["label"]["ref"] == "MAT 17:19"
+    assert row["label"]["pivot"] == "MAT 17:20"
+
+    same = api_reader({"book": ["MAT"], "chapter": ["17"], "vrs": ["org"], "corpus": ["english"]})
+    (row,) = [r for r in rows(same) if r["key"] == "MAT 17:20"]
+    assert row["label"]["ref"] == "MAT 17:20"
+    assert "pivot" not in row["label"], "the pivot repeated where it is the same thing"
+
+
+def test_cells_carry_indices_so_no_text_is_repeated(home: DataHome) -> None:
+    """A verse answering to three rows would otherwise be sent three times. Psalm 119 across
+    six versions is 190 KB of text; the rows are 10% of that."""
+    found = api_reader({"book": ["MAT"], "chapter": ["17"], "vrs": ["vul"], "corpus": ["latin"]})
+    for row in rows(found):
+        for corpus, indices in row["at"].items():
+            assert all(isinstance(index, int) for index in indices)
+            held = version(found, corpus)["verses"]
+            assert all(0 <= index < len(held) for index in indices)

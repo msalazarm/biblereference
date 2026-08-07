@@ -87,7 +87,15 @@ class VerseRef:
         """
         return replace(self, vrs=vrs)
 
-    def _sort_key(self) -> tuple[int, int, int, int, str]:
+    def sort_key(self) -> tuple[int, int, int, int, str]:
+        """Where a reader meets this verse: canon order, then chapter, verse, subverse.
+
+        Public because sorting references is not only this class's own business. The
+        comparison reader keys its rows on pivot references drawn from several versions at
+        once and has to put them in reading order, and those references cross books --
+        ``BAR 6:43`` answers to ``LJE 1:42`` -- so comparing the USFM strings would put
+        ``1SA`` before ``GEN``. One ordering, here, rather than a second one that drifts.
+        """
         # Letter chapters sort after numbered ones within a book, which matches how
         # editions that use them print the additions.
         if isinstance(self.chapter, str):
@@ -96,10 +104,13 @@ class VerseRef:
             chapter_key = (0, self.chapter)
         return (canonical_order(self.book), *chapter_key, self.verse, self.subverse)
 
+    #: The old private spelling, kept so nothing in the tree has to change at once.
+    _sort_key = sort_key
+
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, VerseRef):
             return NotImplemented
-        return self._sort_key() < other._sort_key()
+        return self.sort_key() < other.sort_key()
 
     def __str__(self) -> str:
         return f"{self.book} {self.chapter}:{self.verse}{self.subverse}"
