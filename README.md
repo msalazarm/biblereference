@@ -265,9 +265,14 @@ recorded with its reasoning in
 
 ## Running it as a server
 
-`tools/serve.py` puts the whole library behind HTTP, so the corpus and the slow work can
-live on one machine and be used from another. Standard library only — no framework, no
-extra dependency.
+`biblereference serve` puts the whole library behind HTTP: a reader to browse it with, a
+JSON API, and a job queue for the walks that take minutes. Standard library only — no
+framework, no build step, no extra dependency, and nothing fetched from the network at run
+time.
+
+```bash
+venv/bin/biblereference serve                  # http://localhost:8000, local only
+```
 
 ### Setting it up on a fresh Ubuntu box
 
@@ -277,7 +282,7 @@ git clone <your-remote> biblereference && cd biblereference
 python3 -m venv venv && venv/bin/pip install -e .
 
 venv/bin/biblereference sync         # ~160 MB down, ~600 MB built, once
-venv/bin/python tools/serve.py --host 0.0.0.0 --token "$(openssl rand -hex 24)"
+venv/bin/biblereference serve --host 0.0.0.0 --token "$(openssl rand -hex 24)"
 ```
 
 `sync` is the long step and the only one that needs the network. If you already have the
@@ -297,7 +302,7 @@ After=network.target
 User=$USER
 WorkingDirectory=$PWD
 Environment=BIBLEREFERENCE_TOKEN=$(openssl rand -hex 24)
-ExecStart=$PWD/venv/bin/python tools/serve.py --host 0.0.0.0
+ExecStart=$PWD/venv/bin/biblereference serve --host 0.0.0.0
 Restart=on-failure
 [Install]
 WantedBy=multi-user.target
@@ -311,25 +316,97 @@ network without a token.** There is no user model and no rate limiting: anyone w
 reach the port can run jobs on that machine. Put it on a trusted network or behind a
 tunnel, not on the open internet.
 
-### Using it
+The token works three ways, and the third is what makes the reader usable. A header is
+what a script sends; `?token=` is how you arrive from a link; and arriving that way sets a
+`SameSite=Strict; HttpOnly` cookie, because a `<link>` cannot carry an `Authorization`
+header and a page whose own stylesheet 401'd would look broken rather than unauthorised.
+`curl "$BR/api/search?token=…"` is unaffected.
+
+`--data-home` applies to the job workers as well as to the reads: they are spawned and
+build their own `DataHome` from the environment, so the environment is what carries it.
+
+### The reader
+
+`GET /` is four screens, routed on the URL fragment — which the browser never sends, so a
+deep link needs nothing configured at either end.
+
+**Read** — pick a book from a dropdown grouped into the four parts of the canon, a chapter
+from a grid, and the version you prefer. That version reads at full size with its verse
+numbers hanging in the margin; every other version sits beside it, collapsed by
+versification family, and opens where you want it.
+
+> **Hover a verse and every verse beside it carrying the same text lights up.** Not a guess
+> from verse numbers: each verse reports which verses of the pivot its text covers, and two
+> correspond when those sets meet. Hover the Douay's Matthew 17:14 and *two* Greek verses
+> light, because that one Latin verse holds both.
+
+**Numbering** — `#/numbering/MAT/17:14?vrs=vul`. Exact beside covering, differing rows
+highlighted, and a third column saying **why**: the refusal in its own words where a system
+has no place for the verse, or the recorded reason where the mapping was corrected by hand.
+The five worth starting with are `Matt 17:14` in `vul`, `Bar 6:43` in `eng`, `1Sam 20:42`
+in `eng`, `Mal 3:22` in `org` and `Matt 5:4` in `vul` — each is a different way for two
+traditions to disagree, and each now explains itself.
+
+**Search** — paste a quotation. The answer names the passage *and* which edition's wording
+it matches, so a patristic quotation agreeing with the Douay at 94% and the King James at
+71% tells you which Bible the author had. Give the year the document was written and any
+edition whose wording postdates it is struck through.
+
+**Library** — the sixty-six editions as a filterable table: language, numbering, verses,
+the year the wording appeared, and what its licence obliges. Beside it, the families
+derived from where the chapter divisions actually fall, which is not always what a corpus
+declares.
+
+Type either a reference or a quotation in the one box; the server decides which it is. If
+you type something that means different books in different traditions — "1 Kings" is
+1 Samuel to a Douay reader — it asks rather than guessing.
+
+`/` needs JavaScript. **`GET /plain` does the same in one round trip without it**, and is
+linked from the header and the footer.
+
+#### Fonts
+
+None are fetched — this works with the network off, and the good Hebrew, Syriac and Coptic
+faces are not ours to redistribute. The page names deep local stacks per language instead.
+Worth installing if you read in them:
+
+| | |
+|---|---|
+| Hebrew | *SBL Hebrew* (the Leningrad Codex carries niqqud **and** te'amim; most stacks collide them) |
+| Syriac | *Noto Sans Syriac*, or *Estrangelo Edessa* |
+| Greek | *Gentium Plus* or *New Athena Unicode* — polytonic, so a stack without it renders every breathing as tofu |
+| Coptic | *Antinoou* |
+
+### The API
 
 ```bash
 export BR=http://bigbox.local:8000 TOKEN=...
 curl -H "Authorization: Bearer $TOKEN" "$BR/api/health"
 ```
 
-`GET /` is the browsing page: type a reference, say which numbering you wrote it in, and
-see how every system numbers it — exact beside covering, differences highlighted — then
-the text of every corpus that carries it.
-
 | | |
 |---|---|
 | `GET /api/health` | corpora count, versification fingerprint, cores, jobs running |
 | `GET /api/corpora` | every built corpus, with language and versification |
+| `GET /api/library` | every corpus in full: books, canon, date, licence, totals |
+| `GET /api/families` | versification families derived from where the chapter ends fall |
+| `GET /api/books` | `?vrs=eng&naming=dr` — every book, grouped, with its chapter shape |
+| `GET /api/reader` | `?book=&chapter=&corpus=&covering=` — a chapter across versions, with the covering links |
+| `GET /api/parse` | `?q=` — is this a reference or is it prose? **always 200**; it is a predicate |
+| `GET /api/alignment` | `?ref=&vrs=&to=` — exact beside covering, and why each is what it is |
+| `GET /api/corrections` | `?system=&book=&chapter=&verse=&kind=` — the recorded reasons, browsable |
 | `GET /api/convert` | `?ref=Matt+17:14&from=vul&covering=1` — that reference in every system |
 | `GET /api/passage` | `?ref=&vrs=eng&covering=1` — the text in every corpus, or `&corpus=dra` for one |
 | `POST /api/search` | body is the quotation; returns the passage and which translation it came from |
 | `POST /api/scan` | body is a *document*; finds the quotations inside it and where each one sits |
+
+`/api/reader` loads only the versions you name and answers for the rest from a cached
+inventory with no queries at all. That is not an optimisation: Psalm 119 in every version
+holding it is 740 KB.
+
+Two hundred corrections to the upstream versification data each carry a written reason, and
+until recently the loader consumed them and threw them away. `/api/corrections` and the
+`why` column of `/api/alignment` are where they surface.
 
 `search` must be handed a quotation; `scan` finds them. Its spans are character offsets
 into the body exactly as posted, so a caller can point back at its own text.

@@ -982,7 +982,7 @@ def build_parser() -> argparse.ArgumentParser:
     mirror = subparsers.add_parser(
         "mirror",
         help="copy another machine's archive here, so both hold the same bytes",
-        description="Points this machine at another one running `tools/serve.py` and "
+        description="Points this machine at another one running `biblereference serve` and "
         "copies its archive, verifying every file against the checksum that machine "
         "recorded before writing it. Then rebuilds. Use this rather than `sync` when two "
         "machines must match: `sync` takes whatever upstream publishes today, and upstream "

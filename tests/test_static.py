@@ -191,6 +191,32 @@ def test_every_module_parses_and_its_imports_resolve() -> None:
     assert "window is not defined" in done.stderr, done.stderr
 
 
+# --------------------------------------------------------------------------------------
+# The README, which rots more quietly than the code
+# --------------------------------------------------------------------------------------
+
+
+def test_every_route_the_readme_documents_is_one_the_server_answers() -> None:
+    """A documented endpoint that 404s is worse than an undocumented one: somebody writes a
+    client against it. The reverse is allowed -- `/api/archive` and `/api/manifest` exist
+    for mirroring and are described in prose rather than in the table."""
+    from biblereference.web.server import ROUTES
+
+    readme = (Path(__file__).resolve().parent.parent / "README.md").read_text("utf-8")
+    named = set(re.findall(r"`(GET|POST) (/[a-z/<>-]+)`", readme))
+    served = {(key.split()[0], key.split()[1].split("?")[0]) for key in ROUTES}
+    assert named, "the route table has stopped matching"
+    assert not (named - served), f"documented but not served: {sorted(named - served)}"
+
+
+def test_the_readme_names_the_command_that_starts_the_server() -> None:
+    """It was `python tools/serve.py` for a long time, and the systemd unit is copied out of
+    here by hand."""
+    readme = (Path(__file__).resolve().parent.parent / "README.md").read_text("utf-8")
+    assert "biblereference serve" in readme
+    assert "python tools/serve.py" not in readme
+
+
 def code(text: str) -> str:
     """The file with its comments removed, so a rule can be about what the code does.
 
