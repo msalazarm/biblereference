@@ -130,6 +130,10 @@ def api_books(params: dict[str, list[str]]) -> Any:
                 "single_chapter": code in SINGLE_CHAPTER_BOOKS,
                 "from": "system" if declared else "corpora",
                 "carried_by": len(holders),
+                # Which loaded systems *do* number it. Where the chosen one does not, this
+                # is what lets the reader move to one that does instead of refusing -- and
+                # refusing is what it used to do, for a fifth of the library under `nvl`.
+                "in": [name for name in VRS.system_names if VRS.has_book(name, code)],
             }
         )
 
@@ -137,6 +141,9 @@ def api_books(params: dict[str, list[str]]) -> Any:
     return {
         "vrs": system,
         "naming": naming.value,
+        # The systems this server actually loaded, so the numbering picker is not a second
+        # hard-coded list that can drift from `DEFAULT_SYSTEMS`.
+        "systems": list(VRS.system_names),
         "groups": [
             {
                 "canon": canon,

@@ -17,6 +17,7 @@ import hashlib
 from dataclasses import dataclass
 from functools import cache
 from importlib import resources
+from pathlib import Path
 from typing import Final
 
 __all__ = ["Asset", "assets"]
@@ -44,13 +45,38 @@ class Asset:
     etag: str
 
 
-@cache
+def _stamp() -> tuple[tuple[str, int], ...]:
+    """What the directory looks like now: each file's name and mtime.
+
+    Cheap -- four stats -- and it is what lets an edit to the stylesheet show up without
+    restarting the server. Reading the files once and never again is correct for an
+    installed wheel and maddening for anyone working on them, and the difference is
+    indistinguishable from the page being wrong.
+    """
+    root = resources.files(__package__).joinpath("static")
+    if not root.is_dir():
+        return ()
+    try:
+        return tuple(
+            sorted((entry.name, Path(str(entry)).stat().st_mtime_ns) for entry in root.iterdir())
+        )
+    except OSError:
+        return ()
+
+
 def assets() -> dict[str, Asset]:
-    """Every servable file, keyed by its bare name.
+    """Every servable file, keyed by its bare name."""
+    return _read(_stamp())
+
+
+@cache
+def _read(_stamp: tuple[tuple[str, int], ...]) -> dict[str, Asset]:
+    """Read the directory. Cached against what it looked like when it was read.
 
     Flat: one directory, no subdirectories, so a name is a name. The ETag is a hash of the
     bytes rather than an mtime, because a wheel installed twice has two mtimes and one
-    content, and a caller revalidating should get its 304 either way.
+    content, and a caller revalidating should get its 304 either way -- the mtimes are the
+    cache key here, not the identity of the file.
     """
     root = resources.files(__package__).joinpath("static")
     found: dict[str, Asset] = {}
