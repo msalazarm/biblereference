@@ -351,16 +351,83 @@ terms is recorded as a note on each corpus rather than passed over.
 * **Most of First1KGreek** — its `tlg0527` *is* Swete, which the library already holds, and
   the verse counts are exact: Judges 618 against 618, Susanna 64 against 64. The texts are
   not, and the comparison above is what came of looking.
-* **The Old Latin gospels** (Corpus Corporum idno 343) — no verse markup at all. Verse
-  numbers are bare `N.` at line starts among 6,770 runs of spaced dots marking lacunae, which
-  are also full stops, and the four manuscripts are distinguished only by `<head>` text
-  because the `div1` elements have no `n`. The dots must survive into the stored text or the
-  import manufactures readings.
-* **Jerome's *Psalterium iuxta Hebraeos*** — 49 headings for 150 psalms, and the headings are
-  Hebrew superscriptions rather than numbers. Segmenting it against a psalter of known
-  divisions is an alignment job, not a parse. It is also the one remaining candidate for a
-  Latin witness to `org`, which would make `nvl` textually checkable for the first time.
+* **The Old Latin gospels** — since imported, as `oldlatin-a` and `oldlatin-b`. See below.
+* **Jerome's *Psalterium iuxta Hebraeos*** — since read and measured. It *is* an org-family
+  psalter, which is what was hoped, and it still cannot be a witness. See `TODO.md` item 8.
 * **Castellio was that candidate and is not.** Translated from the originals owing nothing to
   the Vulgate, it looked like the Latin `org` witness. Measured, it is about 90% against every
   shipped system with `eng` winning narrowly, and its Genesis 31/32 is 55 verses and 32 — the
   English tradition's division, where the Hebrew has 54 and 33.
+
+
+---
+
+## The Old Latin gospels, and the two of four that could be read
+
+Migne's collation of four Vetus Latina gospel manuscripts, catalogued under an old and wrong
+attribution to Eusebius of Vercelli — which is why searching for *Biblia* or *Vulgata* never
+finds it. It is Corpus Corporum **work 343**, whose downloadable text is **6898**; asking for
+the work answers *"this XML file doesn't exist"*, because the file hangs off the text nested
+inside it. The same two-step applies to Jerome's psalter (work 656, text 7213).
+
+Codex Vercellensis is 4th-century and usually called the oldest surviving Old Latin gospel
+manuscript. This library held no pre-Vulgate Latin at all before it.
+
+**Two of the four manuscripts are imported and two are not.**
+
+| | | |
+|---|---|---|
+| Vercellensis | `oldlatin-a` | 3,580 verses — verse numbers and `CAPUT` divisions |
+| Veronensis | `oldlatin-b` | 3,427 verses — the same |
+| Corbeiensis | — | continuous prose: no verse numbers, no chapter heads |
+| Brixianus | — | the same, 94 unbroken paragraphs |
+
+Corbeiensis and Brixianus print as *"Liber generationis Jesu Christi, filii David, filii
+Abraham. Abraham genuit Isaac…"* and nothing else. Giving them verses would mean aligning
+them against the Vulgate and numbering them by where the Vulgate's verses fall, which is not
+reading a versification but inventing one and attributing it to a manuscript. `oldlatin.SKIPPED`
+records them, because an absence with no reason beside it is indistinguishable from a bug.
+
+### The order that matters
+
+The plan for this said to tokenise verse starts at a line boundary. There are no lines — no
+`<l>`, no `<lb>` — and the verse numbers are bare `N.` in the middle of a paragraph, among
+5,615 runs of spaced dots where the page is gone. A dot run and a full stop are the same
+characters.
+
+Marking the holes first is the obvious order and it silently loses verses. `2. . . . . .
+Abraham` is a verse number followed by a hole, and the hole pattern begins at the *number's
+own full stop* and eats it, leaving a bare `2` that no longer looks like anything.
+Vercellensis Matthew 1:2 and 1:3 vanished into 1:1 that way — into a verse already so
+damaged that the loss did not show. **119 verses came back when the order was reversed**, and
+the reverse hazard does not exist: a hole is only dots, so it can lose a number but never
+manufacture one.
+
+What is stored keeps `…` where the manuscript is gone. A verse that survives *only* as a hole
+is left out rather than stored empty, which a reader would take for an omission in the
+manuscript rather than a hole in the page.
+
+### How the numbering was checked
+
+There is no facsimile here, so the check is scale rather than a hand-read sample. Every verse
+with four or more surviving words, against the Clementine *at the same reference*, and then
+against the next verse:
+
+| | median similarity | at 0.45+ | match verse *n+1* better |
+|---|---:|---:|---:|
+| Veronensis | 0.79 | 96.2% | 0.4% |
+| Vercellensis | 0.67 | 85.4% | 1.1% |
+
+The last column is the one that matters. A misparsed verse number *drifts*, and drift shows
+up as runs of verses matching *n+1*; under 1% is noise. Vercellensis scores lower throughout
+because it is the more mutilated manuscript and the more divergent text — a real Old Latin
+against a revised Vulgate — which is the reason to want it. Veronensis John 1:1 reads *"et
+Verbum erat **aput** Deum"* where the Clementine has *apud*.
+
+**One verse was refused rather than moved.** Vercellensis John 14 runs 1–30 in exact
+correspondence with the Clementine, then skips 31 and labels its last verse 32 — whose
+content is verbatim the Clementine's 31. The number is a slip in the edition rather than a
+manuscript reading, and renumbering on that reasoning would be guessing; guessing at scale is
+how a corpus comes to hold verses nobody printed. It is dropped, counted, and named in the
+corpus's notes. Both corpora hold zero verses that cannot be cited, and the library is still
+at 0 ghosts.

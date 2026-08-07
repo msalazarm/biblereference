@@ -221,6 +221,33 @@ corrected range.
 
 </details>
 
+### ~~14. The Old Latin gospels~~ — DONE, two manuscripts of four
+
+`oldlatin-a` (Codex Vercellensis, 4th c., 3,580 verses) and `oldlatin-b` (Codex Veronensis,
+3,427). The library's first pre-Vulgate Latin, and its 68th and 69th corpora.
+
+Corpus Corporum **work 343**, downloadable text **6898** — the work idno answers "this XML
+file doesn't exist", which is the two-step this catalogue is easy to get wrong on.
+
+**Corbeiensis and Brixianus are not imported and `oldlatin.SKIPPED` says why.** They are
+printed as continuous prose with no verse numbers and no chapter heads at all. Numbering them
+would mean aligning against the Vulgate and calling the result the manuscript's own
+versification.
+
+**The one real trap was an ordering.** There are no lines in the file — no `<l>`, no `<lb>` —
+so the plan's "tokenise verse starts at a line boundary" does not apply; verse numbers are
+bare `N.` mid-paragraph among 5,615 runs of spaced dots. Marking the holes first eats the
+verse number's own full stop: `2. . . . . . Abraham` leaves a bare `2`, and Vercellensis
+Matthew 1:2 and 1:3 disappeared into 1:1, a verse already so damaged that the loss did not
+show. 119 verses came back when the order was reversed.
+
+Checked at scale rather than by facsimile: every verse with four or more surviving words
+against the Clementine at the same reference, then against the next. Veronensis medians 0.79
+with 0.4% matching *n+1* better; Vercellensis 0.67 and 1.1%. Drift is what a misparse looks
+like, and under 1% is noise. One verse refused rather than renumbered — Vercellensis John 14
+skips 31 and labels its last verse 32 — and named in the corpus notes. 0 uncitable verses,
+still 0 ghosts. Written up in `docs/tei-corpora.md`.
+
 ### ~~13. The 691 Rahlfs boundary disagreements~~ — READ, and a quarter of them were not that
 
 Arbitrated all 691 against Swete and Brenton by word overlap rather than a sample of forty

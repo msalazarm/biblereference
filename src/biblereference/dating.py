@@ -56,6 +56,10 @@ TRANSLATED: Final[dict[str, int | None]] = {
     "peshitta-ot": None,
     "peshitta-nt": None,
     "peshitta-alt": None,
+    # The Old Latin gospels are pre-Jerome, which is the whole reason to hold them: their
+    # wording is older than the Vulgate's and nothing can be anachronistic to it.
+    "oldlatin-a": None,
+    "oldlatin-b": None,
     "latvuc": 405,  # Jerome's Vulgate; the Clementine of 1592 is an edition of it
     "novavulgata": 1979,  # a new Latin translation, not an edition of Jerome
     "castellio": 1551,  # a new Latin translation from the originals, owing nothing to Jerome
