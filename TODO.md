@@ -221,6 +221,47 @@ corrected range.
 
 </details>
 
+### 12. A conversion can answer with a book the target system does not have
+
+Found while building the numbering screen, which raised on `Ps 151:1` in `lxx`.
+
+`convert_range` falls back to the identity where neither system maps a book, and **the
+fallback does not check that the target declares it**. So `lxx PSA 151:1` converts to
+`nvl PS2 1:1`, and the Nova Vulgata has no `PS2`. `expand` and `validate` on that result
+raise `VerseOutOfRangeError` — so the library will produce a coordinate it will not accept,
+which is an inconsistency rather than a judgement call.
+
+Measured over the shipped tables, converting the first and last verse of every chapter of
+every system to every other:
+
+    2,384 conversions across 90 (source, target, book) triples
+
+Every book involved is one system carrying what another does not: `ENO` and `JUB` out of
+`org`; `PSS`, `ODA`, `TBS`, `JDB`, `JSA`, `DNT`, `BLT`, `SST` into `vul` and `nvl`; `EZA`
+into `eng`; the whole deuterocanonical tail into `nvl`, which declares 73 books. The largest
+single triple is `org`→`eng` for `ENO` at 84.
+
+**Why the coverage walk reports 0 ghosts anyway.** A ghost is defined against the *pivot*,
+and `org` holds every one of these books. The 156,146 conversions the walk makes are all
+to or from `org`, so no ghost check has ever looked at a non-pivot target.
+
+The question is which of two things `convert` should do, and it is a real question rather
+than an oversight to sweep up:
+
+- **Refuse**, with a `VersificationGapError` naming the book — consistent with `validate`,
+  and consistent with how a missing *verse* is already treated. But it would turn ~2,384
+  currently-answered conversions into refusals, and `render`, `audit` and `compare` all
+  convert freely; each would need checking for whether it treats a refusal as a gap in the
+  data or as an error.
+- **Keep answering**, and say in the docstring that the identity fallback means "no mapping
+  difference is recorded" rather than "the target has this". Then `validate` is the odd one
+  out, and a caller who converts and then expands still gets a raise.
+
+`web/alignment.py` reports it as a refusal on the screen and `web/reader.py` reads such a
+book through `SqliteCorpus.chapter`, which needs no declared verse list. Neither is a fix;
+both are there so that a screen says "the Nova Vulgata has no Additional Psalms" instead of
+returning a 500. `tests/test_web_alignment.py` pins the behaviour.
+
 ### 6. `rsc` and `rso` cannot be audited at all
 
 No corpus exists in either. Only the structural invariants in `tests/test_alignment.py`

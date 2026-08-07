@@ -193,6 +193,25 @@ def _read(corpus: Any, span: Any, covering: bool) -> dict[str, Any]:
     for segment in segments:
         if not corpus.has_book(segment.book):
             continue
+        if not VRS.has_book(corpus.versification, segment.book):
+            # The edition holds the book and its declared system does not number it, which
+            # `convert_range`'s identity fallback does not check for. Reading it verse by
+            # verse would raise; `chapter` needs no list of expected verses, so the
+            # edition's own divisions come through instead of being clipped to a system
+            # that has none for it.
+            for number in range(int(segment.start.chapter), int(segment.end.chapter) + 1):
+                for verse in corpus.chapter(segment.book, number):
+                    asked += 1
+                    verses.append(
+                        {
+                            "n": verse.ref.verse,
+                            "sub": verse.ref.subverse,
+                            "ref": str(verse.ref),
+                            "text": verse.text,
+                            "covers": [],
+                        }
+                    )
+            continue
         expected = VRS.expand(segment)
         asked += len(expected)
         for verse in corpus.available(expected):

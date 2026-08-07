@@ -28,6 +28,7 @@ from typing import Any, Final
 from urllib.parse import parse_qs, urlparse
 
 from ..store import DataHome
+from .alignment import api_alignment, api_corrections
 from .api import (
     api_convert,
     api_corpora,
@@ -72,7 +73,18 @@ MAX_BODY: int = 64 * 1024 * 1024
 #: Anything not here is refused rather than ignored -- see :func:`search_options`.
 _SCORES: Final = {"quotation": None, "coverage": None, "identified": None}
 _FILTERS: Final = {"languages", "corpora", "families"}
-_OTHER: Final = {"q", "limit", "token", "min_run", "min_query", "window", "stride"}
+#: `composed` is here rather than in `_SCORES` because it is a year, not a fraction: the
+#: date the document was written, which is what makes `Match.anachronistic` mean anything.
+_OTHER: Final = {
+    "q",
+    "limit",
+    "token",
+    "min_run",
+    "min_query",
+    "window",
+    "stride",
+    "composed",
+}
 
 #: Query parameters the job endpoint owns. Named explicitly rather than folded into the
 #: general allow-list, so that `/api/search?task=scan` is still the error it ought to be.
@@ -155,6 +167,14 @@ def search_options(
             options["min_query"] = int(raw)
         except ValueError:
             raise ValueError(f"min_query must be an integer, not {raw!r}") from None
+    if params.get("composed"):
+        raw = params["composed"][0]
+        try:
+            options["composed"] = int(raw)
+        except ValueError:
+            raise ValueError(
+                f"composed must be the year the document was written, not {raw!r}"
+            ) from None
 
     known = known_filters()
     for name in _FILTERS:
@@ -225,6 +245,8 @@ ROUTES = {
     "GET  /api/books": "?vrs=eng&naming=modern -- every book, grouped, with its shape",
     "GET  /api/reader": "?book=&chapter=&vrs=&corpus=&covering= -- a chapter across versions",
     "GET  /api/parse": "?q= -- is this a reference or is it prose? always 200",
+    "GET  /api/alignment": "?ref=&vrs=&to= -- exact beside covering, and why each is what it is",
+    "GET  /api/corrections": "?system=&book=&chapter=&verse=&kind= -- the recorded reasons",
     "POST /api/search": "body is the quotation; ?limit=5 and any scoring or filter option",
     "POST /api/scan": "body is a document; finds the quotations in it and where they sit",
     "POST /api/jobs": "?task=coverage|audit|compare (&book=&left=&right=&covering=1)",
@@ -471,6 +493,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, api_reader(params))
         elif path == "/api/parse":
             self._json(200, api_parse(params))
+        elif path == "/api/alignment":
+            self._json(200, api_alignment(params))
+        elif path == "/api/corrections":
+            self._json(200, api_corrections(params))
         elif path == "/api/search":
             self._json(200, api_search(params, body))
         elif path == "/api/scan":
