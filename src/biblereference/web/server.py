@@ -43,7 +43,7 @@ from .api import (
 from .assets import assets
 from .catalogue import api_families, api_library
 from .jobs import BATCH_TASKS, TASKS, Jobs
-from .library import corpora, known_filters, prewarm
+from .library import built_filters, corpora, known_filters, prewarm
 from .plain import page
 from .reader import api_books, api_parse, api_reader
 
@@ -178,6 +178,7 @@ def search_options(
             ) from None
 
     known = known_filters()
+    built = built_filters()
     for name in _FILTERS:
         chosen = _listed(params, name)
         if chosen is None:
@@ -185,7 +186,16 @@ def search_options(
         strange = [value for value in chosen if value not in known[name]]
         if strange:
             # Not an empty result: that would be indistinguishable from nothing matching,
-            # which is the failure this whole function exists to prevent.
+            # which is the failure this whole function exists to prevent. Two different
+            # refusals, because "I have never heard of it" and "I hold it but cannot search
+            # it" want different things done about them, and only the second has a cure.
+            unindexed = [value for value in strange if value in built[name]]
+            if unindexed:
+                raise LookupError(
+                    f"{name} in the library but not in the search index: "
+                    f"{', '.join(unindexed)}. Run `biblereference index --stale` on the "
+                    f"server. Searchable now: {', '.join(sorted(known[name]))}"
+                )
             raise LookupError(
                 f"unknown {name}: {', '.join(strange)}. "
                 f"This machine has: {', '.join(sorted(known[name]))}"

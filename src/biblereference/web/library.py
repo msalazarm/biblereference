@@ -21,6 +21,7 @@ import threading
 from collections.abc import Mapping
 from typing import Any, Final
 
+from ..search import indexed_corpora
 from ..store import (
     DataHome,
     SourceMeta,
@@ -76,7 +77,7 @@ class Library:
     expensive one and only the reader needs it.
     """
 
-    __slots__ = ("_chapters", "_lock", "books", "filters", "home", "key", "meta")
+    __slots__ = ("_chapters", "_lock", "books", "filters", "home", "key", "meta", "searchable")
 
     def __init__(self, where: DataHome, key: tuple[str, int, int]) -> None:
         self.home = where
@@ -85,12 +86,18 @@ class Library:
         self.books: Mapping[str, frozenset[str]] = all_books(where)
         #: ``corpus -> SourceMeta``, in the database's own order.
         self.meta: Mapping[str, SourceMeta] = {row.corpus: row for row in read_meta(where)}
-        #: What a filter may name. Derived from the metadata rather than from open corpora,
-        #: so asking costs nothing.
+        #: The corpora with rows in the search index. Built here is not the same as
+        #: searchable, and the reader needs the first while search needs the second.
+        self.searchable: frozenset[str] = frozenset(indexed_corpora(where)) & set(self.meta)
+        #: What a *search* filter may name. Derived from the search index, not from the
+        #: metadata: a corpus that is built but unindexed answers a search with silence,
+        #: and admitting its name here is how a caller comes to believe he searched
+        #: something he did not. The whole Syriac Bible sat on the built side of that gap.
+        found = [row for corpus, row in self.meta.items() if corpus in self.searchable]
         self.filters: Mapping[str, set[str]] = {
-            "corpora": {row.corpus for row in self.meta.values()},
-            "languages": {row.language for row in self.meta.values()},
-            "families": {row.versification for row in self.meta.values()},
+            "corpora": set(self.searchable),
+            "languages": {row.language for row in found},
+            "families": {row.versification for row in found},
         }
         self._chapters: dict[str, dict[str, dict[int, int]]] | None = None
         self._lock = threading.Lock()
@@ -166,8 +173,24 @@ def by_system() -> dict[str, list[SqliteCorpus]]:
 
 
 def known_filters() -> Mapping[str, set[str]]:
-    """What this machine actually holds, so a filter naming anything else can be refused."""
+    """What this machine can actually search, so a filter naming anything else is refused."""
     return library().filters
+
+
+def searchable_corpora() -> frozenset[str]:
+    """The corpora with rows in the search index, which is fewer than the corpora built."""
+    return library().searchable
+
+
+def built_filters() -> Mapping[str, set[str]]:
+    """The same three sets over everything *built*, so a name can be refused for the right
+    reason: unheard-of, or held and not indexed."""
+    meta = library().meta.values()
+    return {
+        "corpora": {row.corpus for row in meta},
+        "languages": {row.language for row in meta},
+        "families": {row.versification for row in meta},
+    }
 
 
 _STAMP: dict[str, Any] = {}

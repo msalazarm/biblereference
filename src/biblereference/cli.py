@@ -97,17 +97,44 @@ def cmd_build(args: argparse.Namespace) -> int:
         _say("\nnotes:")
         for note in notes:
             _say(f"  {note}")
-    _say(f"\n{total:,} verses indexed into {home.database}")
+    # "written to", not "indexed into". This command has never touched the search index and
+    # the old wording said otherwise -- which is how two whole imports, thirteen corpora and
+    # the entire Syriac Bible among them, stayed unsearchable without anyone noticing.
+    _say(f"\n{total:,} verses written to {home.database}")
+    _warn_if_unsearchable(home)
     return 0
+
+
+def _warn_if_unsearchable(home: DataHome) -> None:
+    """Say what the verse store now holds that the search index does not."""
+    from .search import index_is_stale
+
+    stale = index_is_stale(home)
+    if not stale:
+        return
+    shown = ", ".join(stale[:8]) + (f", and {len(stale) - 8} more" if len(stale) > 8 else "")
+    _say(f"\n! {len(stale)} corpus/corpora cannot be searched: {shown}")
+    _say("  Run `biblereference index --stale` to fold them in.")
 
 
 def cmd_index(args: argparse.Namespace) -> int:
     """Build the search index from the verse store."""
+    from .search import index_is_stale
+
     home = _home(args)
     if not home.database.exists():
         _say("nothing built yet -- run `biblereference build` first")
         return 1
-    result = build_index(home, report=_say if args.verbose else _silent)
+
+    wanted: list[str] | None = list(args.corpus) if args.corpus else None
+    if args.stale:
+        wanted = sorted(set(wanted or []) | set(index_is_stale(home)))
+        if not wanted:
+            _say("the search index is up to date")
+            return 0
+        _say(f"reindexing {len(wanted)} corpus/corpora: {', '.join(wanted)}")
+
+    result = build_index(home, corpora=wanted, report=_say if args.verbose else _silent)
     _say(
         f"\nindexed {result.verses:,} verses as {result.texts:,} distinct texts "
         f"across {len(result.corpora)} corpora"
@@ -678,11 +705,26 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         _say("\nno corpora built yet -- run `biblereference fetch` then `build`")
         return 0
 
+    from .search import index_coverage
+
+    # Whether a corpus can be *searched* is a different question from whether it is built,
+    # and doctor answered only the first. Thirteen corpora sat here reporting their verse
+    # counts while holding not one row in the search index, and nothing on this screen said
+    # so -- which is exactly where somebody would have looked.
+    searchable = {row.corpus: row for row in index_coverage(home)}
+
     _say(f"\ncorpora: {len(meta)}")
     for item in meta:
+        found = searchable.get(item.corpus)
+        note = {
+            "missing": "  NOT SEARCHABLE",
+            "drifted": "  search index behind",
+            "unknown": "",
+            "current": "",
+        }.get(found.state if found else "missing", "")
         _say(
             f"  {item.corpus:14} {item.verse_count:>7,} verses  "
-            f"{item.language:4} {item.versification:4}  {item.label}"
+            f"{item.language:4} {item.versification:4}  {item.label}{note}"
         )
         chapters = stored_chapters(home, item.corpus)
         if chapters:
@@ -702,6 +744,31 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 )
         elif item.license:
             _say(f"                 licence: {item.license}")
+
+    missing = [row.corpus for row in searchable.values() if row.state == "missing"]
+    drifted = [row.corpus for row in searchable.values() if row.state == "drifted"]
+    if missing or drifted:
+        _say(
+            f"\nsearch index: {len(searchable) - len(missing) - len(drifted)} of "
+            f"{len(searchable)} corpora searchable"
+        )
+        if missing:
+            _say(f"  never indexed:  {', '.join(sorted(missing))}")
+        if drifted:
+            _say(f"  behind the store: {', '.join(sorted(drifted))}")
+        _say("  Run `biblereference index --stale`.")
+    else:
+        _say(f"\nsearch index: all {len(searchable)} corpora searchable")
+
+    # Said plainly rather than counted in with the stale, because it is a different fact:
+    # these were indexed before the store recorded what it indexed *from*, so drift in them
+    # cannot be detected either way. One reindex each turns the unknown into an answer.
+    unknown = [row.corpus for row in searchable.values() if row.state == "unknown"]
+    if unknown:
+        _say(
+            f"  {len(unknown)} were indexed before this check existed; drift in them cannot "
+            f"be seen until each is indexed once more"
+        )
 
     # The question a person actually has, which no per-corpus line answers: of everything
     # I hold, what may I not use freely? Counted rather than listed, because the list is
@@ -905,7 +972,26 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--source", help="just this one")
     build.set_defaults(func=cmd_build)
 
-    index = subparsers.add_parser("index", help="build the search index from the database")
+    index = subparsers.add_parser(
+        "index",
+        help="build the search index from the database",
+        description="Fold the verse store into the search index. Indexing new corpora "
+        "reuses the ids of texts already there -- they are addressed by a hash of their "
+        "own words -- but it does rebuild the document-frequency table, so the scoring "
+        "of every query shifts whenever the set of indexed corpora changes.",
+    )
+    index.add_argument(
+        "--corpus",
+        action="append",
+        default=[],
+        metavar="ID",
+        help="index only this corpus; repeatable",
+    )
+    index.add_argument(
+        "--stale",
+        action="store_true",
+        help="index whatever the store holds and the index does not, and nothing else",
+    )
     index.set_defaults(func=cmd_index)
 
     search = subparsers.add_parser("search", help="find the passage a string of text was quoting")

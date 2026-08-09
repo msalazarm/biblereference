@@ -64,6 +64,7 @@ def api_library(params: dict[str, list[str]]) -> Any:
     _nothing_asked(params)
     held = library()
     inventory = held.chapters
+    searchable = held.searchable
     rows: list[dict[str, Any]] = []
     languages: dict[str, int] = {}
     families: dict[str, int] = {}
@@ -97,6 +98,9 @@ def api_library(params: dict[str, list[str]]) -> Any:
                 "books": len(books),
                 "chapters": sum(len(ch) for ch in chapters.values()),
                 "canon": canon,
+                # Built and searchable are two facts, and this listing used to publish only
+                # the first while the reader assumed both.
+                "searchable": corpus.id in searchable,
                 # The year the *wording* appeared, which is what makes a quotation
                 # anachronistic. None means the text is ancient rather than unknown.
                 "translated": year,
@@ -115,6 +119,7 @@ def api_library(params: dict[str, list[str]]) -> Any:
         "data_home": str(home().root),
         "totals": {
             "corpora": len(rows),
+            "searchable": len(searchable),
             "verses": verses,
             "languages": dict(sorted(languages.items(), key=lambda kv: (-kv[1], kv[0]))),
             "families": dict(sorted(families.items(), key=lambda kv: (-kv[1], kv[0]))),

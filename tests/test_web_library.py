@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from biblereference.refs import VerseRef
+from biblereference.search import build_index
 from biblereference.store import DataHome, SourceMeta, write_corpus
 from biblereference.web import library as lib
 from biblereference.web import server
@@ -83,7 +84,9 @@ def test_a_rebuilt_database_replaces_it(home: DataHome) -> None:
     after = lib.library()
     assert after is not before
     assert set(after.books) == {"alpha", "beta", "gamma"}
-    assert "lxx" in after.filters["families"]
+    # Not `filters`, which now answers what can be *searched* and so is empty until
+    # something is indexed. The metadata is the derived fact this test is about.
+    assert after.meta["gamma"].versification == "lxx"
 
 
 def test_a_fresh_thread_asks_the_database_nothing_about_books(
@@ -138,23 +141,46 @@ def test_a_rebuild_reopens_this_threads_corpora(home: DataHome) -> None:
 # --------------------------------------------------------------------------------------
 
 
-def test_the_filters_say_exactly_what_the_corpora_are(home: DataHome) -> None:
-    """They are derived from the metadata now rather than from opened corpora, so that
-    asking costs nothing. The two must not be able to disagree."""
-    held = lib.corpora().values()
+def test_the_filters_say_exactly_what_can_be_searched(home: DataHome) -> None:
+    """Derived from the search index rather than from the metadata, because built and
+    searchable are two facts and this gate used to check the wrong one -- refusing
+    `klingon` while waving through `syc`, which held not one indexed verse."""
+    build_index(home, corpora=["alpha"])
+    lib._LIBRARY = None
+
     assert lib.known_filters() == {
-        "corpora": {c.id for c in held},
-        "languages": {c.language for c in held},
-        "families": {c.versification for c in held},
+        "corpora": {"alpha"},
+        "languages": {"en"},
+        "families": {"eng"},
     }
+    assert lib.searchable_corpora() == frozenset({"alpha"})
+    # Everything built, which is the other question and still has an answer.
+    assert lib.built_filters()["corpora"] == {"alpha", "beta"}
 
 
 def test_a_filter_is_still_refused_rather_than_ignored(home: DataHome) -> None:
     """The behaviour `search_options` exists for, checked against the new source of the
     known values."""
+    build_index(home)
+    lib._LIBRARY = None
+
     assert server.search_options({"languages": ["en"]}) == {"languages": ["en"]}
     with pytest.raises(LookupError, match="klingon"):
         server.search_options({"languages": ["klingon"]})
+
+
+def test_a_corpus_held_but_unindexed_is_refused_for_the_right_reason(home: DataHome) -> None:
+    """Two refusals, because a typo and an unrun command want different things done about
+    them, and only one of them is the caller's fault."""
+    build_index(home, corpora=["alpha"])
+    lib._LIBRARY = None
+
+    with pytest.raises(LookupError) as raised:
+        server.search_options({"languages": ["la"]})
+    assert "not in the search index" in str(raised.value)
+    assert "biblereference index --stale" in str(raised.value)
+    # Not the message for something never heard of, which offers no cure.
+    assert "unknown languages" not in str(raised.value)
 
 
 # --------------------------------------------------------------------------------------

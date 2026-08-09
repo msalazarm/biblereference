@@ -33,6 +33,7 @@ import json
 import math
 import re
 import sqlite3
+import warnings
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import closing
 from dataclasses import dataclass
@@ -47,6 +48,7 @@ from .dating import translated as _translated
 from .emphasis import fold
 from .refs import VerseRange, VerseRef
 from .store import DataHome, open_store, read_chapter
+from .tags import resolve_language
 from .versification import Versification, VersificationError
 
 __all__ = [
@@ -56,6 +58,8 @@ __all__ = [
     "IDENTIFIED",
     "QUOTATION",
     "RESOLUTION_ORDER",
+    "IndexCoverage",
+    "IndexIncomplete",
     "IndexResult",
     "Match",
     "Resolution",
@@ -64,6 +68,9 @@ __all__ = [
     "Searcher",
     "Witness",
     "build_index",
+    "index_coverage",
+    "index_is_stale",
+    "indexed_corpora",
 ]
 
 #: Below this, text is not treated as a quotation at all -- but see :data:`_MIN_RUN`, which
@@ -416,8 +423,12 @@ def _index_corpus(
         count += 1
 
     connection.execute(
-        "INSERT OR REPLACE INTO search_state (corpus, indexed_at, verses) VALUES (?, ?, ?)",
-        (corpus, datetime.now(UTC).isoformat(timespec="seconds"), count),
+        "INSERT OR REPLACE INTO search_state "
+        "(corpus, indexed_at, verses, source_verses) VALUES (?, ?, ?, ?)",
+        (corpus, datetime.now(UTC).isoformat(timespec="seconds"), count, len(rows)),
+        # `count` and `len(rows)` differ where a verse folds away to nothing -- a line of
+        # editorial sigla, a verse of pure punctuation. Both are recorded because only
+        # `len(rows)` can be compared with the store to ask whether this is out of date.
     )
     report(f"search: indexed {corpus} ({count:,} verses)")
     return count
@@ -452,17 +463,106 @@ def recount_df(connection: sqlite3.Connection, report: Reporter = _silent) -> No
     report(f"search: {len(counts):,} distinct words")
 
 
-def index_is_stale(home: DataHome) -> list[str]:
-    """Corpora whose verse count no longer matches what was indexed for them."""
+class IndexIncomplete(UserWarning):
+    """Some of the library is built but not folded into the search index.
+
+    A warning rather than an error because the searcher still answers for everything else,
+    and a category of its own so a caller running a sweep can turn it into one::
+
+        warnings.simplefilter("error", IndexIncomplete)
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class IndexCoverage:
+    """What the search index holds for one corpus, against what the store holds."""
+
+    corpus: str
+    stored: int
+    """Rows this corpus has in ``verse`` -- counted, not read off ``source_meta``.
+
+    The two are not the same number and never were: ``verse_count`` records the verses a
+    build *offered*, and references that repeat collapse onto one row on the way in.
+    ``castellio`` says 5,273 and holds 5,272; ``brenton`` says 29,004 and holds 28,690.
+    Comparing the index against the recorded figure is what reported four corpora as
+    permanently stale, and six more the moment they were freshly indexed."""
+    indexed: int | None = None
+    """Verses that produced a searchable text, or ``None`` where it was never indexed."""
+    source_verses: int | None = None
+    """What the store held when it was indexed, or ``None`` for an index built before this
+    was recorded."""
+
+    @property
+    def searchable(self) -> bool:
+        return self.indexed is not None and self.indexed > 0
+
+    @property
+    def state(self) -> str:
+        """``missing`` | ``drifted`` | ``unknown`` | ``current``."""
+        if self.indexed is None:
+            return "missing"
+        if self.source_verses is None:
+            # Indexed before the store recorded what it indexed *from*. Nothing here can
+            # say whether it has drifted, and guessing "stale" would send every existing
+            # install off to rebuild a perfectly good index.
+            return "unknown"
+        return "current" if self.source_verses == self.stored else "drifted"
+
+
+def index_coverage(home: DataHome) -> list[IndexCoverage]:
+    """What the search index holds, corpus by corpus, in store order.
+
+    Opened read-only, so it must cope with a database the migration has not reached yet:
+    ``source_verses`` was added after the fact and only a write-mode ``open_store`` creates
+    it. Asking for it unconditionally made this swallow an ``OperationalError`` and report
+    that *nothing* was searchable, which is a worse answer than the one it replaced.
+    """
+    if not home.database.exists():
+        # Read-only means read-only: SQLite will not conjure the file, and asking what an
+        # absent library holds is a fair question with the answer "nothing".
+        return []
     with closing(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)) as connection:
         try:
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(search_state)")}
+            source = "s.source_verses" if "source_verses" in columns else "NULL"
             rows = connection.execute(
-                "SELECT m.corpus, m.verse_count, COALESCE(s.verses, -1) "
-                "FROM source_meta m LEFT JOIN search_state s ON s.corpus = m.corpus"
+                f"SELECT m.corpus, s.verses, {source} "
+                "FROM source_meta m LEFT JOIN search_state s ON s.corpus = m.corpus "
+                "ORDER BY m.corpus"
             ).fetchall()
+            # A fifth of a second over 900,000 rows, and the only figure the comparison
+            # below may honestly use. See `IndexCoverage.stored`.
+            counted = dict(connection.execute("SELECT corpus, COUNT(*) FROM verse GROUP BY corpus"))
         except sqlite3.OperationalError:  # pragma: no cover - database not built yet
             return []
-    return [str(corpus) for corpus, stored, indexed in rows if stored != indexed]
+    return [
+        IndexCoverage(str(corpus), int(counted.get(corpus, 0)), indexed, held)
+        for corpus, indexed, held in rows
+    ]
+
+
+def indexed_corpora(home: DataHome) -> set[str]:
+    """Which corpora a search can actually answer from.
+
+    The distinction this module had been missing. A corpus is in the *library* as soon as
+    it is built, and in the *index* only after it is folded -- and for thirteen corpora,
+    including the whole Syriac Bible, the second never happened. Every filter validated
+    against the first, so asking for Syriac was accepted and returned nothing.
+    """
+    return {row.corpus for row in index_coverage(home) if row.searchable}
+
+
+def index_is_stale(home: DataHome) -> list[str]:
+    """Corpora the index cannot answer for, or has fallen behind.
+
+    Was a bare count comparison, and reported four corpora as stale forever: it measured
+    ``search_state.verses``, which counts verses that folded to something, against
+    ``source_meta.verse_count``, which counts all of them. `brenton` has 314 verses of
+    editorial matter that fold away, so it was permanently 314 short of itself and no
+    amount of reindexing could settle it. A warning on that predicate would have been wrong
+    a quarter of the time it fired.
+    """
+    return [row.corpus for row in index_coverage(home) if row.state in {"missing", "drifted"}]
 
 
 # -- results ----------------------------------------------------------------------------
@@ -726,7 +826,7 @@ class Searcher:
         self._min_run = min_run
         self._min_query = min_query
         self._connection = sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)
-        self._corpora = self._load_corpora(corpora, families, languages)
+        self._corpora = self._load_corpora(home, corpora, families, languages)
         self._texts = int(
             self._connection.execute("SELECT COUNT(*) FROM search_text").fetchone()[0]
         )
@@ -738,10 +838,24 @@ class Searcher:
 
     def _load_corpora(
         self,
+        home: DataHome,
         only: Sequence[str] | None,
         families: Sequence[str] | None,
         languages: Sequence[str] | None,
     ) -> dict[str, _Corpus]:
+        """The corpora this searcher will answer from, and a refusal where it cannot.
+
+        **Validated against the index, not the library.** A corpus is in the library as soon
+        as it is built and searchable only once it is folded, and the two had drifted thirteen
+        corpora apart -- the whole Syriac Bible among them. Every filter here checked the
+        first, so `languages=["syc"]` was accepted and answered nothing, which is
+        indistinguishable from a genuine absence of matches. That cost another project a
+        sweep of two million words.
+
+        So: what you *name* must be searchable, or this raises. What you do not name is
+        merely reported, because a plain ``Searcher(home)`` has to stay usable while a
+        reindex is pending.
+        """
         rows = self._connection.execute(
             "SELECT corpus, label, language, versification FROM source_meta"
         )
@@ -749,15 +863,63 @@ class Searcher:
             str(corpus): _Corpus(str(label), str(language), str(versification))
             for corpus, label, language, versification in rows
         }
+        held = indexed_corpora(home)
+
+        spoken: list[str] | None = None
+        if languages is not None:
+            spoken = [
+                resolve_language(one, {m.language for m in loaded.values()}) for one in languages
+            ]
+
+        def check(kind: str, asked: Sequence[str] | None, of: dict[str, str]) -> None:
+            """Refuse a value this machine does not hold, or holds and cannot search."""
+            for value in dict.fromkeys(asked or ()):
+                named = {corpus for corpus, at in of.items() if at == value}
+                if not named:
+                    raise LookupError(
+                        f"unknown {kind} {value!r}. "
+                        f"This machine has: {', '.join(sorted(set(of.values())))}"
+                    )
+                if not named & held:
+                    # Counted only on the way to raising: it is a scan of the verse table,
+                    # and every ordinary construction of a `Searcher` skips it.
+                    stored = {row.corpus: row.stored for row in index_coverage(home)}
+                    verses = sum(stored.get(corpus, 0) for corpus in named)
+                    raise LookupError(
+                        f"{value!r} is in the library but not in the search index "
+                        f"({len(named)} corpus{'' if len(named) == 1 else 'es'}, "
+                        f"{verses:,} verses): {', '.join(sorted(named))}. "
+                        f"Run `biblereference index` to fold them in."
+                    )
+
+        check("corpus", only, {corpus: corpus for corpus in loaded})
+        check("family", families, {c: m.versification for c, m in loaded.items()})
+        check("language", spoken, {c: m.language for c, m in loaded.items()})
+
         if only is not None:
             wanted = set(only)
             loaded = {c: m for c, m in loaded.items() if c in wanted}
         if families is not None:
             chosen = set(families)
             loaded = {c: m for c, m in loaded.items() if m.versification in chosen}
-        if languages is not None:
-            spoken = set(languages)
-            loaded = {c: m for c, m in loaded.items() if m.language in spoken}
+        if spoken is not None:
+            wanted_languages = set(spoken)
+            loaded = {c: m for c, m in loaded.items() if m.language in wanted_languages}
+
+        # What is left but unsearchable is dropped rather than refused: nobody asked for it
+        # by name, and a library with one stale corpus has to stay usable. Said once,
+        # because silence here is the whole fault being fixed.
+        absent = sorted(set(loaded) - held)
+        if absent:
+            warnings.warn(
+                f"{len(absent)} of {len(loaded)} corpora are in the library but not in the "
+                f"search index, and will not be searched: {', '.join(absent[:6])}"
+                + (f", and {len(absent) - 6} more" if len(absent) > 6 else "")
+                + ". Run `biblereference index`.",
+                IndexIncomplete,
+                stacklevel=3,
+            )
+            loaded = {c: m for c, m in loaded.items() if c in held}
         return loaded
 
     @property

@@ -10,6 +10,8 @@ different way, so each gets its own test.
 from __future__ import annotations
 
 import pickle
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -19,6 +21,7 @@ from biblereference.search import (
     COVERAGE,
     IDENTIFIED,
     QUOTATION,
+    IndexIncomplete,
     Match,
     ScaledRun,
     Searcher,
@@ -29,6 +32,7 @@ from biblereference.search import (
     _tokens,
     _without_overlaps,
     build_index,
+    index_coverage,
     index_is_stale,
 )
 from biblereference.store import DataHome, SourceMeta, write_corpus
@@ -185,6 +189,226 @@ def test_a_corpus_built_after_indexing_is_reported_stale(home: DataHome) -> None
 
     build(home, "modern", MODERN)
     assert index_is_stale(home) == ["modern"]
+
+
+# --------------------------------------------------------------------------------------
+# What can be searched, and what only looks as if it can
+#
+# A corpus can be built and unindexed at once, and for thirteen of them -- the whole
+# Syriac Bible among them -- it was, for months. Every symptom pointed elsewhere: the
+# corpus listed in `doctor`, the filter naming it was accepted, and the search came back
+# empty in the ordinary way an unmatched query does. The tests here are of the seams that
+# were silent, not of the search itself.
+# --------------------------------------------------------------------------------------
+
+
+def build_in(home: DataHome, corpus: str, language: str, verses: dict[str, str]) -> None:
+    """The same as :func:`build`, for a corpus that is not in English."""
+    rows = []
+    for reference, text in verses.items():
+        book, position = reference.split(" ")
+        chapter, verse = position.split(":")
+        rows.append((VerseRef(book, int(chapter), int(verse), vrs="org"), text))
+    write_corpus(
+        home,
+        SourceMeta(corpus=corpus, label=corpus.upper(), language=language, versification="org"),
+        rows,
+    )
+
+
+#: John 1:1 in the Peshitta, pointed as the corpus stores it and bare as a Syriac father
+#: writing in the fourth century would have written it. The fold has always handled the
+#: difference; what it could not do was find a corpus nobody had indexed.
+PESHITTA = {
+    "JHN 1:1": "ܒ݁ܪܺܫܺܝܬ݂ ܐܺܝܬ݂ܰܘܗ̱ܝ ܗ̱ܘܳܐ ܡܶܠܬ݂ܳܐ ܂ ܘܗܽܘ ܡܶܠܬ݂ܳܐ ܐܺܝܬ݂ܰܘܗ̱ܝ ܗ̱ܘܳܐ ܠܘܳܬ݂ ܐܰܠܳܗܳܐ",
+    "JHN 1:2": "ܗܳܢܳܐ ܐܺܝܬ݂ܰܘܗ̱ܝ ܗ̱ܘܳܐ ܒ݁ܪܺܫܺܝܬ݂ ܠܘܳܬ݂ ܐܰܠܳܗܳܐ",
+}
+UNPOINTED = "ܒܪܫܝܬ ܐܝܬܘܗܝ ܗܘܐ ܡܠܬܐ ܘܗܘ ܡܠܬܐ ܐܝܬܘܗܝ ܗܘܐ ܠܘܬ ܐܠܗܐ"
+
+
+def _syriac_filler() -> dict[str, str]:
+    """:func:`_filler`'s job in another script: enough distinct Syriac verses that a word
+    of John 1:1 is not automatically the rarest thing in the corpus."""
+    nouns = "ܡܠܟܐ ܟܗܢܐ ܢܒܝܐ ܥܡܐ ܒܝܬܐ ܐܪܥܐ ܡܕܝܢܬܐ ܛܘܪܐ".split()
+    verbs = "ܐܡܪ ܥܒܕ ܐܙܠ ܝܗܒ ܩܡ ܢܦܩ ܥܢܐ ܫܡܥ".split()
+    places = "ܐܘܪܫܠܡ ܓܠܝܠܐ ܝܗܘܕ ܡܨܪܝܢ ܒܒܠ ܢܝܢܘܐ ܫܡܪܝܢ ܟܢܥܢ".split()
+    verses: dict[str, str] = {}
+    count = 0
+    for chapter in range(1, 26):
+        for verse in range(1, 21):
+            count += 1
+            verses[f"GEN {chapter}:{verse}"] = (
+                f"ܘ{verbs[count % len(verbs)]} {nouns[(count // 3) % len(nouns)]} "
+                f"ܒ{places[(count // 7) % len(places)]} ܘ{verbs[(count // 11) % len(verbs)]} "
+                f"{nouns[(count // 13) % len(nouns)]} ܥܡ ܟܠܗ ܥܡܐ ܒܝܘܡܐ ܗܘ"
+            )
+    return verses
+
+
+SYRIAC_FILLER = _syriac_filler()
+
+
+def test_a_corpus_named_in_a_filter_but_never_indexed_is_refused(home: DataHome) -> None:
+    """The failure this whole section exists for. Asking for a corpus that holds no
+    indexed verse used to return an empty result, which is indistinguishable from the
+    text simply not being quoted -- so a sweep of 2.2 M words reported nothing found and
+    nobody could tell it apart from a sweep that had genuinely found nothing."""
+    build(home, "archaic", {**ARCHAIC, **FILLER})
+    build(home, "modern", MODERN)
+    build_index(home, corpora=["archaic"])
+
+    with pytest.raises(LookupError) as raised:
+        Searcher(home, corpora=["modern"])
+    assert "not in the search index" in str(raised.value)
+    assert "modern" in str(raised.value)
+    # The message has to carry the cure, because the reader of it is by definition
+    # someone who did not know the index and the store were different things.
+    assert "biblereference index" in str(raised.value)
+
+
+def test_an_unindexed_corpus_nobody_asked_for_is_dropped_with_one_warning(
+    home: DataHome,
+) -> None:
+    """Refusing here instead would make a single stale corpus take the library down with
+    it, and thirteen were stale at once. So the rest still answer -- but not quietly."""
+    build(home, "archaic", {**ARCHAIC, **FILLER})
+    build(home, "modern", MODERN)
+    build_index(home, corpora=["archaic"])
+
+    with pytest.warns(IndexIncomplete, match="modern"):
+        searcher = Searcher(home)
+    found = list(searcher.search("He maketh me to lie down in green pastures"))
+    assert [witness.corpus for match in found for witness in match.witnesses] == ["archaic"]
+
+
+def test_syriac_answers_to_either_of_its_two_iso_codes(home: DataHome) -> None:
+    """`syc` and `syr` both name Syriac. The library stores the first and `churchfathers`
+    asked with the second, and got an empty corpus rather than an error.
+
+    The query is unpointed and the corpus is pointed throughout, which is the shape the
+    request blamed for the whole failure. It matches, and always would have.
+    """
+    build_in(home, "peshitta", "syc", {**PESHITTA, **SYRIAC_FILLER})
+    build_index(home)
+
+    under = {
+        code: [str(match.passage) for match in Searcher(home, languages=[code]).search(UNPOINTED)]
+        for code in ("syc", "syr")
+    }
+    assert under["syc"] == under["syr"] == ["JHN 1:1"]
+
+
+def test_an_unrecognised_language_says_so_rather_than_finding_nothing(home: DataHome) -> None:
+    build(home, "archaic", ARCHAIC)
+    build_index(home)
+
+    with pytest.raises(LookupError) as raised:
+        Searcher(home, languages=["klingon"])
+    assert "klingon" in str(raised.value)
+    assert "en" in str(raised.value)
+
+
+def test_a_language_held_but_unindexed_is_refused_for_that_reason(home: DataHome) -> None:
+    """Two different refusals, because they want different things done about them: one is
+    a typo and the other is a command the operator has not run yet."""
+    build(home, "archaic", ARCHAIC)
+    build_in(home, "peshitta", "syc", PESHITTA)
+    build_index(home, corpora=["archaic"])
+
+    with pytest.raises(LookupError) as raised:
+        Searcher(home, languages=["syr"])
+    assert "not in the search index" in str(raised.value)
+    assert "peshitta" in str(raised.value)
+
+
+def test_indexing_one_corpus_leaves_what_was_indexed_for_the_others_alone(
+    home: DataHome,
+) -> None:
+    """`index --corpus` exists so the thirteen missing corpora could be folded in without
+    re-folding the fifty-five already there.
+
+    Proved by wrecking `archaic`'s rows first: if indexing `modern` touched it at all, the
+    rows would come back. Comparing timestamps would not do -- they have one-second
+    resolution and a corpus this small reindexes well inside one.
+    """
+    build(home, "archaic", ARCHAIC)
+    build(home, "modern", MODERN)
+    build_index(home)
+    _forget_rows(home, "archaic")
+
+    build_index(home, corpora=["modern"])
+
+    assert _indexed_rows(home) == {"modern": len(MODERN)}
+    assert set(_index_state(home)) == {"archaic", "modern"}
+
+
+def test_a_freshly_indexed_corpus_is_not_reported_stale(home: DataHome) -> None:
+    """The wolf that was cried. `source_meta.verse_count` records the verses a build
+    *offered*; references that repeat collapse onto one row on the way in, so the store
+    holds fewer than the metadata says. Comparing the index against the metadata reported
+    four corpora as stale permanently, and six more the moment they were indexed."""
+    twice = VerseRef("JHN", 11, 35, vrs="eng")
+    write_corpus(
+        home,
+        SourceMeta(corpus="doubled", label="Doubled", language="en", versification="eng"),
+        [(twice, "Jesus wept."), (twice, "Jesus wept.")],
+    )
+    (stored,) = _verse_counts(home).values()
+    assert stored == 1, "the duplicate reference should have collapsed onto one row"
+
+    build_index(home)
+    assert index_is_stale(home) == []
+
+
+def test_coverage_counts_the_rows_the_store_holds_not_the_ones_it_was_offered(
+    home: DataHome,
+) -> None:
+    twice = VerseRef("JHN", 11, 35, vrs="eng")
+    write_corpus(
+        home,
+        SourceMeta(corpus="doubled", label="Doubled", language="en", versification="eng"),
+        [(twice, "Jesus wept."), (twice, "Jesus wept.")],
+    )
+    build_index(home)
+    (row,) = index_coverage(home)
+    assert (row.stored, row.indexed, row.source_verses) == (1, 1, 1)
+    assert row.state == "current"
+
+
+def _index_state(home: DataHome) -> dict[str, tuple[str, int]]:
+    with closing(sqlite3.connect(home.database)) as connection:
+        return {
+            str(corpus): (str(at), int(verses))
+            for corpus, at, verses in connection.execute(
+                "SELECT corpus, indexed_at, verses FROM search_state"
+            )
+        }
+
+
+def _indexed_rows(home: DataHome) -> dict[str, int]:
+    with closing(sqlite3.connect(home.database)) as connection:
+        return {
+            str(corpus): int(n)
+            for corpus, n in connection.execute(
+                "SELECT corpus, COUNT(*) FROM search_ref GROUP BY corpus"
+            )
+        }
+
+
+def _forget_rows(home: DataHome, corpus: str) -> None:
+    with closing(sqlite3.connect(home.database)) as connection:
+        connection.execute("DELETE FROM search_ref WHERE corpus = ?", (corpus,))
+        connection.commit()
+
+
+def _verse_counts(home: DataHome) -> dict[str, int]:
+    with closing(sqlite3.connect(home.database)) as connection:
+        return {
+            str(corpus): int(n)
+            for corpus, n in connection.execute(
+                "SELECT corpus, COUNT(*) FROM verse GROUP BY corpus"
+            )
+        }
 
 
 # --------------------------------------------------------------------------------------

@@ -112,6 +112,52 @@ def test_doctor_lists_built_corpora(home: Path, capsys: pytest.CaptureFixture[st
     assert "lxx" in err
 
 
+def test_doctor_says_which_corpora_cannot_be_searched(
+    home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`doctor` reported verse counts and never once mentioned the search index, so
+    thirteen corpora -- the whole Syriac Bible among them -- sat here looking healthy and
+    holding not a single searchable row. This is where somebody would have looked."""
+    assert main(["--data-home", str(home), "doctor"]) == 0
+    err = capsys.readouterr().err
+    assert "NOT SEARCHABLE" in err
+    assert "never indexed:  demo" in err
+    assert "biblereference index --stale" in err
+
+    assert main(["--data-home", str(home), "index"]) == 0
+    capsys.readouterr()
+    assert main(["--data-home", str(home), "doctor"]) == 0
+    err = capsys.readouterr().err
+    assert "NOT SEARCHABLE" not in err
+    assert "all 1 corpora searchable" in err
+
+
+def test_build_does_not_claim_to_have_indexed_anything(
+    home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`build` printed "N verses indexed into ...corpus.sqlite", meaning the *verse
+    store*. Two whole imports read that as done and never ran `index`. The wording is
+    load-bearing, so it is pinned."""
+    from biblereference.cli import _warn_if_unsearchable
+    from biblereference.store import DataHome
+
+    _warn_if_unsearchable(DataHome(home))
+    err = capsys.readouterr().err
+    assert "indexed into" not in err
+    assert "cannot be searched" in err
+    assert "demo" in err
+    assert "biblereference index --stale" in err
+
+
+def test_index_can_be_asked_for_one_corpus_or_for_whatever_is_missing(
+    home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["--data-home", str(home), "index", "--corpus", "demo"]) == 0
+    capsys.readouterr()
+    assert main(["--data-home", str(home), "index", "--stale"]) == 0
+    assert "up to date" in capsys.readouterr().err
+
+
 def test_doctor_reports_chapters_it_cannot_convert(
     home: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -21,7 +21,7 @@ text; this module's whole job is turning three syntaxes into one object.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -30,10 +30,12 @@ import yaml
 from .canon import NamingScheme
 
 __all__ = [
+    "LANGUAGES",
     "Citation",
     "Emphasis",
     "TagSyntaxError",
     "find_citations",
+    "resolve_language",
 ]
 
 
@@ -45,24 +47,65 @@ class TagSyntaxError(ValueError):
         super().__init__(f"{message} in tag: {raw.strip()[:120]}")
 
 
-#: Language keys, as written in tags, normalised to ISO-ish codes. ``grc`` is ancient
-#: Greek and ``hbo`` ancient Hebrew, matching the codes the corpora report.
-_LANGUAGES: Final[Mapping[str, str]] = {
+#: Language keys, as written in tags or handed to a search filter, normalised to the codes
+#: the corpora actually report. ``grc`` is ancient Greek and ``hbo`` ancient Hebrew.
+#:
+#: **The ISO alternates are here on purpose.** ``syr`` and ``syc`` both name Syriac -- the
+#: first is the macrolanguage and the second Classical Syriac, which is what the Peshitta is
+#: and what this library stores. Another project reached for ``syr``, got an empty corpus
+#: rather than a correction, and had no way to tell that from finding nothing. Likewise
+#: ``el``/``grc`` and ``he``/``hbo``: a caller who writes the modern code means the ancient
+#: text, because the ancient text is the only one here.
+LANGUAGES: Final[Mapping[str, str]] = {
     "en": "en",
+    "eng": "en",
     "english": "en",
     "grc": "grc",
+    "el": "grc",
+    "ell": "grc",
     "greek": "grc",
     "gk": "grc",
     "hbo": "hbo",
-    "hebrew": "hbo",
+    "he": "hbo",
     "heb": "hbo",
+    "hebrew": "hbo",
     "la": "la",
+    "lat": "la",
     "latin": "la",
     "syc": "syc",
+    "syr": "syc",
     "syriac": "syc",
     "cop": "cop",
     "coptic": "cop",
 }
+
+#: The old private name, kept because this module's own parser uses it.
+_LANGUAGES = LANGUAGES
+
+
+def resolve_language(name: str, held: Iterable[str] | None = None) -> str:
+    """The code this library uses for ``name``, or a refusal naming what it has.
+
+    Refusing is the point. A language code that is merely unknown used to filter every
+    corpus away and return an empty result, which reads exactly like a passage nobody
+    quotes -- and there is nothing in the answer to tell the two apart. The web server has
+    refused unknown filter values since it was written; this is the same doctrine for the
+    library, so the two cannot disagree about what is askable.
+
+    :param held: What this machine actually has, where the caller knows. Named in the
+        refusal, since "unknown language 'klingon'" is less useful than the list.
+    """
+    code = LANGUAGES.get(name.strip().lower())
+    if code is not None:
+        return code
+    known = ", ".join(sorted(held)) if held else ", ".join(sorted(set(LANGUAGES.values())))
+    aliases = ", ".join(
+        f"{written} -> {code}" for written, code in sorted(LANGUAGES.items()) if written != code
+    )
+    raise LookupError(
+        f"unknown language {name!r}. This machine has: {known}. Also accepted: {aliases}"
+    )
+
 
 #: What ``original=`` accepts. See :class:`~biblereference.canon.Canon` for how ``auto``
 #: decides between them.

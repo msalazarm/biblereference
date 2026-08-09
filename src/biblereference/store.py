@@ -132,10 +132,19 @@ CREATE TABLE IF NOT EXISTS search_ref (
 
 CREATE INDEX IF NOT EXISTS search_ref_by_text ON search_ref (text_id);
 
+-- What was indexed for each corpus, and what it was indexed *from*.
+--
+-- `verses` counts the verses that produced a non-empty fold; `source_verses` counts what
+-- the store held at the time. They differ legitimately -- a verse of nothing but editorial
+-- sigla folds away -- and comparing `verses` against `source_meta.verse_count` therefore
+-- reported four corpora as permanently stale, which reindexing could never clear. Keeping
+-- both means "never indexed" and "has drifted" can be told apart, which is the whole use
+-- anyone has for this table.
 CREATE TABLE IF NOT EXISTS search_state (
-    corpus     TEXT PRIMARY KEY,
-    indexed_at TEXT    NOT NULL,
-    verses     INTEGER NOT NULL
+    corpus        TEXT PRIMARY KEY,
+    indexed_at    TEXT    NOT NULL,
+    verses        INTEGER NOT NULL,
+    source_verses INTEGER
 );
 
 -- How many distinct texts each word appears in, so a query can be built out of the words
@@ -305,6 +314,10 @@ class DataHome:
 _ADDED_COLUMNS: Final = (
     ("source_meta", "licence_id", "TEXT"),
     ("source_meta", "licence_ids", "TEXT"),
+    # Nullable on purpose. An index built before this column existed cannot say what it was
+    # built from, and NULL means exactly that -- not zero, and not "stale". Telling a user
+    # to reindex on the strength of a column we only just added would be crying wolf.
+    ("search_state", "source_verses", "INTEGER"),
 )
 
 
