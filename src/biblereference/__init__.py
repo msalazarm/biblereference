@@ -26,6 +26,7 @@ from .canon import (
 from .compare import BookComparison, VerseDifference, compare_corpora
 from .corpora import Corpus, CorpusError, VerseText, VerseUnavailable
 from .emphasis import SpanNotFoundError, apply_spans, fold
+from .passage import PassageReader, ResolvedPassage
 from .quotecheck import QuoteCheck, check_quotation
 from .refs import ReferenceParseError, VerseRange, VerseRef, parse_reference
 from .render import (
@@ -58,12 +59,14 @@ __all__ = [
     "CorpusError",
     "Emphasis",
     "NamingScheme",
+    "PassageReader",
     "QuoteCheck",
     "ReferenceParseError",
     "RenderReport",
     "Renderer",
     "Rendition",
     "ResolvedCitation",
+    "ResolvedPassage",
     "SpanNotFoundError",
     "TagSyntaxError",
     "UnknownBookError",

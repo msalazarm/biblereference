@@ -119,6 +119,47 @@ no public-domain translation aligns with it, so a Message quotation is usually n
 in the first place — and resolution can only name the translation for a passage already
 found.
 
+## Reading one passage, in a language you name
+
+The other direction from search: you already have the reference, and you want the text.
+
+```bash
+$ biblereference passage 'PSA 79:5' --vrs vul --language la
+latvuc  PSA 79:5  (vul)
+Domine Deus virtutum, quousque irasceris super orationem servi tui?
+
+$ biblereference passage 'PSA 79:5' --vrs nvl --language la
+novavulgata  PSA 79:5  (nvl)
+Usquequo, Domine? Irasceris in finem? Accendetur velut ignis zelus tuus?
+```
+
+Two different psalms, because `vul` and `nvl` number the Psalter differently. `--vrs` is
+required for that reason: there is no numbering it would be safe to assume.
+
+```python
+from biblereference import PassageReader
+from biblereference.store import DataHome
+
+with PassageReader(DataHome()) as reader:                 # open once; reuse
+    found = reader.resolve("DAN 10:11", vrs="vul", language="grc")
+
+found.corpus        # 'swete-daniel'  -- which text answered
+found.reference     # (DAN 10:11,)    -- the number to check it by
+found.text          # 'καὶ εἶπεν πρὸς μέ Δανιήλ, ἀνὴρ ἐπιθυμιῶν…'
+```
+
+**It will not cross language.** Candidates come only from corpora in the language asked
+for, so a Greek question is never answered with an English verse — a failure mode that
+cost one consumer 275 confirmed findings before this existed. Where nothing can answer,
+`found` is falsy and `found.reason` says which kind of nothing: `book-not-held`,
+`verse-not-held`, `out-of-range`, `unconvertible`, `no-corpus`.
+
+Corpora needing no conversion are tried first, since a text numbered as the reference is
+numbered cannot be renumbered wrongly; `PREFERRED` orders the rest, and `corpora=[…]`
+overrides both. The answer always names the corpus that gave it, because "the model was
+shown Swete" and "the model was shown the Old Greek" are different pieces of evidence —
+for Daniel 10:11 they are different texts.
+
 ## Usage
 
 ```python

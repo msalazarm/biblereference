@@ -158,6 +158,35 @@ def test_index_can_be_asked_for_one_corpus_or_for_whatever_is_missing(
     assert "up to date" in capsys.readouterr().err
 
 
+def test_passage_reads_one_verse_in_the_language_asked_for(
+    home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The hand-check: which corpus answered, under what number, and the text. All three
+    were facts a caller had to guess at, and each guess was wrong once."""
+    code = main(
+        ["--data-home", str(home), "passage", "PSA 22:1", "--vrs", "lxx", "--language", "grc"]
+    )
+    out = capsys.readouterr()
+    assert code == 0
+    assert "Κύριος ποιμαίνει με" in out.out
+    assert "demo" in out.err
+    assert "PSA 22:1" in out.err
+
+
+def test_passage_refuses_to_answer_in_another_language(
+    home: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The library holds this verse. It does not hold it in Latin, and saying so is the
+    whole point -- answering in Greek anyway is the fault that withdrew 275 findings."""
+    code = main(
+        ["--data-home", str(home), "passage", "PSA 22:1", "--vrs", "lxx", "--language", "la"]
+    )
+    out = capsys.readouterr()
+    assert code == 1
+    assert out.out == "", "nothing may be printed as the passage"
+    assert "no-corpus" in out.err
+
+
 def test_doctor_reports_chapters_it_cannot_convert(
     home: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -627,6 +627,45 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def cmd_passage(args: argparse.Namespace) -> int:
+    """Read one passage in a stated numbering and a stated language.
+
+    Exists so that a person can check by hand what a caller was shown: the corpus, the
+    reference as renumbered into it, and the text. Every one of those is a fact somebody
+    had to guess at before, and each guess was wrong once.
+    """
+    from .passage import PassageReader
+
+    with PassageReader(_home(args)) as reader:
+        try:
+            found = reader.resolve(
+                args.reference,
+                vrs=args.vrs,
+                language=args.language,
+                corpora=args.corpus or (),
+                covering=args.covering,
+            )
+        except (LookupError, ValueError) as exc:
+            _say(f"error: {exc}")
+            return 2
+
+        if not found:
+            _say(f"{found.asked} ({found.asked.vrs}) in {found.language}: {found.reason}")
+            if args.verbose:
+                _say(
+                    f"  tried: {', '.join(reader.candidates(args.language, args.vrs)) or 'nothing'}"
+                )
+            return 1
+
+        where = ", ".join(str(span) for span in found.reference)
+        _say(
+            f"{found.corpus}  {where}  ({found.versification})"
+            + ("  PARTIAL" if found.partial else "")
+        )
+        print(found.text)
+    return 0
+
+
 def cmd_compare(args: argparse.Namespace) -> int:
     """Report how far two editions of one text have drifted apart, book by book."""
     home = _home(args)
@@ -1089,6 +1128,35 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--book", help="just this book; with -v, print the verses")
     _covering(compare)
     compare.set_defaults(func=cmd_compare)
+
+    passage = subparsers.add_parser(
+        "passage",
+        help="read one passage in a stated numbering and a stated language",
+        description="Reads a reference in the numbering it is written in and returns it in "
+        "the language asked for, naming the corpus that answered and the reference as "
+        "renumbered into it. Never crosses language: if no corpus of that language holds "
+        "the passage, it says so rather than answering in another. `PSA 79:5` under `vul` "
+        "and under `nvl` are different verses, which is why --vrs is required.",
+    )
+    passage.add_argument("reference", help="e.g. 'PSA 79:5'")
+    passage.add_argument(
+        "--vrs",
+        required=True,
+        help="the numbering the reference is written in: org, eng, lxx, vul or nvl",
+    )
+    passage.add_argument(
+        "--language",
+        required=True,
+        help="the language to answer in: grc, hbo, syc, la, cop, en, or an alias (lat, eng)",
+    )
+    passage.add_argument(
+        "--corpus",
+        action="append",
+        metavar="ID",
+        help="try only these corpora, in this order; repeatable",
+    )
+    _covering(passage)
+    passage.set_defaults(func=cmd_passage)
 
     audit = subparsers.add_parser(
         "audit",
