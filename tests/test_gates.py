@@ -340,3 +340,24 @@ def test_the_alternates_a_scan_already_found_are_not_overwritten() -> None:
 
     merged = _merge_passages([span("JOB", 1, 8)], [span("ISA", 53, 6), span("JOB", 1, 8)])
     assert [str(p) for p in merged] == ["JOB 1:8", "ISA 53:6"], "both kinds, no repeat"
+
+
+def test_the_graded_path_reports_rivals_as_the_exact_path_does() -> None:
+    """The first attempt at this wired `alternates` into the exact path only.
+
+    So a match found by dictionary form -- which is most of what this feature exists to find
+    -- still came back claiming nothing else fitted. The consumer could not reproduce the fix
+    for exactly that reason, and an empty `alternates` reads as evidence when it is silence.
+    """
+    with greek(inflected=True) as rich:
+        graded = [m for m in rich.scan(POLYCARP_2_2) if m.grade != "direct"]
+    assert graded, "Ignatius re-inflecting Matthew is found by the lemma path"
+    assert graded[0].alternates, "and it says what else answered nearly as well"
+
+
+def test_alternates_stay_empty_when_the_feature_was_not_asked_for() -> None:
+    """Filling a field that has always been empty changes what every existing scan returns,
+    and half a million findings downstream rest on that not happening by surprise."""
+    with greek() as plain:
+        for match in plain.scan(CLEMENT_17_3):
+            assert match.alternates == ()

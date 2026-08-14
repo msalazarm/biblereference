@@ -2415,15 +2415,17 @@ class Searcher:
             return None
 
         best: tuple[LemmaChain, int, int, list[Witness]] | None = None
+        rivals: list[tuple[float, int, int]] = []
         for first, last in self._runs(verses):
             witnesses = self._witnesses(vrs, book, chapter, first, last, query)
             if not witnesses:
                 continue
             theirs = lemma_readings(_tokens(witnesses[0].text, language), language, lexicon)
             chained = lemma_chain(mine, theirs, weigh)
-            if chained.length and (
-                best is None or (chained.length, chained.bits) > (best[0].length, best[0].bits)
-            ):
+            if not chained.length:
+                continue
+            rivals.append((witnesses[0].similarity, first, last))
+            if best is None or (chained.length, chained.bits) > (best[0].length, best[0].bits):
                 best = (chained, first, last, witnesses)
         if best is None:
             return None
@@ -2465,6 +2467,19 @@ class Searcher:
             bits=weight,
             matched_lemmas=evidence,
             formula=self._formula_before(words, low, language),
+            # The same rivalry the exact path reports. Leaving it off here meant a match
+            # found by dictionary form -- which is most of what this feature exists to find
+            # -- came back saying nothing else fitted, on cases where something else fitted
+            # exactly as well.
+            alternates=self._near_ties(
+                rivals,
+                max((score for score, _, _ in rivals), default=0.0),
+                vrs,
+                book,
+                chapter,
+                start,
+                end,
+            ),
         )
 
 
