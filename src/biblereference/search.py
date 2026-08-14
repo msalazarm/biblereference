@@ -375,9 +375,14 @@ def lemma_run(
     not replace the run: summed rarity was tried here before and overlaps almost completely
     between formula and quotation (see :func:`longest_run`). It is the pair that discriminates.
 
-    Where a position has several readings the most surprising shared one is counted, on the
-    ground that an accidental collision is likeliest on the commonest reading and a real
-    quotation on the rarest.
+    Where a position has several readings the **least** surprising shared one is counted.
+    That was the other way round to begin with, on the reasoning that an accidental collision
+    is likeliest on the commonest reading and a real quotation on the rarest -- which is
+    exactly backwards for the words that recur. The commonest preposition in Greek, `διά`,
+    has no correct reading in this lexicon at all: it offers `Ζεύς` and `Διός`, and taking
+    the rarer scored a preposition at 4.6 bits every time it occurred. The conservative
+    reading cannot inflate, and a word that is genuinely rare has no common reading to fall
+    back to, so nothing real is lost.
     """
     best = LemmaRun.none()
     for start in range(len(left)):
@@ -387,7 +392,15 @@ def lemma_run(
                 shared = left[start + length] & right[origin + length]
                 if not shared:
                     break
-                pick = max(shared, key=bits)
+                # The *least* surprising shared reading, not the most. This was the other
+                # way round on the reasoning that "an accidental collision is likeliest on
+                # the commonest reading and a real quotation on the rarest", which is
+                # exactly backwards for the words that recur. `διά` -- the commonest
+                # preposition in Greek -- carries no correct reading in the lexicon at all:
+                # its two are `Ζεύς` and `Διός`, and taking the rarer scored the preposition
+                # at 4.6 bits every time it appeared. Reading a rare word into a common one
+                # is how a chain of function words came to outscore a real quotation.
+                pick = min(shared, key=bits)
                 total += bits(pick)
                 run.append(pick)
                 length += 1
@@ -461,7 +474,7 @@ def lemma_chain(
             shared = left[i] & right[j]
             if not shared:
                 continue
-            weight = bits(max(shared, key=bits))
+            weight = bits(min(shared, key=bits))
             length, total, end = 1, weight, i + 1
             for di in range(1, span_gap + 2):
                 for dj in range(1, verse_gap + 2):
@@ -495,7 +508,7 @@ def _chain_lemmas(
     for reading in left[first:last]:
         shared = reading & theirs
         if shared:
-            out.append(max(shared, key=bits))
+            out.append(min(shared, key=bits))
     return tuple(out)
 
 
@@ -517,7 +530,7 @@ def shared_bits(
     for reading in left:
         shared = reading & theirs
         if shared:
-            total += bits(max(shared, key=bits))
+            total += bits(min(shared, key=bits))
     return total
 
 
@@ -2014,8 +2027,15 @@ class Searcher:
         # chain's span *is* the quotation's extent, so there is no other span this could be
         # taken over -- which is the whole of why a score no longer depends on how a document
         # happened to be sliced.
-        first, last = chained.span
-        weight = shared_bits(readings[first:last], theirs, weigh) if last > first else 0.0
+        # Weighed over the chain's own *distinct* lemmas, not over every shared word in the
+        # stretch it covers. Both halves of that matter, and the consumer found the case that
+        # proves it: Ignatius' Magnesians 9.1 against Romans 5:21 scored 66 bits -- the
+        # highest of eighty-eight findings they read by hand, and a false positive -- on five
+        # content words scattered through forty. The bits were coming from the span rather
+        # than from the evidence, and three occurrences of `καί` were counted as three pieces
+        # of it rather than one. Counting distinct links takes that case to 33 and leaves
+        # Ignatius at Matthew 10:16, which is real, at 49.
+        weight = sum(weigh(lemma) for lemma in set(chained.lemmas))
         if not any(gate.admits(run, found.length, chained.length, weight) for gate in self._gates):
             return None
         if _MIN_PARTIAL_RUN <= run < self._min_run_for(len(query)):
@@ -2116,6 +2136,98 @@ class Searcher:
         ranked = sorted(votes, key=lambda key: weight[key])
         return [(key, votes[key]) for key in ranked[:_SCAN_CHAPTERS]]
 
+    def _span_rivals(
+        self,
+        vrs: str,
+        book: str,
+        chapter: int,
+        first: int,
+        last: int,
+        query: Sequence[str],
+    ) -> list[tuple[float, int, int]]:
+        """Every seed in this run and what it scored, not merely the winner.
+
+        `_best_span` keeps one span per run and throws the rest away, which is right for
+        deciding *what* was quoted and wrong for saying what else it might have been. Job 1:1
+        and Job 1:8 are one contiguous run, carry the same four epithets, and until this the
+        loser vanished before anything could report it.
+
+        Only walked when inflected matching was asked for: it is the same loop `_best_span`
+        already runs, and paying for it twice on a scan that did not ask is not worth an
+        answer nobody requested.
+        """
+        if not self._inflected:
+            return []
+        found: list[tuple[float, int, int]] = []
+        for seed in range(first, min(last, first + _MAX_SEEDS - 1) + 1):
+            start, end, witnesses = self._grow(vrs, book, chapter, seed, seed, query)
+            if witnesses:
+                found.append((witnesses[0].similarity, start, end))
+        return found
+
+    def _near_ties(
+        self,
+        rivals: Sequence[tuple[float, int, int]],
+        won: float,
+        vrs: str,
+        book: str,
+        chapter: int,
+        start: int,
+        end: int,
+    ) -> tuple[VerseRange, ...]:
+        """Other verses of this same chapter that answered nearly as well.
+
+        A scan keeps one span per chapter, so until now a rival inside the chapter was
+        discarded before `_without_overlaps` ever saw it and `alternates` could only ever
+        name a *different* chapter. Clement's Job quotation shows what that cost: Job 1:1 and
+        Job 1:8 carry the same four epithets, both are correct, and only the first was
+        reported -- with an empty `alternates`, which reads as "nothing else fits".
+
+        Populated only when inflected matching was asked for, because filling a field that
+        has always been empty changes what every existing scan returns, and half a million
+        findings downstream rest on that not happening by surprise.
+        """
+        if not self._inflected:
+            return ()
+        return tuple(
+            VerseRange(
+                VerseRef(book, chapter, other_start, vrs=vrs),
+                VerseRef(book, chapter, other_end, vrs=vrs),
+            )
+            for score, other_start, other_end in sorted(rivals, reverse=True)
+            if (other_start, other_end) != (start, end) and won - score <= _TIE
+        )
+
+    def _with_axes(self, found: Match, query: Sequence[str], best: Witness) -> Match:
+        """The lemma axes for a match the *exact* path found, where they can be computed.
+
+        The exact path used to leave all four at their defaults, which made `bits = 0.0`
+        mean "not computed" in a field where 0.0 also means "no information", and a caller
+        could not tell the two apart without reading the source. Worse than untidy: the
+        largest true error class the consumer found -- one liturgical doxology matching
+        whichever epistle happens to end that way -- arrives through the exact path, so it
+        had no surprisal defence at all. Nine verbatim words of *to whom be glory for ever
+        and ever* now carry the seventeen bits they are worth rather than a silent zero.
+
+        Empty unless inflected matching was asked for, because computing it costs a lexicon
+        lookup per word and a caller who did not ask for the feature should not pay for it.
+        """
+        language = self._language_of(best)
+        if not self._inflected or language not in LEMMA_LANGUAGES:
+            return found
+        lexicon, weights = self._lemma_tools(language)
+        weigh = weights.of(language)
+        mine = lemma_readings(list(query), language, lexicon)
+        theirs = lemma_readings(_tokens(best.text, language), language, lexicon)
+        chained = lemma_chain(mine, theirs, weigh)
+        return replace(
+            found,
+            lemma_run=lemma_run(mine, theirs, weigh).length,
+            chain=chained.length,
+            bits=sum(weigh(lemma) for lemma in set(chained.lemmas)),
+            matched_lemmas=shared_lemmas(mine, theirs),
+        )
+
     def _formula_before(
         self, words: Sequence[tuple[str, int, int]], low: int, language: str | None
     ) -> str | None:
@@ -2215,9 +2327,13 @@ class Searcher:
             return None
 
         best: tuple[float, int, int, list[Witness]] | None = None
+        rivals: list[tuple[float, int, int]] = []
         for first, last in self._runs(verses):
             start, end, witnesses = self._best_span(vrs, book, chapter, first, last, query)
-            if witnesses and (best is None or witnesses[0].similarity > best[0]):
+            if not witnesses:
+                continue
+            rivals.extend(self._span_rivals(vrs, book, chapter, first, last, query))
+            if best is None or witnesses[0].similarity > best[0]:
                 best = (witnesses[0].similarity, start, end, witnesses)
         if best is None:
             return None
@@ -2242,7 +2358,7 @@ class Searcher:
             VerseRef(book, chapter, start, vrs=vrs), VerseRef(book, chapter, end, vrs=vrs)
         )
         span = (words[low][1], words[high - 1][2])
-        return Match(
+        found = Match(
             passage,
             tuple(exact[:20]),
             span=span,
@@ -2253,7 +2369,9 @@ class Searcher:
             # threw it away; a grade a caller cannot check is not evidence.
             run=longest_run(tokens[low:high], _tokens(exact[0].text, self._language_of(exact[0]))),
             formula=self._formula_before(words, low, self._language_of(exact[0])),
+            alternates=self._near_ties(rivals, best[0], vrs, book, chapter, start, end),
         )
+        return self._with_axes(found, tokens[low:high], exact[0])
 
     def _graded_cluster(
         self,
@@ -2348,6 +2466,16 @@ class Searcher:
             matched_lemmas=evidence,
             formula=self._formula_before(words, low, language),
         )
+
+
+def _merge_passages(
+    first: Sequence[VerseRange], second: Sequence[VerseRange]
+) -> tuple[VerseRange, ...]:
+    """Both lists of rivals, in order, without repeating a passage."""
+    seen: dict[tuple[str, object, int, int], VerseRange] = {}
+    for passage in (*first, *second):
+        seen.setdefault(_coordinates(passage), passage)
+    return tuple(seen.values())
 
 
 def _coordinates(passage: VerseRange) -> tuple[str, object, int, int]:
@@ -2504,7 +2632,14 @@ def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
     # `composed` and `identified_at` once already -- every scanned match then reported
     # anachronistic as False and ignored whatever threshold its Searcher had been given.
     # A field added to `Match` in future is carried by this without anybody remembering to.
-    resolved = [replace(m, alternates=tuple(rivals.get(index, ()))) for index, m in enumerate(kept)]
+    # Merged, not replaced. A match may already carry rivals from inside its own chapter --
+    # Job 1:1 and Job 1:8 answer a quotation of the same four epithets equally well -- and
+    # those are found one span at a time, where this looks across spans. Overwriting them
+    # here is what made `alternates` come back empty on the cases it was most wanted for.
+    resolved = [
+        replace(m, alternates=_merge_passages(m.alternates, rivals.get(index, ())))
+        for index, m in enumerate(kept)
+    ]
     return sorted(resolved, key=lambda m: m.span or (0, 0))
 
 

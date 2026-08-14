@@ -233,3 +233,110 @@ def test_the_formula_changes_no_threshold() -> None:
     announced = "γέγραπται γάρ· " + PHILADELPHIANS_11_1A
     with greek(inflected=True) as rich:
         assert "ACT 6:3" not in [str(m.passage) for m in rich.scan(announced)]
+
+
+# --------------------------------------------------------------------------------------
+# What reading eighty-eight findings by hand turned up
+#
+# The consumer scanned the nine Greek works a scholar had tabulated, read every match at a
+# locus he had not annotated, and sorted them. The three cases below are the ones that were
+# defects here rather than differences of judgement.
+# --------------------------------------------------------------------------------------
+
+#: Ignatius, Magnesians 9.1. Against Romans 5:21 this scored 66 bits -- the highest of the
+#: eighty-eight, and a false positive. The two share `ἡ ζωή`, `θάνατος`, `διά`, `Ἰησοῦ
+#: Χριστοῦ` and `ἡμῶν`, scattered through forty words of Ignatius and twenty of Paul.
+MAGNESIANS_9_1 = (
+    "Εἰ οὖν οἱ ἐν παλαιοῖς πράγμασιν ἀναστραφέντες εἰς καινότητα ἐλπίδος ἦλθον, μηκέτι "
+    "σαββατίζοντες, ἀλλὰ κατὰ κυριακὴν ζῶντες, ἐν ᾗ καὶ ἡ ζωὴ ἡμῶν ἀνέτειλεν δἰ αὐτοῦ καὶ "
+    "τοῦ θανάτου αὐτοῦ, ὅν τινες ἀρνοῦνται, δἰ οὗ μυστηρίου ἐλάβομεν τὸ πιστεύειν, καὶ διὰ "
+    "τοῦτο ὑπομένομεν, ἵνα εὑρεθῶμεν μαθηταὶ Ἰησοῦ Χριστοῦ τοῦ μόνου διδασκάλου ἡμῶν:"
+)
+
+#: The doxology that closes eleven sections of 1 Clement, and matches whichever epistle
+#: happens to end that way -- Galatians, 1 Peter, Jude, Romans, 4 Maccabees.
+DOXOLOGY = "ᾧ ἡ δόξα καὶ ἡ μεγαλωσύνη εἰς τοὺς αἰῶνας τῶν αἰώνων. ἀμήν."
+
+#: 1 Clement 17.3, announced with `γέγραπται` and verbatim. Job 1:1 and Job 1:8 carry the
+#: same four epithets, so naming either is right and naming both is better.
+CLEMENT_17_3 = (
+    "ἔτι δὲ καὶ περὶ Ἰὼβ οὕτως γέγραπται: Ἰὼβ δὲ ἦν δίκαιος καὶ ἄμεμπτος, ἀληθινός, "
+    "θεοσεβής, ἀπεχόμενος ἀπὸ παντὸς κακοῦ."
+)
+
+
+def weigh(text: str, book: str, chapter: int, number: int, corpus: str = "n1904") -> float:
+    """The bits a passage earns against one verse, as the gate computes them."""
+    import sqlite3
+
+    db = sqlite3.connect(f"file:{REAL.database}?mode=ro", uri=True)
+    row = db.execute(
+        "SELECT text FROM verse WHERE corpus=? AND book=? AND chapter=? AND verse=?",
+        (corpus, book, chapter, number),
+    ).fetchone()
+    lexicon, weights = Lexicon(REAL), LemmaWeights(REAL)
+    weigher = weights.of("grc")
+    mine = lemma_readings(_tokens(text, "grc"), "grc", lexicon)
+    theirs = lemma_readings(_tokens(str(row[0]), "grc"), "grc", lexicon)
+    chained = lemma_chain(mine, theirs, weigher)
+    return sum(weigher(lemma) for lemma in set(chained.lemmas))
+
+
+def test_a_chain_of_function_words_no_longer_outscores_a_quotation() -> None:
+    """The worst finding in the eighty-eight, and the arithmetic behind it.
+
+    Bits were summed over every shared word in the stretch the chain covered, counting three
+    occurrences of `καί` as three pieces of evidence; and where a form was ambiguous the
+    *rarest* reading was taken, so `διά` -- which this lexicon analyses only as `Ζεύς` and
+    `Διός` -- scored 4.6 bits as though Ignatius had written *Zeus*. Distinct links at their
+    commonest reading is what puts a real quotation back above a coincidence.
+    """
+    coincidence = weigh(MAGNESIANS_9_1, "ROM", 5, 21)
+    quotation = weigh(POLYCARP_2_2, "MAT", 10, 16)
+    assert coincidence < 40, f"the worst false positive still scores {coincidence:.1f}"
+    assert quotation > coincidence, "and it no longer outscores Ignatius quoting Matthew"
+
+
+def test_a_liturgical_formula_scores_like_the_common_words_it_is_made_of() -> None:
+    """*To whom be glory for ever and ever, Amen* is not a quotation of Galatians; it is how
+    the whole church prayed. Surprisal cannot see that -- the words are rare in the Bible and
+    ubiquitous in Christian prose, which is the inverse of what it measures -- but it should
+    at least not score them as evidence."""
+    assert weigh(DOXOLOGY, "GAL", 1, 5) < 25
+
+
+def test_an_exact_match_carries_its_axes_when_asked_for_them() -> None:
+    """`bits = 0.0` used to mean two different things -- "no information" and "never
+    computed" -- and the exact path only ever meant the second, so the doxology came through
+    it with no surprisal defence at all."""
+    with greek() as plain:
+        bare = [m for m in plain.scan(DOXOLOGY) if m.grade == "direct"]
+    with greek(inflected=True) as rich:
+        weighed = [m for m in rich.scan(DOXOLOGY) if m.grade == "direct"]
+    assert bare and weighed, "a nine-word verbatim run is found either way"
+    assert bare[0].bits == 0.0 and bare[0].chain == 0, "not asked for, not computed"
+    assert weighed[0].bits > 0 and weighed[0].chain > 0, "asked for, and now defensible"
+
+
+def test_a_rival_inside_the_same_chapter_is_reported() -> None:
+    """A scan keeps one span per chapter, so Job 1:8 lost to Job 1:1 before anything could
+    call them rivals, and `alternates` came back empty -- which reads as "nothing else fits"
+    on a case where something else fits exactly as well."""
+    with greek(inflected=True) as rich:
+        found = [m for m in rich.scan(CLEMENT_17_3) if m.passage.book == "JOB"]
+    assert found, "the quotation is found"
+    assert [str(a) for a in found[0].alternates] == ["JOB 1:8"]
+    assert found[0].formula == "γεγραπται", "and it is announced, which is also reported"
+
+
+def test_the_alternates_a_scan_already_found_are_not_overwritten() -> None:
+    """`_without_overlaps` rebuilt the field from its own cross-span rivals, discarding what
+    the cluster had recorded. Merging is what makes both kinds reachable."""
+    from biblereference.search import VerseRange, VerseRef, _merge_passages
+
+    def span(book: str, chapter: int, number: int) -> VerseRange:
+        ref = VerseRef(book, chapter, number, vrs="org")
+        return VerseRange(ref, ref)
+
+    merged = _merge_passages([span("JOB", 1, 8)], [span("ISA", 53, 6), span("JOB", 1, 8)])
+    assert [str(p) for p in merged] == ["JOB 1:8", "ISA 53:6"], "both kinds, no repeat"
