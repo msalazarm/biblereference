@@ -57,8 +57,8 @@ def additions() -> dict[str, Addition]:
             title=entry["title"],
             first_letter_verse=first,
             last_letter_verse=last,
-            start=tuple(entry["vulgate"]["from"]),  # type: ignore[arg-type]
-            end=tuple(entry["vulgate"]["to"]),  # type: ignore[arg-type]
+            start=tuple(entry["vulgate"]["from"]),
+            end=tuple(entry["vulgate"]["to"]),
         )
 
     missing = set(ADDITION_LETTERS) - set(out)

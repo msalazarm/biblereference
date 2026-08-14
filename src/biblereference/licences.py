@@ -288,6 +288,42 @@ LICENCES: Final[dict[str, Licence]] = {
                 "permitted; wholesale redistribution of the text is not."
             ),
         ),
+        # Not a text but a lexicon: the Latin lemma table descends from the Collatinus
+        # project and carries its copyleft. It is fetched into a data home and read at run
+        # time, never shipped in this package, so nothing here is a derivative of it -- but
+        # the terms are recorded so that anyone redistributing a built data home knows.
+        Licence(
+            id="gpl-3.0",
+            name="GNU General Public Licence v3",
+            url="https://www.gnu.org/licenses/gpl-3.0.html",
+            commercial=True,
+            share_alike=True,
+            attribution=True,
+            rank=2,
+            summary="GNU GPL v3. See https://www.gnu.org/licenses/gpl-3.0.html",
+            notice=(
+                "Derived from the Collatinus project and used under the GNU GPL v3. Free to "
+                "use, including commercially; a redistributed derivative must carry the same "
+                "terms."
+            ),
+        ),
+        # Perseus publishes Morpheus's output under CC BY-SA 3.0, and 4.0 is not the same
+        # licence however similar. Recorded as what it is.
+        Licence(
+            id="cc-by-sa-3.0",
+            name="CC BY-SA 3.0",
+            url="https://creativecommons.org/licenses/by-sa/3.0/",
+            commercial=True,
+            share_alike=True,
+            attribution=True,
+            rank=2,
+            summary="CC BY-SA 3.0. See https://creativecommons.org/licenses/by-sa/3.0/",
+            notice=(
+                "Morphological data from the Perseus Digital Library, used under CC BY-SA "
+                "3.0, with credit to Perseus. A redistributed derivative must carry the same "
+                "terms."
+            ),
+        ),
     )
 }
 

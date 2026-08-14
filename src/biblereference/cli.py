@@ -134,6 +134,23 @@ def cmd_index(args: argparse.Namespace) -> int:
             return 0
         _say(f"reindexing {len(wanted)} corpus/corpora: {', '.join(wanted)}")
 
+    if args.lemmata:
+        from .lemmata import LexiconUnavailable
+        from .search import build_lemma_index
+
+        try:
+            found = build_lemma_index(
+                home, corpora=wanted, report=_say if args.verbose else _silent
+            )
+        except LexiconUnavailable as exc:
+            _say(f"error: {exc}")
+            return 2
+        _say(
+            f"\nindexed {found.verses:,} verses by lemma as {found.texts:,} distinct readings "
+            f"across {len(found.corpora)} corpora"
+        )
+        return 0
+
     result = build_index(home, corpora=wanted, report=_say if args.verbose else _silent)
     _say(
         f"\nindexed {result.verses:,} verses as {result.texts:,} distinct texts "
@@ -627,6 +644,38 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def cmd_lemmata(args: argparse.Namespace) -> int:
+    """Fetch and build the Greek and Latin lemma lexicons.
+
+    Its own command rather than a source of `fetch`, because a lexicon is not a corpus: it
+    produces no verses, appears in no versification, and `build` would have nothing to do
+    with it. Making it look like one would put a row in `doctor`'s corpus list that no
+    reference could ever resolve to.
+    """
+    from .fetch import fetch_source
+    from .lemmata import LEXICONS, build_lexicon, lexicon_coverage
+
+    home = _home(args)
+    wanted = [args.language] if args.language else sorted(LEXICONS)
+    unknown = [name for name in wanted if name not in LEXICONS]
+    if unknown:
+        _say(f"error: no lexicon for {', '.join(unknown)}. Defined: {', '.join(LEXICONS)}")
+        return 2
+
+    for language in wanted:
+        spec = LEXICONS[language]
+        _say(f"\n{language}: {spec.source.label}")
+        _say(f"  terms: {spec.source.license}")
+        fetch_source(spec.source, home, report=_say, force=args.force)
+        build_lexicon(home, language, report=_say)
+
+    held = lexicon_coverage(home)
+    _say(
+        "\nlexicons: " + (", ".join(f"{k} {v:,} forms" for k, v in sorted(held.items())) or "none")
+    )
+    return 0
+
+
 def cmd_passage(args: argparse.Namespace) -> int:
     """Read one passage in a stated numbering and a stated language.
 
@@ -808,6 +857,23 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             f"  {len(unknown)} were indexed before this check existed; drift in them cannot "
             f"be seen until each is indexed once more"
         )
+
+    # Said here for the same reason the search index is: a feature that silently cannot
+    # work is the fault this library has already been bitten by twice, and `doctor` is
+    # where somebody looks.
+    from .lemmata import LEXICONS, lexicon_coverage
+
+    held = lexicon_coverage(home)
+    if held:
+        _say(
+            "\nlemmata: "
+            + ", ".join(f"{language} {forms:,} forms" for language, forms in sorted(held.items()))
+        )
+        absent = sorted(set(LEXICONS) - set(held))
+        if absent:
+            _say(f"  not fetched: {', '.join(absent)} -- `biblereference lemmata`")
+    else:
+        _say("\nlemmata: none. `scan --inflected` needs `biblereference lemmata` first")
 
     # The question a person actually has, which no per-corpus line answers: of everything
     # I hold, what may I not use freely? Counted rather than listed, because the list is
@@ -1027,6 +1093,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="index only this corpus; repeatable",
     )
     index.add_argument(
+        "--lemmata",
+        action="store_true",
+        help="build the *lemma* index instead: the Greek and Latin verses keyed by "
+        "dictionary form, for `scan --inflected`. Needs `biblereference lemmata` first, "
+        "and touches none of the exact-form index",
+    )
+    index.add_argument(
         "--stale",
         action="store_true",
         help="index whatever the store holds and the index does not, and nothing else",
@@ -1128,6 +1201,21 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--book", help="just this book; with -v, print the verses")
     _covering(compare)
     compare.set_defaults(func=cmd_compare)
+
+    lemmata = subparsers.add_parser(
+        "lemmata",
+        help="fetch the Greek and Latin lemma lexicons, for inflected matching",
+        description="Downloads and builds the form-to-lemma tables that let `scan "
+        "--inflected` find a quotation whose words have been re-inflected. Greek and Latin "
+        "only. They are fetched rather than shipped: 33 MB together, and they descend from "
+        "Perseus's Morpheus and the Collatinus project rather than from anything this "
+        "library may relicense.",
+    )
+    lemmata.add_argument("--language", help="just this one: grc or la")
+    lemmata.add_argument(
+        "--force", action="store_true", help="download again even if already archived"
+    )
+    lemmata.set_defaults(func=cmd_lemmata)
 
     passage = subparsers.add_parser(
         "passage",

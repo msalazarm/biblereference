@@ -140,12 +140,12 @@ required for that reason: there is no numbering it would be safe to assume.
 from biblereference import PassageReader
 from biblereference.store import DataHome
 
-with PassageReader(DataHome()) as reader:                 # open once; reuse
+with PassageReader(DataHome()) as reader:  # open once; reuse
     found = reader.resolve("DAN 10:11", vrs="vul", language="grc")
 
-found.corpus        # 'swete-daniel'  -- which text answered
-found.reference     # (DAN 10:11,)    -- the number to check it by
-found.text          # 'καὶ εἶπεν πρὸς μέ Δανιήλ, ἀνὴρ ἐπιθυμιῶν…'
+found.corpus  # 'swete-daniel'  -- which text answered
+found.reference  # (DAN 10:11,)    -- the number to check it by
+found.text  # 'καὶ εἶπεν πρὸς μέ Δανιήλ, ἀνὴρ ἐπιθυμιῶν…'
 ```
 
 **It will not cross language.** Candidates come only from corpora in the language asked

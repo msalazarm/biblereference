@@ -226,4 +226,35 @@ def test_scan_and_search_return_what_they_returned_before(home: DataHome) -> Non
     expected = json.loads(GOLDEN.read_text("utf-8"))
     assert list(found) == list(expected), "a whole language's results appeared or vanished"
     for key in expected:
-        assert found[key] == expected[key], f"{key} moved"
+        assert _without_additions(found[key]) == expected[key], f"{key} moved"
+
+
+#: Keys `Match.to_dict` gained when inflected matching was added. The promise made was that
+#: nothing already returned would change, not that nothing would ever be added -- the
+#: consumer asked for the grade in the same document. Listing them here is what keeps the
+#: difference between the two honest: an addition has to be named to be tolerated, and
+#: anything else moving still fails.
+ADDED: frozenset[str] = frozenset({"grade", "run", "lemma_run", "bits", "matched_lemmas"})
+
+
+def _without_additions(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _without_additions(v) for k, v in value.items() if k not in ADDED}
+    if isinstance(value, list):
+        return [_without_additions(v) for v in value]
+    return value
+
+
+def test_the_only_thing_that_changed_is_what_was_added(home: DataHome) -> None:
+    """The other half of the promise: the new keys are present and are not empty of meaning.
+
+    Without this, `_without_additions` above could hide a regression by growing.
+    """
+    with Searcher(home, languages=["en"], **TUNING["en"]) as searcher:
+        found = searcher.scan(DOCUMENTS["en"])
+    assert found, "the English document quotes two verses verbatim"
+    for match in found:
+        record = match.to_dict()
+        assert set(record) >= ADDED, "a promised key is missing"
+        assert record["grade"] == "direct", "an exact match is what direct means"
+        assert record["run"] >= 6, "today's rule found it, so its identical run is visible"

@@ -770,7 +770,9 @@ def _resolve_reverse(
     def in_grid(coord: _Coord) -> bool:
         book, chapter, verse, _ = coord
         chapters = max_verses.get(book)
-        return bool(chapters) and 1 <= chapter <= len(chapters) and verse <= chapters[chapter - 1]
+        if not chapters:
+            return False
+        return 1 <= chapter <= len(chapters) and verse <= chapters[chapter - 1]
 
     resolved: dict[_Coord, tuple[_Coord, ...]] = {}
     for target, sources in candidates.items():
@@ -940,7 +942,9 @@ def _build_system(name: str, corrections: dict[str, object]) -> _System:
     assert isinstance(max_raw, dict)
     max_verses = {book: tuple(int(v) for v in counts) for book, counts in max_raw.items()}
 
-    for book, spec in _sub(corrections, "add_books").get(name, {}).items():  # type: ignore[union-attr]
+    added = _sub(corrections, "add_books").get(name, {})
+    assert isinstance(added, dict)
+    for book, spec in added.items():
         if book in max_verses:
             raise VersificationDataError(
                 f"correction for {name!r} adds book {book!r}, which upstream now defines "

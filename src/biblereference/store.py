@@ -158,6 +158,80 @@ CREATE TABLE IF NOT EXISTS search_df (
 """
 
 
+#: The second index: the same verses keyed by *dictionary form* rather than by spelling.
+#:
+#: A father quoting scripture adapts its grammar to his own sentence. Ignatius shares
+#: fourteen words with Matthew 10:16 and his longest identically-spelled run is one, because
+#: Matthew addresses disciples in the plural and Ignatius addresses one bishop. Measured over
+#: 5,770 editor-marked Greek quotations, 27.5% have no four consecutive words spelled as the
+#: source spells them, and no threshold over :data:`SEARCH_SCHEMA` can reach them.
+#:
+#: Kept in its own tables and never merged into the ones above. Half a million findings
+#: downstream rest on what the exact-form index returns, and a document frequency shifted by
+#: a lemma would move scores for every query ever asked. Greek and Latin only: English does
+#: not inflect enough to need it, and folding it in would change what English already finds.
+LEMMA_SCHEMA: Final = """
+-- The fetched lexicon: which dictionary forms a spelling can belong to. Keyed on the
+-- *folded* form, so it meets the search where the search already stands. One form may carry
+-- several lemmas -- Greek `ἄρῃ` carries three -- and all of them are kept: a match needs
+-- only that two words share one reading, and choosing between them here would be a guess
+-- made where there is no context to make it with.
+CREATE TABLE IF NOT EXISTS lemma_form (
+    language TEXT NOT NULL,
+    form     TEXT NOT NULL,
+    lemma    TEXT NOT NULL,
+    PRIMARY KEY (language, form, lemma)
+) WITHOUT ROWID;
+
+-- Unstemmed on purpose. `porter` is an English stemmer; on Greek it is noise, and the
+-- lemmas are already the reduction it would be trying and failing to approximate.
+CREATE VIRTUAL TABLE IF NOT EXISTS lemma_fts USING fts5(
+    lemmas,
+    tokenize = 'unicode61'
+);
+
+CREATE TABLE IF NOT EXISTS lemma_text (
+    id   INTEGER PRIMARY KEY,
+    hash BLOB    NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS lemma_ref (
+    corpus   TEXT    NOT NULL,
+    book     TEXT    NOT NULL,
+    chapter  INTEGER NOT NULL,
+    verse    INTEGER NOT NULL,
+    subverse TEXT    NOT NULL DEFAULT '',
+    text_id  INTEGER NOT NULL,
+    PRIMARY KEY (corpus, book, chapter, verse, subverse)
+) WITHOUT ROWID;
+
+CREATE INDEX IF NOT EXISTS lemma_ref_by_text ON lemma_ref (text_id);
+
+-- Counted per language, which is the whole point of it. How surprising `θεόσ` is has to be
+-- measured against the Greek a father could have written, not diluted by 900,000 English
+-- verses that could never have contained it. `verses` is the denominator: the number of
+-- verses of that language the count was taken over.
+CREATE TABLE IF NOT EXISTS lemma_df (
+    language TEXT    NOT NULL,
+    lemma    TEXT    NOT NULL,
+    docs     INTEGER NOT NULL,
+    PRIMARY KEY (language, lemma)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS lemma_total (
+    language TEXT PRIMARY KEY,
+    verses   INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS lemma_state (
+    corpus        TEXT PRIMARY KEY,
+    indexed_at    TEXT    NOT NULL,
+    verses        INTEGER NOT NULL,
+    source_verses INTEGER
+);
+"""
+
+
 def default_data_home() -> Path:
     """Where the corpus lives unless told otherwise.
 
@@ -337,6 +411,7 @@ def open_store(home: DataHome) -> Iterator[sqlite3.Connection]:
     try:
         connection.executescript(_SCHEMA)
         connection.executescript(SEARCH_SCHEMA)
+        connection.executescript(LEMMA_SCHEMA)
         _migrate(connection)
         yield connection
         connection.commit()
@@ -403,7 +478,7 @@ def drop_corpora(home: DataHome, corpora: Sequence[str]) -> dict[str, int]:
     :returns: verses removed, by corpus. Ids absent from the store are ignored rather than
         raising: dropping something already gone is the state the caller asked for.
     """
-    from .search import recount_df  # deferred: search builds on this module
+    from .search import recount_df, recount_lemma_df  # deferred: search builds on this module
 
     removed: dict[str, int] = {}
     if not corpora:
@@ -417,19 +492,34 @@ def drop_corpora(home: DataHome, corpora: Sequence[str]) -> dict[str, int]:
             ).fetchone()
             removed[corpus] = int(row[0])
 
-        for table in ("verse", "source_meta", "chapter_state", "search_ref", "search_state"):
+        for table in (
+            "verse",
+            "source_meta",
+            "chapter_state",
+            "search_ref",
+            "search_state",
+            # The lemma index is keyed by corpus too, and leaving it behind would be the
+            # same fault in the newer half: a hit resolving to a corpus that is gone.
+            "lemma_ref",
+            "lemma_state",
+        ):
             connection.execute(f"DELETE FROM {table} WHERE corpus IN ({marks})", tuple(corpora))
 
-        orphans = [
-            int(row[0])
-            for row in connection.execute(
-                "SELECT id FROM search_text WHERE id NOT IN (SELECT text_id FROM search_ref)"
-            )
-        ]
-        connection.executemany("DELETE FROM search_text WHERE id = ?", [(i,) for i in orphans])
-        connection.executemany("DELETE FROM search_fts WHERE rowid = ?", [(i,) for i in orphans])
+        for text, ref, fts in (
+            ("search_text", "search_ref", "search_fts"),
+            ("lemma_text", "lemma_ref", "lemma_fts"),
+        ):
+            orphans = [
+                int(row[0])
+                for row in connection.execute(
+                    f"SELECT id FROM {text} WHERE id NOT IN (SELECT text_id FROM {ref})"
+                )
+            ]
+            connection.executemany(f"DELETE FROM {text} WHERE id = ?", [(i,) for i in orphans])
+            connection.executemany(f"DELETE FROM {fts} WHERE rowid = ?", [(i,) for i in orphans])
 
         recount_df(connection)
+        recount_lemma_df(connection)
 
     return removed
 

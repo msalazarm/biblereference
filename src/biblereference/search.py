@@ -36,7 +36,7 @@ import sqlite3
 import warnings
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from difflib import Match as Match_
 from difflib import SequenceMatcher
@@ -46,6 +46,7 @@ from .corpora.base import CorpusError, VerseUnavailable
 from .corpora.web import KNOWN_VERSIONS, BibleGatewayCorpus
 from .dating import translated as _translated
 from .emphasis import fold
+from .lemmata import Lexicon
 from .refs import VerseRange, VerseRef
 from .store import DataHome, open_store, read_chapter
 from .tags import resolve_language
@@ -336,6 +337,101 @@ def longest_run(left: Sequence[str], right: Sequence[str]) -> int:
     return max((block.size for block in _matcher(left, right).get_matching_blocks()), default=0)
 
 
+#: One reading per position: the dictionary forms a word could belong to. Empty where the
+#: lexicon has never heard of it.
+Reading = frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
+class LemmaRun:
+    """The longest stretch of words two passages share *as dictionary forms*."""
+
+    length: int
+    """Words in the run. The lemma counterpart of :func:`longest_run`."""
+    bits: float
+    """How surprising that run is, summed over its words, against the frequencies of the
+    language it is in."""
+    lemmas: tuple[str, ...]
+    """The forms it ran on, in order, one per position."""
+
+    @classmethod
+    def none(cls) -> LemmaRun:
+        return cls(0, 0.0, ())
+
+
+def lemma_run(
+    left: Sequence[Reading], right: Sequence[Reading], bits: Callable[[str], float]
+) -> LemmaRun:
+    """The longest run of positions whose readings intersect, and what it is worth.
+
+    Exactly what :func:`longest_run` measures, one level of abstraction up, and for the same
+    reason. Ignatius shares eleven words with Matthew 10:16 and not two of them in a row are
+    spelled alike; as dictionary forms they run three deep. What makes the rule safe is that
+    it is still a *run*: the two words a father shares with Acts 6:3 are `ἀνήρ` and
+    `μαρτυρέω`, correctly paired and separated in the verse by `ἐξ ὑμῶν`, so they run one --
+    and no scholar accepts that as a quotation either.
+
+    Bits are carried because length alone cannot tell `ὡς ὁ` from `φρόνιμος ὄφις`. They do
+    not replace the run: summed rarity was tried here before and overlaps almost completely
+    between formula and quotation (see :func:`longest_run`). It is the pair that discriminates.
+
+    Where a position has several readings the most surprising shared one is counted, on the
+    ground that an accidental collision is likeliest on the commonest reading and a real
+    quotation on the rarest.
+    """
+    best = LemmaRun.none()
+    for start in range(len(left)):
+        for origin in range(len(right)):
+            total, run, length = 0.0, [], 0
+            while start + length < len(left) and origin + length < len(right):
+                shared = left[start + length] & right[origin + length]
+                if not shared:
+                    break
+                pick = max(shared, key=bits)
+                total += bits(pick)
+                run.append(pick)
+                length += 1
+            if (length, total) > (best.length, best.bits):
+                best = LemmaRun(length, total, tuple(run))
+    return best
+
+
+def shared_bits(
+    left: Sequence[Reading], right: Sequence[Reading], bits: Callable[[str], float]
+) -> float:
+    """How much surprisal the two share in total, wherever it falls.
+
+    The run says the shared words are in the same order and next to each other; this says
+    they are worth something. Both are needed and neither will do alone. Ignatius at Matthew
+    10:16 runs only three deep -- `ὡς ὁ περιστερά`, two of them function words -- but carries
+    57 bits across eleven positions, because `φρόνιμος`, `ὄφις`, `ἀκέραιος` and `περιστερά`
+    cannot co-occur by accident. Gating on the run's own bits would refuse it while admitting
+    `εἰς Θεὸν`, which is two of the commonest words in Christian Greek standing next to each
+    other, and that is precisely the wrong way round.
+    """
+    theirs: set[str] = set().union(*right) if right else set()
+    total = 0.0
+    for reading in left:
+        shared = reading & theirs
+        if shared:
+            total += bits(max(shared, key=bits))
+    return total
+
+
+def shared_lemmas(left: Sequence[Reading], right: Sequence[Reading]) -> tuple[str, ...]:
+    """Every dictionary form the two have in common, rarest reading first per position.
+
+    The evidence, rather than the verdict. The people who asked for this said they would
+    rather weigh it themselves than be handed a judgement, and a caller who disagrees with
+    the gates can re-decide from these.
+    """
+    theirs: set[str] = set().union(*right) if right else set()
+    out: list[str] = []
+    for reading in left:
+        out.extend(sorted(reading & theirs))
+    return tuple(dict.fromkeys(out))
+
+
 # -- building ---------------------------------------------------------------------------
 
 
@@ -461,6 +557,255 @@ def recount_df(connection: sqlite3.Connection, report: Reporter = _silent) -> No
         "INSERT INTO search_df (token, docs) VALUES (?, ?)", sorted(counts.items())
     )
     report(f"search: {len(counts):,} distinct words")
+
+
+# --------------------------------------------------------------------------------------
+# The second index: the same verses keyed by dictionary form
+#
+# Everything below writes only to the `lemma_*` tables. Nothing here touches `search_fts`,
+# `search_df`, `search_ref`, `search_text` or `search_state`, and that separation is the
+# whole guarantee: half a million findings downstream rest on what the exact-form index
+# returns, and a document frequency shifted by a lemma would move every score ever computed.
+# --------------------------------------------------------------------------------------
+
+#: Languages a lemma index is built for. English is excluded deliberately rather than for
+#: want of a lexicon: it barely inflects, the Porter stemmer already covers what it does,
+#: and folding it in could only move results that half a million findings depend on.
+LEMMA_LANGUAGES: Final = ("grc", "la")
+
+
+#: How a match was arrived at, strongest evidence first.
+#:
+#: These grade the *evidence*, not the quotation. An editor calls Ignatius at Matthew 10:16
+#: a direct quotation and is right; this calls it :data:`INDIRECT` and is also right, because
+#: his longest identically spelled run is one word. A caller wanting the old behaviour asks
+#: for :data:`DIRECT` and gets exactly it.
+DIRECT: Final = "direct"
+"""A run of identically spelled words at least ``min_run`` long: today's rule, unchanged."""
+PARTIAL: Final = "partial"
+"""Identically spelled, but a shorter run than ``min_run`` asks for, and surprising enough
+to be worth reporting. Ignatius' three verbatim words of Philippians 2:3 are refused today
+for being short rather than for being different."""
+INDIRECT: Final = "indirect"
+"""The same words in different grammatical clothes: a run of shared dictionary forms, with
+no identically spelled run long enough to have found it."""
+
+#: Weakest first, so ``GRADES.index`` orders them and ``min_grade`` can be compared.
+GRADES: Final = (INDIRECT, PARTIAL, DIRECT)
+
+#: Shortest identically spelled run that may be graded :data:`PARTIAL`.
+#:
+#: Three, on the evidence of the case that argued for two. `εἰς θεὸν μετανοεῖν` against
+#: `τὴν εἰς Θεὸν μετάνοιαν` shares `εἰς θεόν` exactly, and the editor who published it as a
+#: quotation did not believe it was one: *repentance toward God* is the common property of
+#: the whole New Testament. Two words is a phrase. Ignatius' three verbatim words of
+#: Philippians 2:3 are the shortest thing here anyone defends as a quotation, so three is
+#: where the floor goes.
+_MIN_PARTIAL_RUN: Final = 3
+
+
+def build_lemma_index(
+    home: DataHome,
+    *,
+    corpora: Sequence[str] | None = None,
+    report: Reporter = _silent,
+) -> IndexResult:
+    """Index the Greek and Latin verses by lemma. Derived data; drop and rebuild freely.
+
+    Separate from :func:`build_index` rather than a flag on it, because the two must be able
+    to run without each other: rebuilding this must never be a reason to rebuild that, and
+    the promise that the exact-form index does not move is easier to keep when no code path
+    can move both.
+    """
+    from .lemmata import Lexicon
+
+    with open_store(home) as connection:
+        # Reading the lexicon through the writer's own connection: a second one would be
+        # locked out for the whole build.
+        lexicon = Lexicon(home, connection)
+        rows = connection.execute(
+            "SELECT corpus, language FROM source_meta "
+            f"WHERE language IN ({', '.join('?' * len(LEMMA_LANGUAGES))}) ORDER BY corpus",
+            LEMMA_LANGUAGES,
+        ).fetchall()
+        wanted = [
+            (str(corpus), str(language))
+            for corpus, language in rows
+            if corpora is None or corpus in set(corpora)
+        ]
+        for language in sorted({language for _, language in wanted}):
+            lexicon.require(language)
+
+        done: list[tuple[str, int]] = []
+        for corpus, language in wanted:
+            done.append((corpus, _index_lemmas(connection, corpus, language, lexicon, report)))
+        recount_lemma_df(connection, report)
+        texts = int(connection.execute("SELECT COUNT(*) FROM lemma_text").fetchone()[0])
+    return IndexResult(tuple(done), texts)
+
+
+def _index_lemmas(
+    connection: sqlite3.Connection,
+    corpus: str,
+    language: str,
+    lexicon: Lexicon,
+    report: Reporter,
+) -> int:
+    """Fold one corpus into the lemma index, replacing whatever was there for it before."""
+    connection.execute("DELETE FROM lemma_ref WHERE corpus = ?", (corpus,))
+
+    rows = connection.execute(
+        "SELECT book, chapter, verse, subverse, text FROM verse WHERE corpus = ?", (corpus,)
+    ).fetchall()
+
+    count = 0
+    for book, chapter, verse, subverse, text in rows:
+        written = _lemma_text(_tokens(text, language), language, lexicon)
+        if not written:
+            continue
+        digest = hashlib.sha1(written.encode("utf-8")).digest()
+        text_id = _lemma_text_id(connection, digest, written)
+        connection.execute(
+            "INSERT OR REPLACE INTO lemma_ref "
+            "(corpus, book, chapter, verse, subverse, text_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (corpus, book, chapter, verse, subverse, text_id),
+        )
+        count += 1
+
+    connection.execute(
+        "INSERT OR REPLACE INTO lemma_state "
+        "(corpus, indexed_at, verses, source_verses) VALUES (?, ?, ?, ?)",
+        (corpus, datetime.now(UTC).isoformat(timespec="seconds"), count, len(rows)),
+    )
+    report(f"lemmata: indexed {corpus} ({count:,} verses)")
+    return count
+
+
+def _lemma_text(tokens: Sequence[str], language: str, lexicon: Lexicon) -> str:
+    """One verse as a bag of readings, for FTS to find candidates in.
+
+    A word the lexicon does not know keeps its own spelling. That is not a fallback so much
+    as the truth: an unanalysed word is its own best guess at its dictionary form, and
+    dropping it would make proper names -- which are exactly the rare, distinctive words a
+    quotation is found by -- invisible to this index.
+    """
+    known = lexicon.of(list(dict.fromkeys(tokens)), language)
+    out: list[str] = []
+    for token in tokens:
+        out.extend(sorted(known.get(token) or {token}))
+    return " ".join(out)
+
+
+def _lemma_text_id(connection: sqlite3.Connection, digest: bytes, written: str) -> int:
+    row = connection.execute("SELECT id FROM lemma_text WHERE hash = ?", (digest,)).fetchone()
+    if row is not None:
+        return int(row[0])
+    cursor = connection.execute("INSERT INTO lemma_text (hash) VALUES (?)", (digest,))
+    text_id = int(cursor.lastrowid or 0)
+    connection.execute("INSERT INTO lemma_fts (rowid, lemmas) VALUES (?, ?)", (text_id, written))
+    return text_id
+
+
+def recount_lemma_df(connection: sqlite3.Connection, report: Reporter = _silent) -> None:
+    """Recount how many verses of each language each lemma appears in.
+
+    Per language, and per *verse* rather than per distinct text. Both differ from
+    :func:`recount_df` on purpose. Language, because how surprising a word is has to be
+    measured against what its author could have written: `θεόσ` diluted by 900,000 English
+    verses would read as far rarer than it is. Verses, because unlike the fifty English
+    translations that render a sentence identically, the Greek and Latin corpora are
+    different texts rather than different renderings of one, and their agreement is
+    evidence about the language rather than a duplicate to be collapsed.
+    """
+    connection.execute("DELETE FROM lemma_df")
+    connection.execute("DELETE FROM lemma_total")
+    counts: dict[tuple[str, str], int] = {}
+    totals: dict[str, int] = {}
+    for language, written in connection.execute(
+        "SELECT m.language, t.lemmas FROM lemma_ref r "
+        "JOIN source_meta m ON m.corpus = r.corpus "
+        "JOIN lemma_fts t ON t.rowid = r.text_id"
+    ):
+        totals[str(language)] = totals.get(str(language), 0) + 1
+        for lemma in set(_WORD_RE.findall(str(written))):
+            counts[(str(language), lemma)] = counts.get((str(language), lemma), 0) + 1
+    connection.executemany(
+        "INSERT INTO lemma_df (language, lemma, docs) VALUES (?, ?, ?)",
+        sorted((language, lemma, n) for (language, lemma), n in counts.items()),
+    )
+    connection.executemany(
+        "INSERT INTO lemma_total (language, verses) VALUES (?, ?)", sorted(totals.items())
+    )
+    for language, verses in sorted(totals.items()):
+        held = sum(1 for key in counts if key[0] == language)
+        report(f"lemmata: {language} {held:,} distinct lemmas over {verses:,} verses")
+
+
+class LemmaWeights:
+    """How surprising each dictionary form is, per language, read once and kept.
+
+    Surprisal against the language's own verses: ``-log2(docs / verses)``. What makes
+    `φρόνιμος` evidence and `καί` not is that the first is in 152 Greek verses of 113,062
+    and the second in 87,558, and no amount of the second adds up to the first.
+
+    A lemma the index has never seen is treated as maximally surprising rather than as
+    unknown. That is the right way round: a word absent from the whole Greek Bible cannot be
+    what makes a false match, because a false match is made of words that *are* there.
+    """
+
+    def __init__(self, home: DataHome) -> None:
+        self.home = home
+        self._counts: dict[str, dict[str, int]] = {}
+        self._verses: dict[str, int] = {}
+
+    def _load(self, language: str) -> None:
+        if language in self._counts:
+            return
+        counts: dict[str, int] = {}
+        verses = 0
+        with closing(sqlite3.connect(f"file:{self.home.database}?mode=ro", uri=True)) as db:
+            try:
+                counts = {
+                    str(lemma): int(docs)
+                    for lemma, docs in db.execute(
+                        "SELECT lemma, docs FROM lemma_df WHERE language = ?", (language,)
+                    )
+                }
+                row = db.execute(
+                    "SELECT verses FROM lemma_total WHERE language = ?", (language,)
+                ).fetchone()
+                verses = int(row[0]) if row else 0
+            except sqlite3.OperationalError:  # pragma: no cover - index not built
+                counts, verses = {}, 0
+        self._counts[language] = counts
+        self._verses[language] = verses
+
+    def verses(self, language: str) -> int:
+        self._load(language)
+        return self._verses[language]
+
+    def bits(self, lemma: str, language: str) -> float:
+        self._load(language)
+        total = self._verses[language]
+        if not total:
+            return 0.0
+        return math.log2(total / (self._counts[language].get(lemma, 0) + 1))
+
+    def of(self, language: str) -> Callable[[str], float]:
+        """A one-argument weigher, for :func:`lemma_run`."""
+        self._load(language)
+        return lambda lemma: self.bits(lemma, language)
+
+
+def lemma_readings(tokens: Sequence[str], language: str, lexicon: Lexicon) -> list[Reading]:
+    """One reading per token: its dictionary forms, or itself where none is known.
+
+    An unanalysed word standing for itself is not a fallback but the truth of the case: it
+    is its own best guess at its dictionary form, and dropping it would make proper names
+    invisible -- and those are exactly the rare words a quotation is recognised by.
+    """
+    known = lexicon.of(list(dict.fromkeys(tokens)), language)
+    return [known.get(token) or frozenset({token}) for token in tokens]
 
 
 class IndexIncomplete(UserWarning):
@@ -625,6 +970,28 @@ class Match:
     :class:`Searcher` configured with a different threshold produces matches which agree
     with it. Defaults to :data:`IDENTIFIED`, so a hand-built ``Match`` behaves as before.
     """
+    grade: str = DIRECT
+    """On what footing this was found: :data:`DIRECT`, :data:`PARTIAL` or :data:`INDIRECT`.
+
+    A record of the evidence, not a literary judgement. The scholarly scheme these names
+    borrow from classifies what a writer was *doing* -- quoting, adapting, alluding -- and
+    no index can see that. What this can see is whether the words were spelled alike, how
+    many of them, and how surprising. Ignatius at Matthew 10:16 is a *direct* quotation to
+    an editor and :data:`INDIRECT` here, because his longest identically spelled run is one
+    word. Both answers are right about different questions.
+    """
+    run: int = 0
+    """The longest run of identically spelled words. Today's whole rule, kept visible on
+    every match so a caller can see what a grade rests on and reproduce it."""
+    lemma_run: int = 0
+    """The longest run of words shared as dictionary forms."""
+    bits: float = 0.0
+    """Total surprisal of every dictionary form the two share, against the frequencies of
+    the language's own verses. Two shared common words score near nothing however correctly
+    they were paired; `φρόνιμος ὄφις ἀκέραιος περιστερά` cannot co-occur by accident."""
+    matched_lemmas: tuple[str, ...] = ()
+    """Every dictionary form the passage and the quotation share. The evidence itself, so a
+    caller who mistrusts the gates can weigh it again."""
 
     @property
     def ambiguous(self) -> bool:
@@ -721,6 +1088,14 @@ class Match:
             "quoted": self.quoted or None,
             "ambiguous": self.ambiguous,
             "alternates": [str(passage) for passage in self.alternates],
+            # Added, never altered: every key above means exactly what it meant before
+            # inflected matching existed, and `grade == "direct"` is the whole of what this
+            # returned then.
+            "grade": self.grade,
+            "run": self.run,
+            "lemma_run": self.lemma_run,
+            "bits": round(self.bits, 2),
+            "matched_lemmas": list(self.matched_lemmas),
             "translations": [
                 {
                     "corpus": w.corpus,
@@ -759,7 +1134,30 @@ class Searcher:
         min_run: int | Callable[[int], int] = _MIN_RUN,
         min_query: int = _MIN_QUERY,
         composed: int | None = None,
+        inflected: bool = False,
+        min_grade: str | None = None,
+        min_lemma_run: int = 2,
+        min_bits: float = 15.0,
     ) -> None:
+        # `min_lemma_run` and `min_bits` are measured rather than chosen. Over 500 quotations
+        # the Patristic Text Archive's editors marked by hand, scored on landing on the
+        # verse they named:
+        #
+        #     ==========================  ========  ==========
+        #     gate                         verse     book
+        #     ==========================  ========  ==========
+        #     inflected=False (today)       52.4%      59.0%
+        #     run>=2 bits>=10               69.6%      80.6%
+        #     run>=2 bits>=15  (default)    69.2%      79.8%
+        #     run>=2 bits>=20               65.2%      74.8%
+        #     run>=3 bits>=15               65.4%      75.2%
+        #     ==========================  ========  ==========
+        #
+        # 15 rather than 10 because the curve is flat between them -- four tenths of a point
+        # -- and the consumer would refuse a change that raised its false-positive rate
+        # whatever it did for recall, so the strictest setting on the flat part is the one
+        # to ship. A run of 3 costs four points and takes `indirect` matches from 29 to 10,
+        # which is most of the point of the feature.
         """
         :param corpora: Search only these, by id.
         :param families: Search only corpora in these versifications. Confining a search
@@ -820,6 +1218,19 @@ class Searcher:
             inference a reader would otherwise draw is refused.
         """
         self._composed = composed
+        # Off, and off is today. Nothing below runs, no lemma table is opened and no query
+        # takes a different path unless a caller has asked for one in so many words.
+        self._home = home
+        self._inflected = inflected
+        # Defaulted from `inflected` rather than to a constant. `min_grade=DIRECT` with
+        # `inflected=True` is a coherent request -- give me the lemma index's opinion but
+        # only where the spelling already agreed -- and it is nobody's intention by
+        # accident, so asking for inflected matching admits inflected matches.
+        self._min_grade = min_grade or (INDIRECT if inflected else DIRECT)
+        self._min_lemma_run = min_lemma_run
+        self._min_bits = min_bits
+        self._lexicon: Lexicon | None = None
+        self._weights: LemmaWeights | None = None
         self._quotation = quotation
         self._coverage = coverage
         self._identified = identified
@@ -1031,7 +1442,10 @@ class Searcher:
         return {key: verses for key, (verses, _) in self._located(text_ids, {}).items()}
 
     def _located(
-        self, text_ids: Sequence[int], scores: Mapping[int, float]
+        self,
+        text_ids: Sequence[int],
+        scores: Mapping[int, float],
+        table: str = "search_ref",
     ) -> dict[tuple[str, str, int], tuple[set[int], float]]:
         """As :meth:`_positions`, but keeping each chapter's best retrieval score.
 
@@ -1044,8 +1458,7 @@ class Searcher:
             return {}
         marks = ",".join("?" * len(text_ids))
         rows = self._connection.execute(
-            f"SELECT corpus, book, chapter, verse, text_id "
-            f"FROM search_ref WHERE text_id IN ({marks})",
+            f"SELECT corpus, book, chapter, verse, text_id FROM {table} WHERE text_id IN ({marks})",
             list(text_ids),
         )
         found: dict[tuple[str, str, int], tuple[set[int], float]] = {}
@@ -1240,11 +1653,163 @@ class Searcher:
                     tuple(witnesses[:20]),
                     composed=self._composed,
                     identified_at=self._identified,
+                    # Recorded rather than left at zero: the consumer asked to see the rule
+                    # that found it, and a `direct` match saying its run was nothing would
+                    # be the one field here nobody could check.
+                    run=longest_run(
+                        query, _tokens(witnesses[0].text, self._language_of(witnesses[0]))
+                    ),
                 )
             )
 
         matches.sort(key=lambda m: -m.similarity)
-        return _one_per_passage(matches)[:limit]
+        exact = _one_per_passage(matches)
+        if not self._inflected:
+            return exact[:limit]
+
+        # Settled first and settled whole. Letting the two sets compete for `limit` places
+        # cost eight passages in four hundred that the exact path had found on its own --
+        # measured, not feared -- and a feature that improves recall by losing matches is
+        # the one thing this must not be. Graded matches fill what is left over, if
+        # anything is.
+        graded = [
+            match
+            for match in _one_per_passage(self._by_lemma(text, {m.passage for m in exact}))
+            if self._graded_enough(match)
+        ]
+        graded.sort(key=lambda m: (-GRADES.index(m.grade), -m.bits, -m.similarity))
+        return (exact + graded)[:limit]
+
+    # -- matching on dictionary forms ---------------------------------------------------
+
+    def _language_of(self, witness: Witness) -> str | None:
+        meta = self._corpora.get(witness.corpus)
+        return meta.language if meta else None
+
+    def _graded_enough(self, match: Match) -> bool:
+        return GRADES.index(match.grade) >= GRADES.index(self._min_grade)
+
+    def _lemma_tools(self, language: str) -> tuple[Lexicon, LemmaWeights]:
+        if self._lexicon is None:
+            self._lexicon = Lexicon(self._home)
+        if self._weights is None:
+            self._weights = LemmaWeights(self._home)
+        self._lexicon.require(language)
+        return self._lexicon, self._weights
+
+    def _lemma_languages(self) -> list[str]:
+        """Which of the loaded corpora's languages a lemma pass can be run in."""
+        return sorted({m.language for m in self._corpora.values()} & set(LEMMA_LANGUAGES))
+
+    def _by_lemma(self, text: str, already: set[VerseRange]) -> list[Match]:
+        """Passages sharing a run of dictionary forms with the text.
+
+        The same shape as :meth:`search` and deliberately so -- retrieve, locate, score,
+        gate -- but retrieving from ``lemma_fts`` and gating on a run of shared lemmas
+        rather than of shared spellings. The scoring in between is the same code: it works
+        on sequences of strings and does not care what the strings are.
+        """
+        out: list[Match] = []
+        for language in self._lemma_languages():
+            lexicon, weights = self._lemma_tools(language)
+            query = _tokens(text, language)
+            if len(query) < self._min_query:
+                continue
+            readings = lemma_readings(query, language, lexicon)
+            weigh = weights.of(language)
+
+            # The rarest shared *lemmas* are what narrow this, exactly as the rarest words
+            # narrow the other index. A common lemma is the more expensive to ask for, since
+            # every verse carrying it has to be scored.
+            terms = sorted(
+                {lemma for reading in readings for lemma in reading},
+                key=lambda lemma: -weigh(lemma),
+            )[:_QUERY_TERMS]
+            candidates = self._lemma_candidates(terms, _CANDIDATES)
+            grouped = self._located(
+                [text_id for text_id, _ in candidates], dict(candidates), "lemma_ref"
+            )
+
+            spans: list[tuple[float, str, str, int, int, int]] = []
+            for (vrs, book, chapter), (verses, score) in grouped.items():
+                spans.extend(
+                    (score, vrs, book, chapter, first, last) for first, last in self._runs(verses)
+                )
+            spans.sort()
+
+            for _, vrs, book, chapter, first, last in spans[:_PASSAGES]:
+                start, end, witnesses = self._best_span(vrs, book, chapter, first, last, query)
+                if not witnesses:
+                    continue
+                passage = VerseRange(
+                    VerseRef(book, chapter, start, vrs=vrs), VerseRef(book, chapter, end, vrs=vrs)
+                )
+                if passage in already:
+                    continue
+                graded = self._grade(readings, query, witnesses[0], language, weigh, lexicon)
+                if graded is None:
+                    continue
+                grade, run, found, weight, evidence = graded
+                out.append(
+                    Match(
+                        passage,
+                        tuple(witnesses[:20]),
+                        composed=self._composed,
+                        identified_at=self._identified,
+                        grade=grade,
+                        run=run,
+                        lemma_run=found.length,
+                        bits=weight,
+                        matched_lemmas=evidence,
+                    )
+                )
+        return out
+
+    def _grade(
+        self,
+        readings: Sequence[Reading],
+        query: Sequence[str],
+        best: Witness,
+        language: str,
+        weigh: Callable[[str], float],
+        lexicon: Lexicon,
+    ) -> tuple[str, int, LemmaRun, float, tuple[str, ...]] | None:
+        """What footing this passage rests on, or ``None`` if it rests on too little.
+
+        Two ways in, and the shorter one is not the looser one. A run of identical spellings
+        below ``min_run`` is refused today for being *short*, not for being different, and
+        where it is surprising enough it comes back as :data:`PARTIAL` -- three verbatim
+        words of Philippians 2:3 are a quotation by any reading. A run of shared dictionary
+        forms with no such spelling behind it is :data:`INDIRECT`.
+
+        Both need the bits. Without them `ὡς ὁ` would qualify as readily as `φρόνιμος ὄφις`,
+        and the words a false match is made of are precisely the common ones.
+        """
+        spelled = _tokens(best.text, language)
+        theirs = lemma_readings(spelled, language, lexicon)
+        run = longest_run(query, spelled)
+        found = lemma_run(readings, theirs, weigh)
+        evidence = shared_lemmas(readings, theirs)
+        weight = shared_bits(readings, theirs, weigh)
+        if weight < self._min_bits:
+            return None
+        if _MIN_PARTIAL_RUN <= run < self._min_run_for(len(query)):
+            return (PARTIAL, run, found, weight, evidence)
+        if found.length >= self._min_lemma_run:
+            return (INDIRECT, run, found, weight, evidence)
+        return None
+
+    def _lemma_candidates(self, terms: Sequence[str], limit: int) -> list[tuple[int, float]]:
+        """Indexed lemma readings sharing dictionary forms with the query, best first."""
+        if not terms:
+            return []
+        expression = " OR ".join('"' + term.replace('"', '""') + '"' for term in terms)
+        rows = self._connection.execute(
+            "SELECT rowid, bm25(lemma_fts) FROM lemma_fts "
+            "WHERE lemma_fts MATCH ? ORDER BY 2 LIMIT ?",
+            (expression, limit),
+        )
+        return [(int(rowid), float(score)) for rowid, score in rows]
 
     # -- scanning a document ------------------------------------------------------------
 
@@ -1381,6 +1946,9 @@ class Searcher:
             quoted=_original(words, low, high),
             composed=self._composed,
             identified_at=self._identified,
+            # The rule that found it, recorded. `_is_quotation` just measured this and
+            # threw it away; a grade a caller cannot check is not evidence.
+            run=longest_run(tokens[low:high], _tokens(exact[0].text, self._language_of(exact[0]))),
         )
 
 
@@ -1533,21 +2101,12 @@ def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
         if all(here != _coordinates(rival) for rival in seen):
             seen.append(match.passage)
 
-    resolved = [
-        Match(
-            m.passage,
-            m.witnesses,
-            span=m.span,
-            quoted=m.quoted,
-            alternates=tuple(rivals.get(index, ())),
-            # Carried, not dropped. Rebuilding without them made every scanned match report
-            # anachronistic as False and ignore a Searcher's configured identified
-            # threshold, whatever it had been asked for.
-            composed=m.composed,
-            identified_at=m.identified_at,
-        )
-        for index, m in enumerate(kept)
-    ]
+    # `replace` rather than a fresh `Match`: the only thing being changed here is
+    # `alternates`, and listing the other fields to carry them is how this silently dropped
+    # `composed` and `identified_at` once already -- every scanned match then reported
+    # anachronistic as False and ignored whatever threshold its Searcher had been given.
+    # A field added to `Match` in future is carried by this without anybody remembering to.
+    resolved = [replace(m, alternates=tuple(rivals.get(index, ()))) for index, m in enumerate(kept)]
     return sorted(resolved, key=lambda m: m.span or (0, 0))
 
 

@@ -208,9 +208,9 @@ def quota_for(corpus_id: str) -> Quota | None:
         corpus_id=corpus_id,
         holder=str(entry["holder"]),
         summary=str(entry["summary"]),
-        verses=entry.get("verses"),  # type: ignore[arg-type]
-        words=entry.get("words"),  # type: ignore[arg-type]
-        work_fraction=entry.get("work_fraction"),  # type: ignore[arg-type]
+        verses=entry.get("verses"),
+        words=entry.get("words"),
+        work_fraction=entry.get("work_fraction"),
         contact=str(entry.get("contact", "the publisher")),
         source=entry.get("source"),  # type: ignore[arg-type]
     )
