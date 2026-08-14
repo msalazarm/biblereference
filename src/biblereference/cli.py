@@ -22,7 +22,7 @@ from .compare import BookComparison, compare_corpora
 from .fetch import build_source, fetch_source, iter_sources, mirror_archive
 from .refs import ReferenceParseError, parse_reference
 from .render import Config, Renderer
-from .search import DEFAULT_BUDGET, Match, Resolver, Searcher, Witness, build_index
+from .search import DEFAULT_BUDGET, Gate, Match, Resolver, Searcher, Witness, build_index
 from .store import DataHome, SqliteCorpus, library_digest, read_meta, stored_chapters
 from .versification import Versification
 
@@ -246,6 +246,8 @@ def cmd_search(args: argparse.Namespace) -> int:
             corpora=args.corpus or None,
             families=getattr(args, "family", None) or None,
             languages=getattr(args, "language", None) or None,
+            inflected=args.inflected,
+            gates=_gates(args),
         ) as searcher:
             matches = searcher.search(text, limit=args.limit)
             if args.resolve and matches:
@@ -271,6 +273,28 @@ def cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def _gates(args: argparse.Namespace) -> list[Gate] | None:
+    """The gates a caller named, or ``None`` to keep the measured defaults."""
+    named = getattr(args, "gate", None)
+    return [Gate.parse(one) for one in named] if named else None
+
+
+def _inflected_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--inflected",
+        action="store_true",
+        help="also match by dictionary form, for Greek and Latin -- finds a quotation whose "
+        "grammar the writer changed. Needs `biblereference lemmata`",
+    )
+    parser.add_argument(
+        "--gate",
+        action="append",
+        metavar="RUN:LEMMA_RUN:CHAIN:BITS",
+        help="what a graded match must reach; repeatable, and a match passes if any gate "
+        "admits it. Defaults to the measured set -- see `Searcher`",
+    )
+
+
 def cmd_scan(args: argparse.Namespace) -> int:
     """Find every quotation in a document, one JSONL record each."""
     home = _home(args)
@@ -281,6 +305,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
             corpora=args.corpus or None,
             families=getattr(args, "family", None) or None,
             languages=getattr(args, "language", None) or None,
+            inflected=args.inflected,
+            gates=_gates(args),
         ) as searcher:
             matches = searcher.scan(text)
             if args.resolve:
@@ -1119,6 +1145,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--language", action="append", help="search only this language, e.g. la; repeatable"
     )
     search.add_argument("--json", action="store_true", help="one JSON record per passage")
+    _inflected_options(search)
     _add_resolve_options(search)
     search.set_defaults(func=cmd_search)
 
@@ -1129,6 +1156,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--family", action="append", help="search only this versification; repeatable"
     )
     scan.add_argument("--language", action="append", help="search only this language; repeatable")
+    _inflected_options(scan)
     _add_resolve_options(scan)
     scan.set_defaults(func=cmd_scan)
 

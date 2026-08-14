@@ -31,7 +31,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from biblereference.canon import AmbiguousBookError, UnknownBookError, resolve_book
-from biblereference.search import GRADES, Searcher
+from biblereference.lemmata import Lexicon
+from biblereference.search import (
+    GRADES,
+    Gate,
+    LemmaWeights,
+    Searcher,
+    _tokens,
+    lemma_chain,
+    lemma_readings,
+    lemma_run,
+    longest_run,
+    shared_bits,
+)
 from biblereference.store import DataHome
 
 MARKS = Path.home() / ".local/share/churchfathers/db/corpus.sqlite"
@@ -106,10 +118,10 @@ def show(label: str, tally: dict[str, int]) -> None:
 
 
 def sweep(home: DataHome, found: list[Mark]) -> Iterator[tuple[str, dict[str, int]]]:
-    for lemma_run in (2, 3):
-        for bits in (10.0, 12.0, 15.0, 20.0):
-            label = f"run>={lemma_run} bits>={bits:g}"
-            yield label, run(home, found, inflected=True, min_lemma_run=lemma_run, min_bits=bits)
+    """Recall for each candidate gate, one gate at a time, so the union can be read off."""
+    for gate in CANDIDATES:
+        yield str(gate), run(home, found, inflected=True, gates=[gate])
+    yield "union of all", run(home, found, inflected=True, gates=CANDIDATES)
 
 
 def additive(home: DataHome, found: list[Mark]) -> tuple[int, int]:
@@ -133,11 +145,142 @@ def additive(home: DataHome, found: list[Mark]) -> tuple[int, int]:
     return len(found), lost
 
 
+#: Eras whose authors were dead before there was a New Testament to quote, so every match in
+#: them is a false positive by construction. Read from `churchfathers`' own dating table --
+#: the consumer's control group, not one invented here to be flattered by.
+CONTROL_ERAS = {"classical", "pre-christian", "pre-septuagint"}
+
+#: The permissive gate the sweep collects through. Every candidate gate below is stricter, so
+#: one pass gathers the evidence for all of them and the sweep costs one scan, not twenty.
+COLLECT = Gate(chain=2, bits=10.0)
+
+
+def control_text(cap: int) -> tuple[list[str], int]:
+    """Greek by authors who cannot be quoting the New Testament, up to ``cap`` words."""
+    import json
+
+    dating = json.loads(
+        (Path.home() / "churchfathers/src/churchfathers/data/dating.json").read_text("utf-8")
+    )
+    eras = {key: value.get("era") for key, value in dating.items() if isinstance(value, dict)}
+    db = sqlite3.connect(f"file:{MARKS}?mode=ro", uri=True)
+    witnesses = [
+        wid
+        for wid, work, _ in db.execute(
+            "SELECT id, work, words FROM witness WHERE language = 'grc' AND words > 0"
+        )
+        if eras.get((work or "").split(".")[0]) in CONTROL_ERAS
+    ]
+    random.Random(11).shuffle(witnesses)
+    out: list[str] = []
+    words = 0
+    for wid in witnesses:
+        for (text,) in db.execute(
+            "SELECT text FROM passage WHERE witness = ? AND text IS NOT NULL", (wid,)
+        ):
+            out.append(str(text))
+            words += len(str(text).split())
+            if words >= cap:
+                return out, words
+    return out, words
+
+
+def evidence(home: DataHome, texts: list[str], window: int = 12, stride: int = 6) -> list[tuple]:
+    """Every graded match the permissive gate finds, with all four axes measured.
+
+    One pass, because the axes are properties of a match rather than of a gate: collecting
+    them once lets twenty candidate gates be scored offline instead of twenty scans.
+    """
+    lexicon, weights = Lexicon(home), LemmaWeights(home)
+    weigh = weights.of("grc")
+    verses = sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)
+    searcher = Searcher(
+        home, languages=["grc"], inflected=True, min_query=3, gates=[COLLECT], **GREEK
+    )
+    found: list[tuple] = []
+    with searcher:
+        for text in texts:
+            tokens = text.split()
+            for start in range(0, max(1, len(tokens) - window + 1), stride):
+                chunk = " ".join(tokens[start : start + window])
+                for match in searcher.search(chunk, limit=3):
+                    if match.grade == "direct":
+                        continue
+                    row = verses.execute(
+                        "SELECT text FROM verse WHERE corpus = ? AND book = ? "
+                        "AND chapter = ? AND verse = ?",
+                        (
+                            match.witnesses[0].corpus,
+                            match.passage.book,
+                            match.passage.start.chapter,
+                            match.passage.start.verse,
+                        ),
+                    ).fetchone()
+                    if not row:
+                        continue
+                    found.append(axes(chunk, str(row[0]), lexicon, weigh))
+    return found
+
+
+def axes(text: str, verse: str, lexicon: Lexicon, weigh: object) -> tuple[int, int, int, float]:
+    """``(run, lemma_run, chain, bits)`` for one text against one verse."""
+    query, spelled = _tokens(text, "grc"), _tokens(verse, "grc")
+    mine = lemma_readings(query, "grc", lexicon)
+    theirs = lemma_readings(spelled, "grc", lexicon)
+    chained = lemma_chain(mine, theirs, weigh)  # type: ignore[arg-type]
+    first, last = chained.span
+    weight = shared_bits(mine[first:last], theirs, weigh) if last > first else 0.0  # type: ignore[arg-type]
+    return (
+        longest_run(query, spelled),
+        lemma_run(mine, theirs, weigh).length,  # type: ignore[arg-type]
+        chained.length,
+        weight,
+    )
+
+
+CANDIDATES = [
+    Gate(lemma_run=2, bits=60.0),
+    Gate(lemma_run=4, bits=40.0),
+    Gate(lemma_run=5, bits=35.0),
+    Gate(chain=4, bits=50.0),
+    Gate(chain=5, bits=40.0),
+    Gate(chain=6, bits=35.0),
+    Gate(chain=8, bits=40.0),
+    Gate(chain=8, bits=30.0),
+    Gate(chain=10, bits=25.0),
+    Gate(run=3, bits=20.0),
+    Gate(run=4, bits=15.0),
+]
+
+
+def cmd_control(args: argparse.Namespace) -> int:
+    home = DataHome()
+    texts, words = control_text(args.control)
+    print(f"control: {words:,} words of classical / pre-christian / pre-septuagint Greek\n")
+    found = evidence(home, texts)
+    print(f"collected at {COLLECT}: {len(found):,} graded matches, all of them false\n")
+    print(f"{'gate':34} {'false positives':>15} {'per 1,000 words':>16}")
+    for gate in CANDIDATES:
+        n = sum(1 for row in found if gate.admits(*row))
+        print(f"  {gate!s:32} {n:>15,} {n / words * 1000:>16.4f}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", type=int, default=1200, help="marks to measure (0 = all)")
     parser.add_argument("--full", action="store_true", help="every mark; slow")
+    parser.add_argument(
+        "--control",
+        type=int,
+        default=0,
+        metavar="WORDS",
+        help="instead, measure false positives over this many words of pre-Christian Greek",
+    )
+    parser.add_argument("--save", metavar="PATH", help="write/read the collected evidence")
     args = parser.parse_args()
+    if args.control:
+        return cmd_control(args)
 
     if not MARKS.exists():
         print(f"no ground truth at {MARKS}", file=sys.stderr)

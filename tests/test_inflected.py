@@ -24,6 +24,7 @@ from biblereference.search import (
     DIRECT,
     INDIRECT,
     PARTIAL,
+    Gate,
     Searcher,
     build_index,
     build_lemma_index,
@@ -50,9 +51,23 @@ POSITIVES = [
         "MAT 10:16",
         "φρόνιμος γίνου ὡς ὁ ὄφις ἐν ἅπασιν καὶ ἀκέραιος εἰς ἀεὶ ὡς ἡ περιστερά",
     ),
+]
+
+#: Quotations a *safe* gate does not reach, kept as fixtures so the boundary is a fact rather
+#: than an impression. Both were found by the first release, at a setting since measured at
+#: 85 false positives per thousand words of Aristotle -- which is to say they were never
+#: really found, they were swept up. Four words each, chains of three, under twenty bits:
+#: there is no threshold that admits them and denies the control text, and the consumer's own
+#: table says as much, topping out at 64% even at the unusable setting.
+OUT_OF_REACH = [
     ("Smyrn. 6.1", "MAT 19:12", "ἐστίν ὁ χωρῶν χωρείτω"),
-    ("Phil. 8.2", "PHP 2:3", "μηδὲν κατ᾽ ἐριθείαν"),
     ("Smyrn. 1.1b", "MAT 3:15", "ἵνα πληρωθῇ πᾶσα δικαιοσύνη"),
+    # Three words, verbatim, 25.2 bits. Admitting it wants a gate on the identical run at
+    # three, and the nearest thing measured -- `run>=3 bits>=20` -- costs 0.35 false
+    # positives per thousand words of Aristotle, nearly twenty times the consumer's whole
+    # budget for the union. `run>=3 bits>=25` might well be safe and is not measured, so it
+    # is not shipped: a threshold nobody has priced is a threshold nobody should run.
+    ("Phil. 8.2", "PHP 2:3", "μηδὲν κατ᾽ ἐριθείαν"),
 ]
 
 #: The paper's fourth grade, *potential*, on entries its own author did not believe were
@@ -235,13 +250,18 @@ def test_the_match_carries_the_evidence_it_rests_on(home: DataHome) -> None:
     assert "φρονιμοσ" in match.matched_lemmas
 
 
-def test_three_verbatim_words_come_back_as_partial_rather_than_as_nothing(
+def test_a_short_verbatim_quotation_is_graded_partial_where_a_gate_admits_it(
     home: DataHome,
 ) -> None:
-    """Philippians 2:3. Today's `min_run` refuses it for being short, not for being
-    different -- so a grade is the whole of what it needed."""
-    with searcher(home, inflected=True) as rich:
-        found = [m for m in rich.search(POSITIVES[2][2]) if str(m.passage) == "PHP 2:3"]
+    """Philippians 2:3 -- three words, identically spelled, refused by `min_run` for being
+    short rather than for being different.
+
+    Not in the shipped union, because the only gate that reaches it is one on the identical
+    run and the nearest measured one costs too much. Reachable on request, and graded
+    honestly when it is: `partial`, not `indirect`, because the spelling did agree.
+    """
+    with searcher(home, inflected=True, gates=[Gate(run=3, bits=25.0)]) as asked:
+        found = [m for m in asked.search("μηδὲν κατ᾽ ἐριθείαν") if str(m.passage) == "PHP 2:3"]
     assert found and found[0].grade == PARTIAL
     assert found[0].run == 3, "identically spelled, and that is why it is not indirect"
 
@@ -249,6 +269,22 @@ def test_three_verbatim_words_come_back_as_partial_rather_than_as_nothing(
 # --------------------------------------------------------------------------------------
 # The ones that must not be found
 # --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("where", "verse", "text"), OUT_OF_REACH)
+def test_a_quotation_too_short_to_be_told_from_chance_is_not_claimed(
+    home: DataHome, where: str, verse: str, text: str
+) -> None:
+    """Pinned as missed, deliberately.
+
+    A test that merely omitted these would leave it open whether they were forgotten. They
+    were not: they are four words with a chain of three, and every gate that admits them
+    admits Aristotle at a rate the consumer has said outright they would refuse. Losing them
+    is the price of the gate being honest, and it is recorded here as a price rather than
+    quietly not mentioned.
+    """
+    with searcher(home, inflected=True) as rich:
+        assert verse not in passages(rich.search(text)), f"{where} is claimed to be reachable"
 
 
 @pytest.mark.parametrize(("where", "verse", "text"), NEGATIVES)

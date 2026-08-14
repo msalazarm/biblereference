@@ -396,6 +396,109 @@ def lemma_run(
     return best
 
 
+@dataclass(frozen=True, slots=True)
+class LemmaChain:
+    """What two passages share *in the verse's own order*, gaps allowed.
+
+    The measure a run cannot be. Ignatius reuses eleven of Matthew's words in Matthew's order
+    and interrupts them constantly with his own, so his longest unbroken agreement is three
+    and his chain is nine. Aristotle, writing about respiration three centuries earlier,
+    brushes a verse twice and his chain is two. Contiguity cannot tell those apart -- both are
+    short runs -- and 256,432 false positives in three million words of control text is what
+    that cost when the run was the only gate.
+
+    The gaps are bounded, by the same asymmetric doctrine as :func:`_continues`: a quotation
+    and its verse advance together, and without a bound on the verse side a chain would stitch
+    a whole window together out of agreements scattered across a chapter.
+    """
+
+    length: int
+    """Positions shared, in order. Never less than the longest run, since a run is a chain
+    with no gaps in it."""
+    bits: float
+    """Surprisal of those positions, summed."""
+    lemmas: tuple[str, ...]
+    """The dictionary forms, in the order they were used."""
+    span: tuple[int, int]
+    """First and last position of the chain in the *searched text*, half-open.
+
+    This is the quotation's own extent, and it is why the chain is worth computing rather
+    than merely counting: the weight of a match can be taken over what actually matched
+    instead of over whatever window the sweep happened to slice. A score that depends on
+    how a document was cut into windows is not a score of the quotation.
+    """
+
+    @classmethod
+    def none(cls) -> LemmaChain:
+        return cls(0, 0.0, (), (0, 0))
+
+
+def lemma_chain(
+    left: Sequence[Reading],
+    right: Sequence[Reading],
+    bits: Callable[[str], float],
+    *,
+    span_gap: int = _SPAN_GAP,
+    verse_gap: int = _VERSE_GAP,
+) -> LemmaChain:
+    """The longest order-preserving agreement between a text and a verse, and its extent.
+
+    A longest-common-subsequence over readings, where two positions agree if their sets of
+    dictionary forms intersect at all, and where a step may skip at most ``span_gap`` words
+    of the text and ``verse_gap`` of the verse. Ties are broken on bits, so where two chains
+    are the same length the more surprising one is the one reported.
+    """
+    if not left or not right:
+        return LemmaChain.none()
+
+    # best[i][j] is the chain starting at exactly (i, j), which is what makes the gap bounds
+    # expressible: a step is a jump forward within the two windows, not to anywhere later.
+    best: list[list[tuple[int, float, int]]] = [
+        [(0, 0.0, -1) for _ in range(len(right) + 1)] for _ in range(len(left) + 1)
+    ]
+    for i in range(len(left) - 1, -1, -1):
+        for j in range(len(right) - 1, -1, -1):
+            shared = left[i] & right[j]
+            if not shared:
+                continue
+            weight = bits(max(shared, key=bits))
+            length, total, end = 1, weight, i + 1
+            for di in range(1, span_gap + 2):
+                for dj in range(1, verse_gap + 2):
+                    if i + di > len(left) - 1 or j + dj > len(right) - 1:
+                        continue
+                    ahead = best[i + di][j + dj]
+                    if ahead[0] and (ahead[0] + 1, ahead[1] + weight) > (length, total):
+                        length, total, end = ahead[0] + 1, ahead[1] + weight, ahead[2]
+            best[i][j] = (length, total, end)
+
+    start = max(
+        ((cell[0], cell[1], i, cell[2]) for i, row in enumerate(best) for cell in row if cell[0]),
+        default=None,
+    )
+    if start is None:
+        return LemmaChain.none()
+    length, total, first, last = start
+    return LemmaChain(length, total, _chain_lemmas(left, right, bits, first, last), (first, last))
+
+
+def _chain_lemmas(
+    left: Sequence[Reading],
+    right: Sequence[Reading],
+    bits: Callable[[str], float],
+    first: int,
+    last: int,
+) -> tuple[str, ...]:
+    """The dictionary forms the chain ran on, in order, read back off its span."""
+    theirs: set[str] = set().union(*right) if right else set()
+    out: list[str] = []
+    for reading in left[first:last]:
+        shared = reading & theirs
+        if shared:
+            out.append(max(shared, key=bits))
+    return tuple(out)
+
+
 def shared_bits(
     left: Sequence[Reading], right: Sequence[Reading], bits: Callable[[str], float]
 ) -> float:
@@ -592,6 +695,102 @@ no identically spelled run long enough to have found it."""
 
 #: Weakest first, so ``GRADES.index`` orders them and ``min_grade`` can be compared.
 GRADES: Final = (INDIRECT, PARTIAL, DIRECT)
+
+
+@dataclass(frozen=True, slots=True)
+class Gate:
+    """What a graded match must reach on at least one of three axes to be admitted.
+
+    Three axes because they measure different things and no one of them will do:
+
+    * ``run`` -- identically *spelled* words, unbroken. What the exact matcher has always used.
+    * ``lemma_run`` -- shared dictionary forms, unbroken. The axis the first release gated on
+      and the one the consumer's own map of false positives is drawn in.
+    * ``chain`` -- shared dictionary forms in the verse's order, gaps allowed. This is what
+      finds a quotation whose grammar has been rewritten, and what no run can see: Ignatius
+      at Matthew 10:16 runs three and chains nine, Aristotle at Luke 4:14 runs two and chains
+      two.
+    * ``bits`` -- surprisal of everything shared. Two common words are not evidence however
+      neatly they are arranged.
+
+    A gate is a conjunction: every axis it names must be met. A :class:`Searcher` holds
+    several and admits a match that satisfies **any** of them, because they are complementary
+    rather than nested -- over 150,000 words the consumer measured, a run gate contributed 20
+    findings a chain gate missed and the chain gate contributed 734 the run gate missed.
+    """
+
+    run: int = 0
+    lemma_run: int = 0
+    chain: int = 0
+    bits: float = 0.0
+
+    def admits(self, run: int, lemma_run: int, chain: int, bits: float) -> bool:
+        return (
+            run >= self.run
+            and lemma_run >= self.lemma_run
+            and chain >= self.chain
+            and bits >= self.bits
+        )
+
+    def __str__(self) -> str:
+        named = [
+            f"{name}>={value:g}"
+            for name, value in (
+                ("run", self.run),
+                ("lemma_run", self.lemma_run),
+                ("chain", self.chain),
+                ("bits", self.bits),
+            )
+            if value
+        ]
+        return " ".join(named) or "anything"
+
+    @classmethod
+    def parse(cls, text: str) -> Gate:
+        """``"0:4:0:40"`` -- run, lemma_run, chain, bits -- as the command line spells it."""
+        parts = text.split(":")
+        if len(parts) != 4:
+            raise ValueError(f"a gate is run:lemma_run:chain:bits, not {text!r}")
+        return cls(int(parts[0]), int(parts[1]), int(parts[2]), float(parts[3]))
+
+
+#: What a graded match must reach by default: a union, because quotations come in shapes no
+#: single gate covers, and because the three axes are complementary rather than nested.
+#:
+#: Measured over 40,103 words of Greek by authors who died before there was a New Testament,
+#: where every match is false by construction:
+#:
+#: ===========================  ==================
+#: gate                          false / 1,000
+#: ===========================  ==================
+#: ``lemma_run>=2 bits>=60``     0.0000
+#: ``lemma_run>=4 bits>=40``     0.0000
+#: ``lemma_run>=5 bits>=35``     0.0000
+#: ``chain>=8 bits>=40``         0.0000
+#: ``chain>=4 bits>=50``         0.0249
+#: ``chain>=5 bits>=40``         0.0748
+#: ``chain>=6 bits>=35``         0.1247
+#: ``run>=3 bits>=20``           0.3491
+#: ===========================  ==================
+#:
+#: The first three are the consumer's own recommendation and they are kept. The fourth is
+#: the addition, and it is the one that matters: Ignatius quoting Matthew 10:16 -- the case
+#: this whole feature was asked for -- chains nine at 57.6 bits and is admitted by nothing
+#: else here. A low chain is *not* safe, whatever its bits: at chain 4, 5 and 6 the rate
+#: climbs steeply, because order over a handful of words is cheap to come by. Eight is where
+#: it stops being cheap.
+#:
+#: One caveat on the zeros, and it is the honest reading: 40,103 words can bound a rate at
+#: 0.025 per thousand and no finer. The consumer measured their own union at 0.0187 over
+#: three million words, which this sample cannot tell from zero. `tools/calibrate_inflected.py
+#: --control` is what they should point at their full corpus.
+DEFAULT_GATES: Final = (
+    Gate(chain=8, bits=40.0),
+    Gate(lemma_run=4, bits=40.0),
+    Gate(lemma_run=5, bits=35.0),
+    Gate(lemma_run=2, bits=60.0),
+)
+
 
 #: Shortest identically spelled run that may be graded :data:`PARTIAL`.
 #:
@@ -984,7 +1183,13 @@ class Match:
     """The longest run of identically spelled words. Today's whole rule, kept visible on
     every match so a caller can see what a grade rests on and reproduce it."""
     lemma_run: int = 0
-    """The longest run of words shared as dictionary forms."""
+    """The longest *unbroken* run of words shared as dictionary forms."""
+    chain: int = 0
+    """The longest run of shared dictionary forms **in the verse's order**, gaps allowed.
+
+    Never less than :attr:`lemma_run`, and the one that tells a re-inflected quotation from a
+    coincidence: Ignatius reuses nine of Matthew 10:16's words in Matthew's order with his own
+    words between them, where Aristotle brushing a verse twice chains two."""
     bits: float = 0.0
     """Total surprisal of every dictionary form the two share, against the frequencies of
     the language's own verses. Two shared common words score near nothing however correctly
@@ -992,6 +1197,10 @@ class Match:
     matched_lemmas: tuple[str, ...] = ()
     """Every dictionary form the passage and the quotation share. The evidence itself, so a
     caller who mistrusts the gates can weigh it again."""
+    formula: str | None = None
+    """The citation formula introducing this quotation, where one does -- *it is written*,
+    *the scripture says*. Reported and never acted on: see :mod:`biblereference.formulae`
+    for the measurement that says why it is evidence but not a threshold."""
 
     @property
     def ambiguous(self) -> bool:
@@ -1094,8 +1303,10 @@ class Match:
             "grade": self.grade,
             "run": self.run,
             "lemma_run": self.lemma_run,
+            "chain": self.chain,
             "bits": round(self.bits, 2),
             "matched_lemmas": list(self.matched_lemmas),
+            "formula": self.formula,
             "translations": [
                 {
                     "corpus": w.corpus,
@@ -1136,8 +1347,9 @@ class Searcher:
         composed: int | None = None,
         inflected: bool = False,
         min_grade: str | None = None,
-        min_lemma_run: int = 2,
-        min_bits: float = 15.0,
+        gates: Sequence[Gate] | None = None,
+        min_lemma_run: int | None = None,
+        min_bits: float | None = None,
     ) -> None:
         # `min_lemma_run` and `min_bits` are measured rather than chosen. Over 500 quotations
         # the Patristic Text Archive's editors marked by hand, scored on landing on the
@@ -1227,8 +1439,14 @@ class Searcher:
         # only where the spelling already agreed -- and it is nobody's intention by
         # accident, so asking for inflected matching admits inflected matches.
         self._min_grade = min_grade or (INDIRECT if inflected else DIRECT)
-        self._min_lemma_run = min_lemma_run
-        self._min_bits = min_bits
+        # `min_lemma_run=`/`min_bits=` remain as the one-gate shorthand they were shipped as.
+        # Naming either builds that gate and nothing else, so code written against the first
+        # release keeps its exact meaning rather than silently acquiring a union.
+        if min_lemma_run is not None or min_bits is not None:
+            if gates is not None:
+                raise ValueError("pass gates= or min_lemma_run=/min_bits=, not both")
+            gates = (Gate(lemma_run=min_lemma_run or 0, bits=min_bits or 0.0),)
+        self._gates = tuple(gates) if gates is not None else DEFAULT_GATES
         self._lexicon: Lexicon | None = None
         self._weights: LemmaWeights | None = None
         self._quotation = quotation
@@ -1749,7 +1967,7 @@ class Searcher:
                 graded = self._grade(readings, query, witnesses[0], language, weigh, lexicon)
                 if graded is None:
                     continue
-                grade, run, found, weight, evidence = graded
+                grade, run, found, chained, weight, evidence = graded
                 out.append(
                     Match(
                         passage,
@@ -1759,6 +1977,7 @@ class Searcher:
                         grade=grade,
                         run=run,
                         lemma_run=found.length,
+                        chain=chained.length,
                         bits=weight,
                         matched_lemmas=evidence,
                     )
@@ -1773,7 +1992,7 @@ class Searcher:
         language: str,
         weigh: Callable[[str], float],
         lexicon: Lexicon,
-    ) -> tuple[str, int, LemmaRun, float, tuple[str, ...]] | None:
+    ) -> tuple[str, int, LemmaRun, LemmaChain, float, tuple[str, ...]] | None:
         """What footing this passage rests on, or ``None`` if it rests on too little.
 
         Two ways in, and the shorter one is not the looser one. A run of identical spellings
@@ -1789,15 +2008,19 @@ class Searcher:
         theirs = lemma_readings(spelled, language, lexicon)
         run = longest_run(query, spelled)
         found = lemma_run(readings, theirs, weigh)
+        chained = lemma_chain(readings, theirs, weigh)
         evidence = shared_lemmas(readings, theirs)
-        weight = shared_bits(readings, theirs, weigh)
-        if weight < self._min_bits:
+        # Weighed over what actually matched, not over the window it was seen through. The
+        # chain's span *is* the quotation's extent, so there is no other span this could be
+        # taken over -- which is the whole of why a score no longer depends on how a document
+        # happened to be sliced.
+        first, last = chained.span
+        weight = shared_bits(readings[first:last], theirs, weigh) if last > first else 0.0
+        if not any(gate.admits(run, found.length, chained.length, weight) for gate in self._gates):
             return None
         if _MIN_PARTIAL_RUN <= run < self._min_run_for(len(query)):
-            return (PARTIAL, run, found, weight, evidence)
-        if found.length >= self._min_lemma_run:
-            return (INDIRECT, run, found, weight, evidence)
-        return None
+            return (PARTIAL, run, found, chained, weight, evidence)
+        return (INDIRECT, run, found, chained, weight, evidence)
 
     def _lemma_candidates(self, terms: Sequence[str], limit: int) -> list[tuple[int, float]]:
         """Indexed lemma readings sharing dictionary forms with the query, best first."""
@@ -1880,8 +2103,59 @@ class Searcher:
                 votes.setdefault(key, set()).add(index)
                 weight[key] = weight.get(key, 0.0) + best
 
+            # A second nomination, by dictionary form. Without it the graded path is
+            # unreachable from a scan however good its gates are: a re-inflected quotation
+            # shares almost no *spellings* with its verse, so the exact sweep above never
+            # puts that chapter on the list, and nothing that is not on the list is ever
+            # scored. Ignatius at Matthew 10:16 shares one spelling and nine dictionary
+            # forms, and it is the nine that have to do the nominating.
+            for key, best in self._lemma_votes(chunk).items():
+                votes.setdefault(key, set()).add(index)
+                weight[key] = weight.get(key, 0.0) + best
+
         ranked = sorted(votes, key=lambda key: weight[key])
         return [(key, votes[key]) for key in ranked[:_SCAN_CHAPTERS]]
+
+    def _formula_before(
+        self, words: Sequence[tuple[str, int, int]], low: int, language: str | None
+    ) -> str | None:
+        """Whether this quotation was announced, and with what.
+
+        Read off the words as written rather than off the folded tokens, because the reach is
+        counted in words of the document and the document is what the caller will look at.
+        """
+        if not language or low <= 0:
+            return None
+        from .formulae import REACH, preceding
+
+        before = " ".join(word for word, _, _ in words[max(0, low - REACH) : low])
+        return preceding(before + " ", len(before) + 1, language)
+
+    def _lemma_votes(self, chunk: Sequence[str]) -> dict[tuple[str, str, int], float]:
+        """Chapters this window points at by dictionary form, scored as the exact arm scores.
+
+        Silent when the feature is off or the language has no lexicon, so a scan that asked
+        for nothing pays nothing: no query is built and no table is opened.
+        """
+        if not self._inflected:
+            return {}
+        spoken = {m.language for m in self._corpora.values()} & set(LEMMA_LANGUAGES)
+        found: dict[tuple[str, str, int], float] = {}
+        for language in sorted(spoken):
+            lexicon, weights = self._lemma_tools(language)
+            weigh = weights.of(language)
+            readings = lemma_readings(list(chunk), language, lexicon)
+            terms = sorted(
+                {lemma for reading in readings for lemma in reading},
+                key=lambda lemma: -weigh(lemma),
+            )[:_SWEEP_TERMS]
+            candidates = self._lemma_candidates(terms, _SWEEP_CANDIDATES)
+            ranks = {
+                text_id: -1.0 / (1 + position) for position, (text_id, _) in enumerate(candidates)
+            }
+            for key, (_, best) in self._located(list(ranks), ranks, "lemma_ref").items():
+                found[key] = min(found.get(key, 0.0), best)
+        return found
 
     def _score_cluster(
         self,
@@ -1894,7 +2168,36 @@ class Searcher:
         window: int,
         stride: int,
     ) -> Match | None:
-        """Score one run of windows that all pointed at the same chapter."""
+        """Score one run of windows that all pointed at the same chapter.
+
+        The exact path answers first and its answer is final. Only where it declines -- and
+        it declines in several places, from finding no candidate to failing the quotation
+        gate -- is the same cluster read again by dictionary form. Trying the graded path at
+        one chosen point inside the exact one missed most of them: a re-inflected quotation
+        shares so few spellings that the exact retrieval gives up before any gate is reached.
+        """
+        found = self._exact_cluster(vrs, book, chapter, cluster, tokens, words, window, stride)
+        if found is not None or not self._inflected:
+            return found
+        first_token = max(0, cluster[0] - stride)
+        last_token = min(len(tokens), cluster[-1] + window + stride)
+        query = tokens[first_token:last_token]
+        if len(query) < _MIN_QUOTE_WORDS:
+            return None
+        return self._graded_cluster(vrs, book, chapter, query, first_token, tokens, words)
+
+    def _exact_cluster(
+        self,
+        vrs: str,
+        book: str,
+        chapter: int,
+        cluster: Sequence[int],
+        tokens: Sequence[str],
+        words: Sequence[tuple[str, int, int]],
+        window: int,
+        stride: int,
+    ) -> Match | None:
+        """Score one run of windows that all pointed at the same chapter, by spelling."""
         # A stride of slack either side, because a quotation that begins near the end of
         # one window and finishes in the next is only partly inside either of them.
         # _matched_span trims the slack back off once the alignment says where the
@@ -1949,6 +2252,101 @@ class Searcher:
             # The rule that found it, recorded. `_is_quotation` just measured this and
             # threw it away; a grade a caller cannot check is not evidence.
             run=longest_run(tokens[low:high], _tokens(exact[0].text, self._language_of(exact[0]))),
+            formula=self._formula_before(words, low, self._language_of(exact[0])),
+        )
+
+    def _graded_cluster(
+        self,
+        vrs: str,
+        book: str,
+        chapter: int,
+        query: Sequence[str],
+        first_token: int,
+        tokens: Sequence[str],
+        words: Sequence[tuple[str, int, int]],
+    ) -> Match | None:
+        """Look at one cluster again by dictionary form, and weigh what actually matched.
+
+        The chain does three jobs at once here, which is why it is worth computing rather
+        than merely counting. It says *whether* the words agree in the verse's order, it says
+        *where* in the searched text they do, and the weight is then taken over exactly that
+        stretch. So a quotation scores the same whether the sweep happened to cut it into one
+        window or two -- a score that depended on the slicing was not a score of the quotation
+        at all, and it is what made every figure measured through a window understate itself.
+        """
+        # The language of the corpora numbered this way, which is what decides whether there
+        # is a lexicon to look in at all.
+        language = next((m.language for m in self._corpora.values() if m.versification == vrs), "")
+        if language not in LEMMA_LANGUAGES:
+            return None
+        lexicon, weights = self._lemma_tools(language)
+        weigh = weights.of(language)
+        mine = lemma_readings(list(query), language, lexicon)
+
+        terms = sorted(
+            {lemma for reading in mine for lemma in reading}, key=lambda lemma: -weigh(lemma)
+        )[:_QUERY_TERMS]
+        candidates = self._lemma_candidates(terms, _CANDIDATES)
+        verses = {
+            key: found
+            for key, (found, _) in self._located(
+                [text_id for text_id, _ in candidates], {}, "lemma_ref"
+            ).items()
+        }.get((vrs, book, chapter))
+        if not verses:
+            return None
+
+        best: tuple[LemmaChain, int, int, list[Witness]] | None = None
+        for first, last in self._runs(verses):
+            witnesses = self._witnesses(vrs, book, chapter, first, last, query)
+            if not witnesses:
+                continue
+            theirs = lemma_readings(_tokens(witnesses[0].text, language), language, lexicon)
+            chained = lemma_chain(mine, theirs, weigh)
+            if chained.length and (
+                best is None or (chained.length, chained.bits) > (best[0].length, best[0].bits)
+            ):
+                best = (chained, first, last, witnesses)
+        if best is None:
+            return None
+
+        chained, start, end, witnesses = best
+        low, high = first_token + chained.span[0], first_token + chained.span[1]
+        if high - low < _MIN_QUOTE_WORDS or high > len(words):
+            return None
+
+        # Re-read the verse against the trimmed span, so the witness that answers is the one
+        # that answers *this* quotation rather than the padded window around it.
+        held = self._witnesses(vrs, book, chapter, start, end, tokens[low:high])
+        if not held:
+            return None
+        graded = self._grade(
+            lemma_readings(list(tokens[low:high]), language, lexicon),
+            tokens[low:high],
+            held[0],
+            language,
+            weigh,
+            lexicon,
+        )
+        if graded is None:
+            return None
+        grade, run, found, chain_here, weight, evidence = graded
+        return Match(
+            VerseRange(
+                VerseRef(book, chapter, start, vrs=vrs), VerseRef(book, chapter, end, vrs=vrs)
+            ),
+            tuple(held[:20]),
+            span=(words[low][1], words[high - 1][2]),
+            quoted=_original(words, low, high),
+            composed=self._composed,
+            identified_at=self._identified,
+            grade=grade,
+            run=run,
+            lemma_run=found.length,
+            chain=chain_here.length,
+            bits=weight,
+            matched_lemmas=evidence,
+            formula=self._formula_before(words, low, language),
         )
 
 

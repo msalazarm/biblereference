@@ -234,7 +234,9 @@ def test_scan_and_search_return_what_they_returned_before(home: DataHome) -> Non
 #: consumer asked for the grade in the same document. Listing them here is what keeps the
 #: difference between the two honest: an addition has to be named to be tolerated, and
 #: anything else moving still fails.
-ADDED: frozenset[str] = frozenset({"grade", "run", "lemma_run", "bits", "matched_lemmas"})
+ADDED: frozenset[str] = frozenset(
+    {"grade", "run", "lemma_run", "chain", "bits", "matched_lemmas", "formula"}
+)
 
 
 def _without_additions(value: Any) -> Any:
