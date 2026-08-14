@@ -308,3 +308,18 @@ def test_gates_travel_as_a_repeatable_parameter() -> None:
     assert options["gates"] == [Gate(lemma_run=4, bits=40.0), Gate(chain=8, bits=40.0)]
     with pytest.raises(ValueError, match="run:lemma_run:chain:bits"):
         serve.search_options({"gate": ["4:40"]})
+
+
+def test_the_listen_backlog_is_not_five() -> None:
+    """`socketserver` defaults it to 5, and the excess is **reset by the kernel** -- no log
+    line, no error, because the connection never reaches the application.
+
+    A consumer opening two dozen concurrent scans hit exactly that and could not tell it from
+    the server having crashed. What executes at once is `--interactive-workers`; this only
+    decides whether the rest wait or are refused, which is the difference between a slow
+    server and a broken one.
+    """
+    import socketserver
+
+    assert socketserver.TCPServer.request_queue_size == 5, "the default this exists to override"
+    assert serve.Server.request_queue_size >= 128

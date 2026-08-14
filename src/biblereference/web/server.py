@@ -305,6 +305,18 @@ class Server(ThreadingHTTPServer):
 
     daemon_threads = True
 
+    #: The `listen()` backlog: connections the kernel will hold while every serving thread is
+    #: busy. `socketserver` defaults it to 5, which is a 1990s number and wrong here -- a
+    #: client opening a few dozen concurrent scans gets the excess **reset by the kernel**,
+    #: with no log line and no error on this side, because the connection never reached the
+    #: application at all. That is indistinguishable from the server crashing, and it is what
+    #: a consumer hit at 24 concurrent requests.
+    #:
+    #: 128 is the usual ceiling `somaxconn` allows without tuning. It does not make the
+    #: server faster -- what executes at once is `--interactive-workers` -- it makes the
+    #: excess *wait* rather than be refused, which is the difference between slow and broken.
+    request_queue_size = 128
+
     def handle_error(self, request: Any, client_address: Any) -> None:
         import sys
 
@@ -615,8 +627,9 @@ def serve(
 
     if announce:
         print(
-            f"{len(corpora())} corpora · {workers} job workers + "
-            f"{interactive_workers} interactive, of {os.cpu_count()} cores\n"
+            f"{len(corpora())} corpora · {interactive_workers} interactive workers "
+            f"(/api/search, /api/scan) + {workers} job workers (/api/jobs), "
+            f"of {os.cpu_count()} cores\n"
             f"http://{host}:{port}  (ctrl-c to stop)",
             flush=True,
         )

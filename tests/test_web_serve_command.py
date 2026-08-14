@@ -160,3 +160,29 @@ def test_the_old_script_still_starts_the_new_server() -> None:
     assert done.returncode == 0
     assert "--interactive-workers" in done.stdout
     assert "serve" in done.stdout
+
+
+def test_one_number_decides_how_many_cores_the_server_uses() -> None:
+    """Two knobs was a trap.
+
+    The pools are separate process pools and neither lends to the other, so an operator who
+    said `--workers 28` on a 32-thread box got 28 processes waiting for batch jobs and every
+    interactive scan queued behind the *other* pool's four. He had said "use 28 cores" and
+    meant it. `--cores` is what he was reaching for.
+    """
+    import argparse
+
+    from biblereference.cli import _pool_sizes
+
+    def sizes(**named: int | None) -> dict[str, int]:
+        asked = {"cores": None, "interactive_workers": None, "workers": None, **named}
+        return _pool_sizes(argparse.Namespace(**asked))
+
+    assert sum(sizes(cores=30).values()) == 30, "the whole budget is spent"
+    # Naming one pool gives the rest to the other rather than halving it and leaving cores
+    # idle, which is the fault this replaced.
+    assert sizes(cores=30, workers=4) == {"workers": 4, "interactive_workers": 26}
+    assert sizes(cores=30, interactive_workers=28) == {"workers": 2, "interactive_workers": 28}
+    # Naming both is taken at face value: an operator who has said it twice means it.
+    assert sizes(cores=30, interactive_workers=20, workers=10)["workers"] == 10
+    assert min(sizes(cores=1).values()) >= 1, "never zero, however small the budget"
