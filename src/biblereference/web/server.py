@@ -597,7 +597,6 @@ def serve(
     token: str | None = None,
     max_body: int | None = None,
     workers: int | None = None,
-    interactive_workers: int = 4,
     data_home: Path | None = None,
     announce: bool = True,
 ) -> None:
@@ -620,16 +619,15 @@ def serve(
     if workers is None:
         workers = max(1, (os.cpu_count() or 2) - 1)
     # After the environment, so the spawned workers see it.
-    JOBS = Jobs(workers, interactive_workers)
+    JOBS = Jobs(workers)
     # And before the socket opens, so the half-second of whole-table queries is spent while
     # nobody is waiting rather than by whoever asks first.
     prewarm()
 
     if announce:
         print(
-            f"{len(corpora())} corpora · {interactive_workers} interactive workers "
-            f"(/api/search, /api/scan) + {workers} job workers (/api/jobs), "
-            f"of {os.cpu_count()} cores\n"
+            f"{len(corpora())} corpora · {workers} workers of {os.cpu_count()} cores, "
+            f"shared by /api/search, /api/scan and /api/jobs\n"
             f"http://{host}:{port}  (ctrl-c to stop)",
             flush=True,
         )

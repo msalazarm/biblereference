@@ -71,9 +71,7 @@ def serving(named_home: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
 
     port = free_port()
     thread = threading.Thread(
-        target=lambda: server.serve(
-            port=port, workers=1, interactive_workers=1, data_home=named_home, announce=False
-        ),
+        target=lambda: server.serve(port=port, workers=1, data_home=named_home, announce=False),
         daemon=True,
     )
     thread.start()
@@ -90,7 +88,6 @@ def serving(named_home: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
     finally:
         if server.JOBS is not None:
             server.JOBS._pool.shutdown(wait=False, cancel_futures=True)
-            server.JOBS._interactive.shutdown(wait=False, cancel_futures=True)
 
 
 def get(base: str, path: str) -> dict:  # type: ignore[type-arg]
@@ -158,31 +155,31 @@ def test_the_old_script_still_starts_the_new_server() -> None:
         [sys.executable, str(tools), "--help"], capture_output=True, text=True, timeout=300
     )
     assert done.returncode == 0
-    assert "--interactive-workers" in done.stdout
     assert "serve" in done.stdout
+    assert "--cores" in done.stdout
 
 
 def test_one_number_decides_how_many_cores_the_server_uses() -> None:
-    """Two knobs was a trap.
+    """Two knobs was a trap, and evening them up only halved it.
 
-    The pools are separate process pools and neither lends to the other, so an operator who
-    said `--workers 28` on a 32-thread box got 28 processes waiting for batch jobs and every
-    interactive scan queued behind the *other* pool's four. He had said "use 28 cores" and
-    meant it. `--cores` is what he was reaching for.
+    The pools could not lend to each other, so an operator who said `--workers 28` on a
+    32-thread box got 28 processes waiting for batch jobs and every scan queued behind the
+    other pool's four; sized evenly, he got half the machine and both arms of his own
+    measurement plateaued at the same number, which looked like a shared bottleneck and was
+    two halves of equal size. There is one pool now, and one number for it.
     """
     import argparse
 
     from biblereference.cli import _pool_sizes
 
-    def sizes(**named: int | None) -> dict[str, int]:
+    def workers(**named: int | None) -> int:
         asked = {"cores": None, "interactive_workers": None, "workers": None, **named}
-        return _pool_sizes(argparse.Namespace(**asked))
+        return _pool_sizes(argparse.Namespace(**asked))["workers"]
 
-    assert sum(sizes(cores=30).values()) == 30, "the whole budget is spent"
-    # Naming one pool gives the rest to the other rather than halving it and leaving cores
-    # idle, which is the fault this replaced.
-    assert sizes(cores=30, workers=4) == {"workers": 4, "interactive_workers": 26}
-    assert sizes(cores=30, interactive_workers=28) == {"workers": 2, "interactive_workers": 28}
-    # Naming both is taken at face value: an operator who has said it twice means it.
-    assert sizes(cores=30, interactive_workers=20, workers=10)["workers"] == 10
-    assert min(sizes(cores=1).values()) >= 1, "never zero, however small the budget"
+    assert workers(cores=30) == 30
+    # The old flags still land somewhere sensible rather than erroring, because there are
+    # systemd units carrying them -- and they now mean what their operator meant by them.
+    assert workers(workers=28) == 28
+    assert workers(interactive_workers=28) == 28
+    assert workers(cores=30, workers=28) == 30, "the largest ask wins rather than the last"
+    assert workers() >= 1, "and a default, on a machine that was told nothing"

@@ -205,6 +205,12 @@ TASKS: Final[dict[str, Callable[..., Any]]] = {
 BATCH_TASKS: Final[dict[str, Callable[..., Any]]] = {"scan": job_scan}
 
 
+#: Documents per chunk, at most. Not a tuning knob for throughput -- the share-based size
+#: below already handles that -- but the ceiling on how long a reader waits when a request
+#: lands while a sweep is running. See :meth:`Jobs.submit_batch`.
+_CHUNK_CEILING: Final = 12
+
+
 class Jobs:
     """A handful of long walks, running at once, that the client polls for.
 
@@ -213,17 +219,26 @@ class Jobs:
     the work goes to a process pool; the client asks again later.
     """
 
-    def __init__(self, workers: int, interactive: int = 4) -> None:
+    def __init__(self, workers: int) -> None:
+        """
+        :param workers: Processes, and the only number here. It was two for a while -- a
+            pool for batch jobs and a small separate one for single requests -- and two
+            pools that cannot lend to each other strand whichever is idle. An operator who
+            said "use 28 cores" on a 32-thread machine got four, because he was driving
+            `/api/scan` and had sized the other pool; and when the split was evened up he
+            got half the machine instead, for the same reason in the other direction. Both
+            arms of his measurement then plateaued at the same throughput, which looked
+            like a shared bottleneck and was simply two halves of equal size.
+
+            The isolation the split protected is real -- a batch occupies every worker for
+            hours, and a reader must not wait behind it -- and is kept in `submit_batch`
+            instead, by bounding how long any one chunk can hold a worker.
+        """
         self._workers = workers
         # Spawn, not fork. A forked child inherits this process's SQLite connections, and
         # two processes using one connection is how a database file gets corrupted.
         spawn = multiprocessing.get_context("spawn")
         self._pool = ProcessPoolExecutor(max_workers=workers, mp_context=spawn)
-        # A separate, small pool for single requests. Sharing one would mean a running
-        # batch -- which is the point of the batch, and occupies every worker for hours --
-        # left /api/scan queued behind it while /api/health answered instantly, which is
-        # exactly the shape of failure that got this reported.
-        self._interactive = ProcessPoolExecutor(max_workers=interactive, mp_context=spawn)
         self._lock = threading.Lock()
         self._ids = itertools.count(1)
         self._jobs: dict[str, dict[str, Any]] = {}
@@ -239,8 +254,13 @@ class Jobs:
 
         The waiting itself is cheap -- a blocked thread holds no GIL -- so the serving
         threads stay free to accept work while the pool is busy.
+
+        The same pool as the batch jobs, which is what lets a machine be fully used by
+        whichever kind of work has actually arrived. What stops a running sweep from burying
+        this is the chunk bound in :meth:`submit_batch`: a request waits behind at most one
+        chunk per worker, not behind the sweep.
         """
-        return self._interactive.submit(function, *args).result()
+        return self._pool.submit(function, *args).result()
 
     def _open(self, task: str, params: dict[str, Any], total: int | None = None) -> dict[str, Any]:
         job_id = f"{task}-{next(self._ids)}"
@@ -285,7 +305,12 @@ class Jobs:
             self._settle(record["id"], {"found": {}, "failed": {}})
             return record
 
-        size = max(1, min(64, len(work) // (self._workers * 4) or 1))
+        # Bounded above by `_CHUNK_CEILING` as well as by the worker count. The share-based
+        # size alone is what a sweep of forty thousand documents wants -- fewer, fatter
+        # futures -- but a fat chunk is also how long an interactive request waits when it
+        # arrives mid-sweep, since a worker finishes its chunk before taking anything else.
+        # A dozen documents is a few seconds; the whole sweep would be hours.
+        size = max(1, min(_CHUNK_CEILING, len(work) // (self._workers * 4) or 1))
         chunks = [work[i : i + size] for i in range(0, len(work), size)]
         remaining = {"chunks": len(chunks)}
         merged: dict[str, Any] = {"found": {}, "failed": {}}

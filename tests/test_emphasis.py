@@ -275,3 +275,58 @@ def test_a_span_ending_on_a_contraction_covers_what_was_written() -> None:
     character. Otherwise a span ending on ΘΝ would mark up only the theta."""
     text = "ἦν πρὸς τὸν ΘΝ"
     assert apply_spans(text, [Emphasis("προσ", "θεον", "italic")], "grc") == ("ἦν *πρὸς τὸν ΘΝ*")
+
+
+# --------------------------------------------------------------------------------------
+# The fold is memoised, and that must be invisible
+# --------------------------------------------------------------------------------------
+
+
+def test_folding_the_same_text_twice_costs_nothing_the_second_time() -> None:
+    """One scan folded 33,292 times over 8,008 distinct inputs -- three quarters of it
+    repeated, because every stage that compares a quotation with a verse re-folds the verse.
+    """
+    from biblereference.emphasis import _folded
+
+    _folded.cache_clear()
+    text = "Ἰδοὺ ἐγὼ ἀποστέλλω ὑμᾶς ὡς πρόβατα ἐν μέσῳ λύκων"
+    first = fold(text, "grc")
+    assert _folded.cache_info().misses == 1
+    for _ in range(20):
+        assert fold(text, "grc") == first
+    assert _folded.cache_info().misses == 1, "the same question was asked again"
+    assert _folded.cache_info().hits == 20
+
+
+def test_the_cache_does_not_conflate_languages() -> None:
+    """The one way a memoised fold could corrupt a corpus silently.
+
+    `la` folds *v* to *u* and `en` must not -- it would turn *have* into *haue* -- so a cache
+    keyed on the text alone would hand one language the other's answer, and every subsequent
+    comparison would be against a word nobody wrote.
+    """
+    latin, english = fold("VIVAT", "la"), fold("VIVAT", "en")
+    assert latin != english
+    assert fold("VIVAT", "la") == latin, "and again, from the cache this time"
+    assert fold("VIVAT", "en") == english
+
+
+def test_the_cache_does_not_conflate_the_orthographic_fold() -> None:
+    """`orthographic` collapses itacism, which makes ὑμεῖς and ἡμεῖς -- *you* and *we* -- one
+    string. Right against a manuscript, wrong against an edited text, and catastrophic if a
+    cache handed one caller the other's answer."""
+    plain, collapsed = fold("ὑμεῖς", "grc"), fold("ὑμεῖς", "grc", orthographic=True)
+    assert plain != collapsed
+    assert fold("ὑμεῖς", "grc") == plain
+    assert fold("ὑμεῖς", "grc", orthographic=True) == collapsed
+
+
+def test_the_keyword_and_positional_spellings_are_one_entry() -> None:
+    """`lru_cache` keys on the call signature, so `fold(x, "grc")` and `fold(x,
+    language="grc")` would otherwise be two entries answering one question."""
+    from biblereference.emphasis import _folded
+
+    _folded.cache_clear()
+    fold("ἀλήθεια", "grc")
+    fold("ἀλήθεια", language="grc")
+    assert _folded.cache_info().misses == 1

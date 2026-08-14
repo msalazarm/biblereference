@@ -19,6 +19,7 @@ import re
 import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from itertools import pairwise
 from typing import Final
 
@@ -264,6 +265,30 @@ def fold(text: str, language: str | None = None, *, orthographic: bool = False) 
 
     Exposed because it is also the right comparison for checking a supplied quotation and
     for telling two editions of one text apart.
+
+    Memoised. One document scan called this 33,292 times with 8,008 distinct inputs -- the
+    same verse folded 94 times, ``καὶ`` folded 203 -- because every stage that compares a
+    quotation with a verse re-folds the verse from scratch. Safe because the answer depends
+    on nothing but the three arguments: verse text does not change under a running process,
+    and where it changes on disk the store is rebuilt and the process with it.
+    """
+    return _folded(text, language, orthographic)
+
+
+#: Entries, not bytes. A verse is a few hundred characters and a folded copy about as much,
+#: so this is tens of megabytes at worst -- per worker process, which is what to multiply by
+#: when sizing a server. Large enough to hold every verse of the corpora a scan touches,
+#: which is the working set that matters; the words of the searched text are a rounding error
+#: beside it.
+_FOLD_CACHE: Final = 200_000
+
+
+@lru_cache(maxsize=_FOLD_CACHE)
+def _folded(text: str, language: str | None, orthographic: bool) -> str:
+    """The cached body of :func:`fold`.
+
+    Positional, because ``lru_cache`` keys on the call signature and ``fold(x, "grc")`` and
+    ``fold(x, language="grc")`` would otherwise be two entries for one question.
     """
     return _fold(text, language, orthographic=orthographic).text
 

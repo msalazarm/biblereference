@@ -533,11 +533,19 @@ request thread gets one core's worth of throughput however many requests arrive 
 Every search and scan therefore runs in a worker process, not on the serving thread. Eight
 concurrent scans now finish in 1.36× the time of one rather than eight times it.
 
-Two pools, because one would mean a running batch — which occupies every worker for hours,
-that being the point of it — left an ordinary `/api/scan` queued behind the whole thing.
-`--workers` sizes the job pool (default cores − 1) and `--interactive-workers` the one kept
-for single requests (default 4). A scan during a running 40-document batch costs 18.8s
-against 14.6s idle: contention, not starvation.
+**One pool, and `--cores` is the only number** — every request draws on the same workers,
+whether it is a search, a scan or a batch job. It was two pools for a while, which sounds
+prudent and is not: two pools that cannot lend to each other strand whichever is idle. An
+operator who said `--workers 28` on a 32-thread machine got four, because that flag sized
+the pool he was not using; and when the split was evened up he got half the machine, and
+both arms of his throughput measurement plateaued at the same number — which looked like a
+shared bottleneck and was two halves of equal size.
+
+What the split was protecting is real: a batch occupies every worker for hours and a reader
+must not wait behind it. That is kept by bounding the batch *chunk* instead, so a request
+arriving mid-sweep waits behind at most one chunk per worker — seconds — rather than behind
+the sweep. `--workers` and `--interactive-workers` are still accepted and now both mean
+`--cores`.
 
 ## Data home
 

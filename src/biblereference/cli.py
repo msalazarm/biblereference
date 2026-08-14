@@ -1017,50 +1017,27 @@ def _serve_arguments(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=None,
         metavar="N",
-        help="how many cores the server may use in total, across both pools "
-        "(default: all but one). Say 30 on a 32-thread box to leave two for everything else",
+        help="how many cores the server may use (default: all but one). Say 30 on a "
+        "32-thread box to leave two for everything else. Every request -- search, scan and "
+        "the batch jobs alike -- draws on the same workers",
     )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=None,
-        help="processes for batch jobs -- `POST /api/jobs`. Defaults to half of --cores",
-    )
-    parser.add_argument(
-        "--interactive-workers",
-        type=int,
-        default=None,
-        metavar="N",
-        help="processes for single /api/search and /api/scan requests. THIS, not --workers, "
-        "is what decides how many of those run at once. Defaults to half of --cores",
-    )
+    # Kept because there are systemd units and a README carrying them. Both now mean the
+    # same thing as --cores, since there is only one pool for them to have meant.
+    parser.add_argument("--workers", type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--interactive-workers", type=int, default=None, help=argparse.SUPPRESS)
 
 
 def _pool_sizes(args: argparse.Namespace) -> dict[str, int]:
-    """Split the core budget between the two pools.
+    """How many worker processes to run. One number, because there is one pool.
 
-    One number, because two was a trap. The pools are separate process pools and neither
-    lends to the other, so a machine told `--workers 28` on 32 threads ran every interactive
-    scan through the *other* pool -- four processes -- with 28 idle behind them. The operator
-    had said "use 28 cores" and meant it; what he got was four.
-
-    Half and half, because the server cannot know which kind of work is coming and an even
-    split is the only division that is never badly wrong. Name either pool explicitly to
-    override it: a box driven by concurrent `/api/scan` wants nearly all of them interactive,
-    and one running a batch sweep through `/api/jobs` wants nearly all of them the other way.
+    There were two for a while, and two pools that cannot lend to each other strand whichever
+    is idle. An operator who said `--workers 28` on a 32-thread machine got four, because
+    that flag sized the pool he was not using; evening the split up gave him half the machine
+    instead. `--workers` and `--interactive-workers` are still accepted, and now both say the
+    same thing as `--cores`, because there is no longer a second pool for them to distinguish.
     """
-    cores = args.cores or max(1, (os.cpu_count() or 2) - 1)
-    named, other = args.interactive_workers, args.workers
-    if named is not None and other is not None:
-        return {"workers": other, "interactive_workers": named}
-    # Naming one pool spends the rest of the budget on the other, rather than halving it and
-    # quietly leaving cores unused -- which is the whole complaint this replaced.
-    if named is not None:
-        return {"workers": max(1, cores - named), "interactive_workers": named}
-    if other is not None:
-        return {"workers": other, "interactive_workers": max(1, cores - other)}
-    interactive = max(1, cores // 2)
-    return {"workers": max(1, cores - interactive), "interactive_workers": interactive}
+    asked = [n for n in (args.cores, args.interactive_workers, args.workers) if n is not None]
+    return {"workers": max(asked) if asked else max(1, (os.cpu_count() or 2) - 1)}
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
