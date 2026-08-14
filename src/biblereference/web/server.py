@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Final
 from urllib.parse import parse_qs, urlparse
 
+from ..search import Gate
 from ..store import DataHome
 from .alignment import api_alignment, api_corrections
 from .api import (
@@ -85,6 +86,11 @@ _OTHER: Final = {
     "window",
     "stride",
     "composed",
+    # Inflected matching over the wire. Without these the feature exists locally and is
+    # unreachable from a remote caller, which is the same fault -- a thing that cannot be
+    # switched on answering as though it had been.
+    "inflected",
+    "gate",
 }
 
 #: Query parameters the job endpoint owns. Named explicitly rather than folded into the
@@ -128,6 +134,16 @@ def _min_run(raw: str) -> int | Callable[[int], int]:
         return ScaledRun(floor)
     except ValueError as exc:
         raise ValueError(str(exc)) from None
+
+
+def _flag(name: str, raw: str) -> bool:
+    """A boolean that crossed a query string. Spelled out, because ``?inflected=0`` reading
+    as true is exactly the silent misconfiguration this module exists to refuse."""
+    if raw.lower() in {"1", "true", "yes", "on"}:
+        return True
+    if raw.lower() in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be true or false, not {raw!r}")
 
 
 def _listed(params: dict[str, list[str]], name: str) -> list[str] | None:
@@ -176,6 +192,16 @@ def search_options(
             raise ValueError(
                 f"composed must be the year the document was written, not {raw!r}"
             ) from None
+
+    if params.get("inflected"):
+        options["inflected"] = _flag("inflected", params["inflected"][0])
+    if params.get("gate"):
+        # Repeatable, and a union: a match passes if any gate admits it. Spelled
+        # `run:lemma_run:chain:bits`, as the command line spells it.
+        try:
+            options["gates"] = [Gate.parse(one) for one in params["gate"]]
+        except ValueError as exc:
+            raise ValueError(str(exc)) from None
 
     known = known_filters()
     built = built_filters()

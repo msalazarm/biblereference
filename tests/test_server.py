@@ -283,3 +283,28 @@ def test_a_batch_is_an_optimisation_not_a_different_algorithm(base: str, query: 
     for document in documents[:2]:
         singly = _post(base, f"/api/scan?{query}", document["text"])["matches"]
         assert state["result"]["found"][document["id"]] == singly
+
+
+def test_inflected_matching_can_be_asked_for_over_the_wire() -> None:
+    """It shipped reachable only from a local `Searcher`.
+
+    A consumer running this on another machine had no way to switch it on, and
+    `search_options` would have refused the parameter as unknown -- so the feature existed
+    and answered as though it had been asked for and found nothing. That is the exact shape
+    of silence this function was written to prevent, in the one place it was not applied.
+    """
+    assert serve.search_options({"inflected": ["true"]}) == {"inflected": True}
+    assert serve.search_options({"inflected": ["false"]}) == {"inflected": False}
+    with pytest.raises(ValueError, match="true or false"):
+        serve.search_options({"inflected": ["maybe"]})
+
+
+def test_gates_travel_as_a_repeatable_parameter() -> None:
+    """A union, because the gates are complementary rather than nested and expressing that
+    took three separate passes before."""
+    from biblereference.search import Gate
+
+    options = serve.search_options({"gate": ["0:4:0:40", "0:0:8:40"]})
+    assert options["gates"] == [Gate(lemma_run=4, bits=40.0), Gate(chain=8, bits=40.0)]
+    with pytest.raises(ValueError, match="run:lemma_run:chain:bits"):
+        serve.search_options({"gate": ["4:40"]})
