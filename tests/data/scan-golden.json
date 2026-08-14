@@ -1,0 +1,696 @@
+{
+ "scan:en": [
+  {
+   "passage": "PSA 23:1",
+   "pretty": "Psalms 23:1",
+   "book": "PSA",
+   "vrs": "eng",
+   "similarity": 1.0,
+   "coverage": 1.0,
+   "identified": true,
+   "decisive": true,
+   "anachronistic": false,
+   "composed": null,
+   "span": [
+    115,
+    156
+   ],
+   "quoted": "The LORD is my shepherd I shall not want",
+   "ambiguous": false,
+   "alternates": [],
+   "translations": [
+    {
+     "corpus": "asv",
+     "label": "ASV",
+     "similarity": 1.0,
+     "translated": 1901
+    }
+   ]
+  },
+  {
+   "passage": "JHN 1:1",
+   "pretty": "John 1:1",
+   "book": "JHN",
+   "vrs": "eng",
+   "similarity": 1.0,
+   "coverage": 1.0,
+   "identified": true,
+   "decisive": true,
+   "anachronistic": false,
+   "composed": null,
+   "span": [
+    24,
+    102
+   ],
+   "quoted": "In the beginning was the Word and the Word was with God and the Word was God",
+   "ambiguous": false,
+   "alternates": [],
+   "translations": [
+    {
+     "corpus": "asv",
+     "label": "ASV",
+     "similarity": 1.0,
+     "translated": 1901
+    }
+   ]
+  }
+ ],
+ "search:en": {
+  "EPH 2:8": [
+   {
+    "passage": "EPH 2:8",
+    "pretty": "Ephesians 2:8",
+    "book": "EPH",
+    "vrs": "eng",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "asv",
+      "label": "ASV",
+      "similarity": 1.0,
+      "translated": 1901
+     }
+    ]
+   }
+  ],
+  "JHN 1:1": [
+   {
+    "passage": "JHN 1:1",
+    "pretty": "John 1:1",
+    "book": "JHN",
+    "vrs": "eng",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "asv",
+      "label": "ASV",
+      "similarity": 1.0,
+      "translated": 1901
+     }
+    ]
+   }
+  ],
+  "JHN 3:16": [
+   {
+    "passage": "JHN 3:16",
+    "pretty": "John 3:16",
+    "book": "JHN",
+    "vrs": "eng",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "asv",
+      "label": "ASV",
+      "similarity": 1.0,
+      "translated": 1901
+     }
+    ]
+   }
+  ],
+  "PSA 23:1": [
+   {
+    "passage": "PSA 23:1",
+    "pretty": "Psalms 23:1",
+    "book": "PSA",
+    "vrs": "eng",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "asv",
+      "label": "ASV",
+      "similarity": 1.0,
+      "translated": 1901
+     }
+    ]
+   }
+  ]
+ },
+ "scan:grc": [
+  {
+   "passage": "LUK 24:39",
+   "pretty": "Luke 24:39",
+   "book": "LUK",
+   "vrs": "org",
+   "similarity": 0.3125,
+   "coverage": 1.0,
+   "identified": false,
+   "decisive": false,
+   "anachronistic": false,
+   "composed": null,
+   "span": [
+    46,
+    73
+   ],
+   "quoted": "ψηλαφήσατέ με καὶ ἴδετε ὅτι",
+   "ambiguous": false,
+   "alternates": [],
+   "translations": [
+    {
+     "corpus": "n1904",
+     "label": "N1904",
+     "similarity": 0.3125,
+     "translated": null
+    }
+   ]
+  }
+ ],
+ "search:grc": {
+  "1CO 11:1": [
+   {
+    "passage": "1CO 11:1",
+    "pretty": "1 Corinthians 11:1",
+    "book": "1CO",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "1CO 1:4": [
+   {
+    "passage": "1CO 1:4",
+    "pretty": "1 Corinthians 1:4",
+    "book": "1CO",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "1CO 6:9": [
+   {
+    "passage": "1CO 6:9",
+    "pretty": "1 Corinthians 6:9",
+    "book": "1CO",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "1TH 5:17": [],
+  "2CO 9:8": [
+   {
+    "passage": "2CO 9:8",
+    "pretty": "2 Corinthians 9:8",
+    "book": "2CO",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "ACT 20:21": [
+   {
+    "passage": "ACT 20:21",
+    "pretty": "Acts 20:21",
+    "book": "ACT",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "ACT 6:3": [
+   {
+    "passage": "ACT 6:3",
+    "pretty": "Acts 6:3",
+    "book": "ACT",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "EPH 5:25": [
+   {
+    "passage": "EPH 5:25",
+    "pretty": "Ephesians 5:25",
+    "book": "EPH",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "GAL 5:21": [
+   {
+    "passage": "GAL 5:21",
+    "pretty": "Galatians 5:21",
+    "book": "GAL",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "JHN 3:8": [
+   {
+    "passage": "JHN 3:8",
+    "pretty": "John 3:8",
+    "book": "JHN",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "LUK 24:39": [
+   {
+    "passage": "LUK 24:39",
+    "pretty": "Luke 24:39",
+    "book": "LUK",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "MAT 10:16": [
+   {
+    "passage": "MAT 10:16",
+    "pretty": "Matthew 10:16",
+    "book": "MAT",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "MAT 19:12": [
+   {
+    "passage": "MAT 19:12",
+    "pretty": "Matthew 19:12",
+    "book": "MAT",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "MAT 3:15": [
+   {
+    "passage": "MAT 3:15",
+    "pretty": "Matthew 3:15",
+    "book": "MAT",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "PHP 2:3": [
+   {
+    "passage": "PHP 2:3",
+    "pretty": "Philippians 2:3",
+    "book": "PHP",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ],
+  "ROM 1:3": [
+   {
+    "passage": "ROM 1:3",
+    "pretty": "Romans 1:3",
+    "book": "ROM",
+    "vrs": "org",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "n1904",
+      "label": "N1904",
+      "similarity": 1.0,
+      "translated": null
+     }
+    ]
+   }
+  ]
+ },
+ "scan:la": [
+  {
+   "passage": "JHN 1:14",
+   "pretty": "John 1:14",
+   "book": "JHN",
+   "vrs": "vul",
+   "similarity": 0.4138,
+   "coverage": 0.8571,
+   "identified": false,
+   "decisive": false,
+   "anachronistic": false,
+   "composed": null,
+   "span": [
+    89,
+    134
+   ],
+   "quoted": "gloriam ejus gloriam quasi unigeniti a Patre",
+   "ambiguous": false,
+   "alternates": [],
+   "translations": [
+    {
+     "corpus": "latvuc",
+     "label": "LATVUC",
+     "similarity": 0.4138,
+     "translated": 405
+    }
+   ]
+  }
+ ],
+ "search:la": {
+  "GEN 1:1": [],
+  "JHN 1:14": [
+   {
+    "passage": "JHN 1:14",
+    "pretty": "John 1:14",
+    "book": "JHN",
+    "vrs": "vul",
+    "similarity": 0.7727,
+    "coverage": 0.7727,
+    "identified": false,
+    "decisive": false,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "latvuc",
+      "label": "LATVUC",
+      "similarity": 0.7727,
+      "translated": 405
+     }
+    ]
+   }
+  ],
+  "PSA 22:1": [
+   {
+    "passage": "PSA 22:1",
+    "pretty": "Psalms 22:1",
+    "book": "PSA",
+    "vrs": "vul",
+    "similarity": 0.8889,
+    "coverage": 0.8889,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "latvuc",
+      "label": "LATVUC",
+      "similarity": 0.8889,
+      "translated": 405
+     }
+    ]
+   }
+  ],
+  "ROM 12:1": [
+   {
+    "passage": "ROM 12:1",
+    "pretty": "Romans 12:1",
+    "book": "ROM",
+    "vrs": "vul",
+    "similarity": 0.7895,
+    "coverage": 0.7895,
+    "identified": false,
+    "decisive": false,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "latvuc",
+      "label": "LATVUC",
+      "similarity": 0.7895,
+      "translated": 405
+     }
+    ]
+   }
+  ]
+ }
+}
