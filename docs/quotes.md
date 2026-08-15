@@ -2,7 +2,11 @@
 
 *A design for the next generation of quotation, allusion and reference detection.
 2026-08-15, augmented same day with three further research passes — sequence
-bioinformatics, security/forensics, and a survey of open ancient scripture corpora.
+bioinformatics, security/forensics, and a survey of open ancient scripture corpora — and a
+final two-wave sweep (a discipline scout, then targeted deep-dives) across blind-
+identification sciences, collation and translation science, exact-matching theory, and
+evidence-combination theory. This is the last research pass; the roadmap is the build
+order.
 Grounded in the measurements of `churchfathers/review/`; every number below names its
 source, and every licence stated was verified on the licence page itself or is marked
 unverified.*
@@ -240,6 +244,146 @@ The security world's problem is ours inverted: find the foreign material an auth
   the way TLSH does. *Transfers:* §10 adopts it; it is the honest form for a near-zero-FP
   instrument.
 
+### 3d. The wider sweep — four more fields, one decision theory
+
+A scouting pass ranked fifteen further discipline/method pairs; deep-dives followed the
+best. Verification flags are the reporting agents' own and are preserved: **(verified)** =
+read from fetched primary text; **(per standard literature — verify at implementation)** =
+bibliographically confirmed, mechanism reconstructed from trained knowledge.
+
+**Evidence combination — the one that reshapes the design.**
+
+- **Fellegi–Sunter record linkage** (JASA 1969; mechanism verified from Winkler's Census
+  Bureau report, [census.gov RRS 2006-02](https://www.census.gov/content/dam/Census/library/working-papers/2006/adrm/rrs2006-02.pdf)) —
+  the census world's theory for combining heterogeneous evidence fields into one calibrated
+  decision. Per-field agreement weights are log-likelihood ratios `log(m/u)` — m =
+  P(agree | match), u = P(agree | non-match) — summed into a composite weight, with **two
+  thresholds** giving a three-zone rule: auto-link / clerical review / non-link, set from
+  designated error rates. *Transfers:* §5.6 — our axes are its fields, and we hold what no
+  census statistician ever had: a labeled non-match population. Every window of the control
+  corpus is a non-match **by construction**, so u is a plain frequency table — the entire
+  EM/Belin–Rubin estimation literature exists to work around not having this. One verified
+  caveat travels with it: correlated fields must be collapsed into one jointly-estimated
+  composite, not summed as if independent (Winkler's Soundex double-counting pathology) —
+  and run/lemma_run/chain/bits are exactly such a nested family.
+- **The forensic LR reporting stack** — the ENFSI *Guideline for Evaluative Reporting*
+  (verified, read in full: [enfsi.eu](https://enfsi.eu/wp-content/uploads/2016/09/m1_guideline.pdf)):
+  evidence reported as a likelihood ratio with a verbal equivalence ladder (2–10 weak,
+  10–100 moderate, 10³–10⁴ strong, >10⁶ extremely strong), four requirements (balance,
+  logic, robustness, transparency), and the never-transpose rule — report P(findings |
+  proposition), never the reverse. Calibration validated by Cllr/ECE (Ramos &
+  Gonzalez-Rodriguez, FSI 2013 — per standard literature). *Transfers:* our `bits` are
+  already in this currency; §10 adopts the ladder and the calibration check.
+- **Conformal prediction** (Vovk/Shafer; mechanism verified) — a distribution-free,
+  finite-sample certificate: rank a candidate's score against the control corpus's scores
+  and admit at p ≤ α, guaranteeing "at most α of exchangeable control-like windows would be
+  admitted," with no distributional assumption. *Checked gap:* arXiv queries for conformal
+  prediction + authorship/duplicate-detection return zero results — nobody has published
+  this application to text matching. *Transfers:* the certificate wrapper on any gate.
+- **Refused: Dempster–Shafer.** Its advantage (representing ignorance across partial
+  frames) does not apply to one binary hypothesis, and Zadeh's conflict pathology lands
+  exactly on our hard cases — strong run, low bits — where two axes genuinely disagree.
+
+**Blind-identification sciences — the verification stage and its thresholds.**
+
+- **Astrometry.net** (Lang, Hogg et al., AJ 2010, verified in full:
+  [arXiv:0910.2233](https://arxiv.org/abs/0910.2233)) — quad-hashes of star patterns only
+  *propose*; every candidate then passes a **sequential Bayes-factor test**, evidence
+  accumulating star-by-star multiplicatively until posterior odds exceed **10⁹** — which is
+  how millions of hypotheses are scanned with "no false positives" (>99.9% success, their
+  words). Their one failure mode: degenerate collinear geometry. *Transfers:* §5.5 — the
+  two-stage architecture (cheap invariant proposal, expensive sequential verification with
+  an odds bar in the currency that matters) is the template our match verification lacks.
+- **Shazam** (Wang, ISMIR 2003 — mechanism corroborated via reimplementations; exact paper
+  numbers unverified) — pairs of spectral peaks hashed as (f1, f2, Δt); a genuine match
+  makes the **histogram of offset differences** spike at one value while coincidence
+  scatters. *Transfers:* pair-hash rare lemmas as (lemma₁, lemma₂, gap); the offset
+  histogram is a free, deterministic per-candidate alignment statistic — one likelihood
+  term for §5.5.
+- **Seismology** — matched-filter detection thresholds at k×MAD of the correlation trace
+  (verified from EQcorrscan docs; the field treats 8–12×MAD as practice, not theory), and
+  FAST's **multi-station corroboration** (verified from the author's page): a single-station
+  candidate is confirmed only when independent stations agree. *Transfers:* MAD-adaptive
+  per-document thresholds; and requiring two independent pieces of evidence (two distinct
+  seed hashes voting for one alignment) before paying for verification.
+- **Radar CFAR / OS-CFAR** (per standard literature — verify closed forms at
+  implementation) — thresholds derived from *local* noise estimates to hold a constant
+  false-alarm rate, with the order-statistic variant robust to "clutter edges."
+  *Transfers:* a florilegium is precisely a quotation-dense clutter edge; rank-based local
+  thresholds are the principled form of per-genre gates.
+- **Scan statistics** (Kulldorff; the max-statistic machinery verified from
+  [arXiv:1511.00108](https://ar5iv.labs.arxiv.org/html/1511.00108)) — valid inference for
+  "best window found by scanning many" requires the null distribution of the **maximum**
+  score over the whole scan, standardly by Monte-Carlo replication. *Transfers:* §7 — the
+  register scan's threshold discipline, without which scanning manufactures significance.
+- **Matrix profile** (Yeh et al., ICDM 2016 — per standard literature) — exact,
+  deterministic all-pairs similarity self-join; "discords" = the least-repeated span.
+  *Transfers:* an exact route to the parallel-family index, and discords as an
+  agraphon-hunting signal.
+
+**Collation and translation science — our profile layer, already built for text.**
+
+- **CollateX and the Gothenburg model** (verified from project docs:
+  [collatex.net/doc](https://collatex.net/doc/)) — tokenization → normalization →
+  alignment → analysis, producing a **variant graph**; the token's `t`/`n` split means
+  alignment can be driven by any normalization, so the exact tier and the lemma tier run on
+  the same engine. *Transfers:* CollateX can *be* §6b's MSA engine — aligning editions of a
+  verse is literally its job — with one caveat: progressive alignment is
+  witness-order-dependent, so a canonical seed order must be pinned.
+- **Multi-Version Documents** (Schmidt & Colomb 2009, verified via the author's explainer)
+  — the variant graph flattened to an ordered list of {version-set, fragment} pairs,
+  provably equivalent, linear-time per-version reads. *Transfers:* the storage form for
+  per-verse profiles once they hold dozens of witnesses.
+- **CBGM / ECM data** (verified: [open-cbgm](https://github.com/jjmccollum/open-cbgm)
+  carries real Editio Critica Maior TEI apparatus for 3 John — readings × witnesses ×
+  local stemma per variant unit). *Transfers:* machine-readable per-verse variant data
+  exists and is exactly profile feedstock; the ECM data itself is Deutsche
+  Bibelgesellschaft copyright — sample-only until terms are cleared.
+- **METEOR** (Banerjee & Lavie; formulas verified from
+  [Denkowski & Lavie 2010](https://aclanthology.org/N10-1031.pdf)) — staged matching
+  (exact → stem → synonym → paraphrase, per-stage weights) *is* our grade ladder
+  independently invented; and the **fragmentation penalty** `Pen = γ·(chunks/matches)^β`
+  is our contiguity doctrine in closed form — scattered matches punished, one long chunk
+  untouched, β the sharpness knob. *Transfers:* §10 — a candidate reported statistic.
+- **Translation-memory fuzzy matching** (Bloodgood & Strauss, EACL 2014, verified:
+  [aclanthology.org/E14-1022](https://aclanthology.org/E14-1022/)) — the industry-standard
+  single fuzzy percentage picked the human-judged best match only **~48–49%** of the time.
+  *Transfers:* direct empirical support for our staged categorical grades over any single
+  collapsed score.
+- **Gale–Church alignment** (verified from
+  [aclanthology.org/J93-1004](https://aclanthology.org/J93-1004.pdf)) — closed-form
+  length-ratio priors for 1-1/1-2/2-1/2-2 clause correspondences. *Transfers:* a cheap
+  prior when a father compresses two half-verses into one clause.
+- **fast_align's diagonal prior** (Dyer et al. 2013, verified:
+  [aclanthology.org/N13-1073](https://aclanthology.org/N13-1073.pdf)) — a one-parameter,
+  training-light alignment model. *Transfers:* a deterministic cross-language signal over
+  our verse-aligned corpora — the Latin father paraphrasing where we hold the Greek — as a
+  tie-breaker, never a gate.
+
+**Exact-matching theory — guarantees over token streams.**
+
+- **Set-similarity joins** (AllPairs, Bayardo et al. WWW 2007; PPJoin+, Xiao et al. WWW
+  2008 — mechanisms per standard literature; SourcererCC's engineering **verified** from
+  [arXiv:1512.06448](https://ar5iv.labs.arxiv.org/html/1512.06448): the same prefix-filter
+  theorem scaled to 250M tokens, 100% Type-1 recall, with a *provably lossless* rarest-first
+  prefix filter). *Transfers:* the **exact** builder of the parallel-family index — all
+  pairs of verses above a stated overlap threshold, complete, no MinHash — beside the
+  OpenBible seed; and Mann et al.'s survey lesson (no single filter-stack wins everywhere —
+  A/B on our own lemma distribution).
+- **Levenshtein automata** (Schulz & Mihov, IJDAR 2002 / CL 2004,
+  [aclanthology.org/J04-4003](https://aclanthology.org/J04-4003.pdf); abstract verified) —
+  exact enumeration of every dictionary entry within edit distance k, no false negatives at
+  the stated bound, via a universal automaton intersected with a trie. *Transfers:* §4.4 —
+  scribal-variant and OOV recovery for the lexicon; and the alphabet-agnostic lift (verse =
+  string over the lemma alphabet) as an unbenchmarked but principled experiment.
+- **Refused: edit distance with moves** (Cormode & Muthukrishnan — exact version
+  intractable, only polylog-approximate algorithms exist; fails auditability), **NCD**
+  (Cilibrasi & Vitányi, verified in full — their own failure modes sit at verse-length
+  inputs), and **parameterized matching** (Baker — bijective renaming is the wrong shape
+  for re-inflection, which lemmatization already solves upstream; kept only as a lead for
+  consistent-substitution paraphrase, with *function matching* the correct generalization
+  to chase if that miss class ever materializes).
+
 ## 4. Stratum 0 — make the text match the text
 
 The cheapest recall in the ledger is not in the matcher at all.
@@ -279,6 +423,12 @@ carries its own axes; `_without_overlaps` already knows how to arbitrate overlap
 claims. Expected recovery: the conflation rows, which include some of the 34 missed
 directs.
 
+**4.4 Recover the scribally corrupted, exactly.** A Levenshtein automaton over the lexicon's
+trie (§3d) enumerates every known form within edit distance k of an out-of-vocabulary token
+— exact, deterministic, provably nothing missed at the stated bound. At k ≤ 2 this is the
+principled recovery for itacistic spellings and copyist slips the lemma lexicon cannot see.
+Feeds the lexicon, not the gates — a recovered form is then matched normally.
+
 ## 5. Stratum 1 — principled significance
 
 Thresholds today are hand-tuned bit floors chosen from measured tables. Two refinements,
@@ -311,6 +461,35 @@ shipped only if a pattern beats the contiguous gates at equal measured FP. **Fra
 containment** as a cheap pre-filter before the chain DP. **Two-hit seeding** and **X-drop**
 as compute controls on the 45M-word sweep — same acceptance semantics, fewer wasted
 extensions.
+
+**5.5 The verification stage.** The blind-identification sciences (§3d) share one
+architecture the matcher lacks: cheap proposals, then an explicit **sequential verification
+test** per candidate. Astrometry.net's form is the template — evidence accumulates item by
+item (matched lemma by matched lemma, the Shazam-style offset-histogram spike, the formula
+flag) as multiplied likelihood ratios, and the candidate is accepted only when posterior
+odds cross a bar chosen in the currency that matters: expected false positives over the
+whole corpus. Around it, two threshold disciplines from the same fields: MAD-adaptive local
+thresholds (seismology's practice), and OS-CFAR-style rank-based local noise estimates —
+robust where the background itself is quotation-dense, and a florilegium is exactly such a
+clutter edge. Plus FAST's corroboration rule: two independent seeds must vote for one
+alignment before verification is paid for.
+
+**5.6 The composite decision — Fellegi–Sunter.** The successor to the gate union, reached
+through the same pricing discipline. Each axis becomes a binned field (run: none/short/
+medium/long; bits: decade bands; formula: present/absent; rivalry: none/weak/strong); each
+field's weight is `log₂(m/u)`, with **u estimated directly from the control corpus** —
+where every window is a non-match by construction, which is the estimation problem the
+entire census literature exists to work around — and m from the golden set, smoothed. The
+nested lexical axes (run, lemma_run, chain, bits) are collapsed into one jointly-estimated
+composite field first, per Winkler's double-counting caveat. The summed weight gets **two
+thresholds**: auto-accept where the measured control false-link rate reaches the target
+ceiling, reject where the measured miss rate on held-out gold becomes unacceptable, and
+between them the clerical-review zone — which is not an analogy to the consumer's
+human-verdict workflow but the same object, published in 1969. Output wrapped in the
+forensic reporting stack (§3d): the ENFSI verbal ladder on the same log-odds currency as
+`bits`, the never-transpose rule, a Cllr/ECE-style calibration check (§10), and a conformal
+p-value against the control scores as the finite-sample certificate. Gates remain until
+this is calibrated; nothing ships on the theory alone.
 
 ## 6. Stratum 2 — quotation families, and the profile that makes them matchable
 
@@ -360,6 +539,18 @@ profiles prove the cost is real; profiles are the MVP, and the §4 fetches are t
 feedstock — the cheap per-edition matching ships first and is never gated behind the
 profile build.
 
+Three findings from the final sweep (§3d) land here. **CollateX can be the MSA engine**:
+aligning witnesses of one text is its whole purpose, its `t`/`n` normalization hook runs the
+exact and lemma tiers on one machine, and its output *is* a variant graph — with the one
+caveat that progressive alignment is witness-order-dependent, so the seed order is pinned
+(critical text first). **Schmidt–Colomb's pairs-list** is the storage form once profiles
+hold dozens of witnesses. And **set-similarity joins** (AllPairs/PPJoin prefix filtering,
+engineering proven at 250M tokens) give the family index its *exact* construction — every
+verse pair above a stated overlap threshold, complete, no MinHash — with the OpenBible seed
+retained as validation rather than foundation. The ECM apparatus data seen in open-cbgm
+(readings × witnesses × local stemma, per verse) is exactly profile feedstock, pending
+Deutsche Bibelgesellschaft terms.
+
 ## 7. Stratum R — register scanning
 
 The three forensics traditions of §3c converge on a capability no quotation stratum has:
@@ -384,6 +575,12 @@ showed matters more than scoring, and the zero-overlap allusions no lexical meth
 - **The ambient-idiom filter: the recurrence test.** A scripture-matching chunk that recurs
   ≥2× elsewhere in the father's own corpus is his idiom, not a quotation. Deterministic;
   reported as evidence on the match, never a silent veto.
+
+One statistical discipline is non-negotiable, from scan statistics (§3d): the scan's
+threshold is calibrated against the Monte-Carlo distribution of the **maximum** window
+score under the null — replicates drawn from the control corpus, the observed maximum
+ranked among them — never against per-window p-values, or scanning thousands of windows
+manufactures the significance it reports.
 
 Three disciplines on this stratum. It is **instrumentation first**: a flagged
 scripture-register span with no resolved source joins the unmatched-formula ledger (§10) as
@@ -477,7 +674,14 @@ Two classes are systematic and deserve structural answers rather than thresholds
 - **Detection-theory reporting.** Operating points published as probability-of-detection
   against probability-of-false-alarm (the fuzzy-hashing and watermarking convention, §3c),
   with the control corpus as the false-alarm denominator — the honest form for an
-  instrument that promises near-zero false positives.
+  instrument that promises near-zero false positives. Once §5.6 lands, wrapped further in
+  the forensic convention: the ENFSI verbal ladder on the reported weight, and a
+  Cllr/ECE-style calibration check — does a match reported at 40 bits actually behave like
+  40 bits against held-out gold and control — because a score that ranks well but lies
+  about its own magnitude fails the only promise this system makes.
+- **The fragmentation statistic** (METEOR's `(chunks/matches)^β`, §3d) as a candidate
+  reported field: the contiguity doctrine in closed form, cheap to compute on every match,
+  priced like any axis before it gates anything.
 - **Gold**: `boyce-golden.jsonl` (159+14), the 5,044 PTA editor marks, the control corpus.
   **BiblIndex** (270k verified patristic references, Sources Chrétiennes) has no open
   licence and an auth-gated API — worth one email to Laurence Mellerin's team; as gold it
@@ -533,6 +737,8 @@ corpus and the golden set before its default changes anything.
 | 4 | **10** formula FN detector + stratified recall + POD/PFA reporting | measurement, not recall — steers everything after | none | S |
 | 5 | **2** quotation families | 34 misfire verdicts; doxology addresses; family-precision | none — reporting change | M |
 | 6 | **1** E-values + containment; spaced-seed experiment priced | defensible thresholds; conflation scoring; maybe a new axis | is itself the pricing tool | M |
+| 6b | **5.6** Fellegi–Sunter composite (binning + counting over held data) | one calibrated weight over all axes; the three-zone rule | u measured exactly on the control corpus | S–M |
+| 6c | **5.5** sequential verification stage + offset-histogram statistic | the FP control the gates approximate | its own odds bar, priced end to end | M |
 | 7 | **6b** per-verse profiles (MSA over editions + family) | edition-variant dilution, structurally; free "which reading" output | none — attested readings only | L |
 | 8 | **R** register scanning, instrumentation-first | span bounds; the only visibility into zero-overlap spans | strict: control-priced, default never until then | L |
 | 9 | **3** allusion pass | the 26 one-to-three-word indirects, bounded honestly | full control pricing gate before any default | L |
@@ -555,6 +761,13 @@ families, profiles, the scripture-side model, and pricing tools are the library'
   permanent, honest remainder — pinned in tests as *not found*, so nobody tunes toward them.
 - **Bulk BiblIndex use without terms.** No open licence exists; browsing and one email are
   the whole of what is proper.
+- **Three tools the final sweep priced and declined.** *Edit distance with moves* — the
+  formally correct model of conflation, but exact computation is intractable and the
+  polylog approximation is unauditable; set-overlap plus multi-chain reporting buys the
+  same tolerance exactly. *Normalized compression distance* — its authors' own documented
+  failure modes sit at verse-length inputs. *Dempster–Shafer combination* — its conflict
+  pathology lands precisely on our hard cases, where two axes genuinely disagree, and
+  Fellegi–Sunter handles unreliable axes natively (m ≈ u contributes zero weight).
 - **Verdicts.** The field's own leading data project declined to encode quotation-vs-allusion
   intentionality as data. Everything here ships evidence — axes, families, flags, E — and
   the grade names stay descriptions of evidence, not judgements of intent.
