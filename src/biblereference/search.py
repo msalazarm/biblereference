@@ -205,6 +205,31 @@ _SPAN_GAP: Final = 8
 #: *Son*, separated from *only* by the verse's *begotten*, has a gap of 1.
 _VERSE_GAP: Final = 2
 
+#: The hard caps a *concave-cost* chain may reach, wider than the walls above because the
+#: cost function is what holds the discipline: a long gap must be paid for, and past these
+#: bounds no anchor could pay. The 4:1 asymmetry of the walls is kept -- see
+#: :data:`_VERSE_COST`.
+_SPAN_CAP: Final = 24
+_VERSE_CAP: Final = 6
+
+#: minimap2's concave gap cost, `0.01·w̄·|l| + 0.5·log₂(|l|+1)`: one long interpolated
+#: clause costs far less per word than the same slack scattered across the span, which is
+#: how fathers actually interrupt a quotation -- a clause of their own, then the verse
+#: resumes. The linear term is scaled by the mean anchor weight so the cost speaks the
+#: same unit the anchors earn in.
+_GAP_LINEAR: Final = 0.01
+_GAP_LOG: Final = 0.5
+
+#: Verse-side slack costs four times text-side slack, the same asymmetric doctrine as the
+#: 8/2 walls and for the same reason: a speaker interpolating moves the text on while the
+#: verse stands still, but the verse leaping ahead of a stationary text is not a quotation
+#: continuing -- it is a different part of the verse coincidentally agreeing.
+_VERSE_COST: Final = 4.0
+
+#: Disjoint chains reported per cluster before stopping. One sentence of 1 Clement weaves
+#: five sayings; nobody weaves ten.
+_MAX_CHAINS: Final = 6
+
 #: Words a match must share consecutively with the text it claims to quote. Measured over
 #: this corpus: formulaic sermon language aligns with a longest run of at most five, while
 #: genuine quotations of the same length run nine and fourteen. See :func:`longest_run`.
@@ -463,6 +488,7 @@ def lemma_chain(
     *,
     span_gap: int = _SPAN_GAP,
     verse_gap: int = _VERSE_GAP,
+    concave: bool = False,
 ) -> LemmaChain:
     """The longest order-preserving agreement between a text and a verse, and its extent.
 
@@ -470,7 +496,18 @@ def lemma_chain(
     dictionary forms intersect at all, and where a step may skip at most ``span_gap`` words
     of the text and ``verse_gap`` of the verse. Ties are broken on bits, so where two chains
     are the same length the more surprising one is the one reported.
+
+    With ``concave``, the hard walls become a cost function: a step may skip up to
+    :data:`_SPAN_CAP` and :data:`_VERSE_CAP` words, but every word of slack is paid for
+    out of the anchors' own bits, concavely, so one long interpolated clause is cheap and
+    the same slack scattered is not. What is reported does not change its meaning --
+    ``length`` is still positions shared and ``bits`` their surprisal -- only *which*
+    chain is judged best. The exhaustive DP is the optimal chaining the literature asks
+    for: at these window sizes nothing needs the O(n log n) machinery, and every pair
+    within the caps is considered, so the maximum is the maximum.
     """
+    if concave:
+        return _concave_chain(left, right, bits)
     if not left or not right:
         return LemmaChain.none()
 
@@ -503,6 +540,104 @@ def lemma_chain(
         return LemmaChain.none()
     length, total, first, last = start
     return LemmaChain(length, total, _chain_lemmas(left, right, bits, first, last), (first, last))
+
+
+def _gap_cost(gap: int, anchor: float) -> float:
+    """What a step over ``gap`` words of slack costs, in bits, concavely."""
+    if gap <= 0:
+        return 0.0
+    return _GAP_LINEAR * anchor * gap + _GAP_LOG * math.log2(gap + 1)
+
+
+def _concave_chain(
+    left: Sequence[Reading],
+    right: Sequence[Reading],
+    bits: Callable[[str], float],
+) -> LemmaChain:
+    """The concave-cost arm of :func:`lemma_chain`: gaps paid for, not walled off.
+
+    A link is taken only when what lies ahead is worth more than the slack costs -- so a
+    chain never grows by stitching in a distant coincidence, however far the caps would
+    let it look. That single rule is what replaces the walls.
+    """
+    if not left or not right:
+        return LemmaChain.none()
+    weights: dict[tuple[int, int], float] = {}
+    for i, mine in enumerate(left):
+        for j, theirs in enumerate(right):
+            shared = mine & theirs
+            if shared:
+                weights[(i, j)] = bits(min(shared, key=bits))
+    if not weights:
+        return LemmaChain.none()
+    anchor = sum(weights.values()) / len(weights)
+
+    # best[(i, j)] is the chain starting at exactly (i, j): score after gap costs, then
+    # length, then bits, then one past its final text position. Compared as a tuple, so
+    # equal scores fall back to the classic length-then-bits order.
+    best: dict[tuple[int, int], tuple[float, int, float, int]] = {}
+    for i in range(len(left) - 1, -1, -1):
+        for j in range(len(right) - 1, -1, -1):
+            weight = weights.get((i, j))
+            if weight is None:
+                continue
+            cell = (weight, 1, weight, i + 1)
+            for di in range(1, _SPAN_CAP + 2):
+                if i + di > len(left) - 1:
+                    break
+                for dj in range(1, _VERSE_CAP + 2):
+                    if j + dj > len(right) - 1:
+                        break
+                    ahead = best.get((i + di, j + dj))
+                    if ahead is None:
+                        continue
+                    cost = _gap_cost(di - 1, anchor) + _VERSE_COST * _gap_cost(dj - 1, anchor)
+                    if ahead[0] <= cost:
+                        # The link cannot pay for its own slack: whatever lies there is
+                        # a coincidence, not the quotation continuing.
+                        continue
+                    linked = (weight + ahead[0] - cost, 1 + ahead[1], weight + ahead[2], ahead[3])
+                    if linked > cell:
+                        cell = linked
+            best[(i, j)] = cell
+
+    (_, length, total, last), first = max(
+        ((cell, i) for (i, _), cell in best.items()), key=lambda pair: (pair[0], -pair[1])
+    )
+    return LemmaChain(length, total, _chain_lemmas(left, right, bits, first, last), (first, last))
+
+
+def lemma_chains(
+    left: Sequence[Reading],
+    right: Sequence[Reading],
+    bits: Callable[[str], float],
+    *,
+    span_gap: int = _SPAN_GAP,
+    verse_gap: int = _VERSE_GAP,
+    concave: bool = False,
+    most: int = _MAX_CHAINS,
+) -> list[LemmaChain]:
+    """Every disjoint chain worth reporting, best first.
+
+    BLAST's answer to the conflation problem: take the best chain, mask its extent, and
+    chain what remains, until nothing chains. One sentence of 1 Clement 13:2 weaves five
+    sayings; a single best chain reports one of them and structurally misses four,
+    however good its gates. Each chain returned here covers a different stretch of the
+    text, carries its own evidence, and is gated by the caller on that evidence alone.
+    """
+    remaining = list(left)
+    out: list[LemmaChain] = []
+    while len(out) < most:
+        chained = lemma_chain(
+            remaining, right, bits, span_gap=span_gap, verse_gap=verse_gap, concave=concave
+        )
+        if not chained.length:
+            break
+        out.append(chained)
+        first, last = chained.span
+        for position in range(first, last):
+            remaining[position] = frozenset()
+    return out
 
 
 def _chain_lemmas(
@@ -1417,6 +1552,7 @@ class Searcher:
         min_query: int = _MIN_QUERY,
         composed: int | None = None,
         inflected: bool = False,
+        concave: bool = False,
         min_grade: str | None = None,
         gates: Sequence[Gate] | None = None,
         min_lemma_run: int | None = None,
@@ -1501,6 +1637,11 @@ class Searcher:
             inference a reader would otherwise draw is refused.
         """
         self._composed = composed
+        #: Concave gap costs in the chain instead of the hard 8/2 walls. Opt-in until the
+        #: control corpus prices it, exactly as every loosening before it: the axes it
+        #: reports mean the same things, but a wall refused what a cost now weighs, and
+        #: what that admits on pre-Christian Greek is a measurement nobody has made yet.
+        self._concave = concave
         # Off, and off is today. Nothing below runs, no lemma table is opened and no query
         # takes a different path unless a caller has asked for one in so many words.
         self._home = home
@@ -2082,7 +2223,7 @@ class Searcher:
         theirs = lemma_readings(spelled, language, lexicon)
         run = longest_run(query, spelled)
         found = lemma_run(readings, theirs, weigh)
-        chained = lemma_chain(readings, theirs, weigh)
+        chained = lemma_chain(readings, theirs, weigh, concave=self._concave)
         evidence = shared_lemmas(readings, theirs)
         # Weighed over what actually matched, not over the window it was seen through. The
         # chain's span *is* the quotation's extent, so there is no other span this could be
@@ -2141,11 +2282,9 @@ class Searcher:
         matches: list[Match] = []
         for (vrs, book, chapter), windows in self._sweep(tokens, window, stride):
             for cluster in _clusters(sorted(windows)):
-                found = self._score_cluster(
-                    vrs, book, chapter, cluster, tokens, words, window, stride
+                matches.extend(
+                    self._score_cluster(vrs, book, chapter, cluster, tokens, words, window, stride)
                 )
-                if found is not None:
-                    matches.append(found)
 
         matches.sort(key=lambda m: (-m.similarity, m.span or (0, 0)))
         return self._flag_positional(_without_overlaps(matches))
@@ -2361,7 +2500,7 @@ class Searcher:
         weigh = weights.of(language)
         mine = lemma_readings(list(query), language, lexicon)
         theirs = lemma_readings(_tokens(best.text, language), language, lexicon)
-        chained = lemma_chain(mine, theirs, weigh)
+        chained = lemma_chain(mine, theirs, weigh, concave=self._concave)
         return replace(
             found,
             lemma_run=lemma_run(mine, theirs, weigh).length,
@@ -2421,7 +2560,7 @@ class Searcher:
         words: Sequence[tuple[str, int, int]],
         window: int,
         stride: int,
-    ) -> Match | None:
+    ) -> list[Match]:
         """Score one run of windows that all pointed at the same chapter.
 
         The exact path answers first and its answer is final. Only where it declines -- and
@@ -2431,14 +2570,41 @@ class Searcher:
         shares so few spellings that the exact retrieval gives up before any gate is reached.
         """
         found = self._exact_cluster(vrs, book, chapter, cluster, tokens, words, window, stride)
-        if found is not None or not self._inflected:
-            return found
+        if not self._inflected:
+            return [found] if found is not None else []
         first_token = max(0, cluster[0] - stride)
         last_token = min(len(tokens), cluster[-1] + window + stride)
         query = tokens[first_token:last_token]
         if len(query) < _MIN_QUOTE_WORDS:
-            return None
-        return self._graded_cluster(vrs, book, chapter, query, first_token, tokens, words)
+            return [found] if found is not None else []
+        if found is None:
+            return self._graded_cluster(vrs, book, chapter, query, first_token, tokens, words)
+        # The exact answer stands -- and the rest of the cluster is still read. Polycarp
+        # quotes Matthew 7:1 word for word and then 7:2's measure-for-measure clause
+        # re-inflected, in one sentence; the verbatim clause used to be the cluster's
+        # whole answer and the other was structurally unreachable, being neither its own
+        # cluster nor an uncovered one. Masking the exact match's words and grading the
+        # remainder is the same uncovered-remainder rule the chains follow below.
+        return [
+            found,
+            *self._graded_cluster(
+                vrs, book, chapter, query, first_token, tokens, words,
+                masked=self._span_tokens(found.span, words, first_token),
+            ),
+        ]
+
+    @staticmethod
+    def _span_tokens(
+        span: tuple[int, int] | None,
+        words: Sequence[tuple[str, int, int]],
+        first_token: int,
+    ) -> tuple[int, int]:
+        """A match's character span as query-relative token positions, for masking."""
+        if span is None:
+            return (0, 0)
+        low = next((i for i, (_, start, _) in enumerate(words) if start >= span[0]), 0)
+        high = next((i + 1 for i, (_, _, end) in enumerate(words) if end >= span[1]), len(words))
+        return (low - first_token, high - first_token)
 
     def _exact_cluster(
         self,
@@ -2524,7 +2690,8 @@ class Searcher:
         first_token: int,
         tokens: Sequence[str],
         words: Sequence[tuple[str, int, int]],
-    ) -> Match | None:
+        masked: tuple[int, int] = (0, 0),
+    ) -> list[Match]:
         """Look at one cluster again by dictionary form, and weigh what actually matched.
 
         The chain does three jobs at once here, which is why it is worth computing rather
@@ -2538,10 +2705,13 @@ class Searcher:
         # is a lexicon to look in at all.
         language = next((m.language for m in self._corpora.values() if m.versification == vrs), "")
         if language not in LEMMA_LANGUAGES:
-            return None
+            return []
         lexicon, weights = self._lemma_tools(language)
         weigh = weights.of(language)
         mine = lemma_readings(list(query), language, lexicon)
+        for position in range(max(masked[0], 0), min(masked[1], len(mine))):
+            # Words an exact match already answered for: not evidence twice.
+            mine[position] = frozenset()
 
         terms = sorted(
             {lemma for reading in mine for lemma in reading}, key=lambda lemma: -weigh(lemma)
@@ -2554,25 +2724,70 @@ class Searcher:
             ).items()
         }.get((vrs, book, chapter))
         if not verses:
-            return None
+            return []
 
-        best: tuple[LemmaChain, int, int, list[Witness]] | None = None
+        # Every run's readings, once: the rounds of chaining below reuse them, and the
+        # rivalry the alternates report is a property of the cluster, not of any one chain.
+        runs: list[tuple[int, int, list[Reading]]] = []
         rivals: list[tuple[float, int, int]] = []
         for first, last in self._runs(verses):
             witnesses = self._witnesses(vrs, book, chapter, first, last, query)
             if not witnesses:
                 continue
             theirs = lemma_readings(_tokens(witnesses[0].text, language), language, lexicon)
-            chained = lemma_chain(mine, theirs, weigh)
-            if not chained.length:
+            if not lemma_chain(mine, theirs, weigh, concave=self._concave).length:
                 continue
+            runs.append((first, last, theirs))
             rivals.append((witnesses[0].similarity, first, last))
-            if best is None or (chained.length, chained.bits) > (best[0].length, best[0].bits):
-                best = (chained, first, last, witnesses)
-        if best is None:
-            return None
+        if not runs:
+            return []
 
-        chained, start, end, witnesses = best
+        # One finding per disjoint chain. A sentence of 1 Clement 13:2 weaves five sayings,
+        # and a single best chain reports one of them and structurally misses four whatever
+        # its gates -- so the best chain is taken, its stretch of the text is masked, and
+        # what remains is chained again until nothing chains. Each finding then stands on
+        # its own axes and passes or fails the gates alone. A chain the gates refuse is
+        # masked all the same, so the loop always moves.
+        matches: list[Match] = []
+        remaining = list(mine)
+        for _ in range(_MAX_CHAINS):
+            best: tuple[LemmaChain, int, int] | None = None
+            for first, last, theirs in runs:
+                chained = lemma_chain(remaining, theirs, weigh, concave=self._concave)
+                if not chained.length:
+                    continue
+                if best is None or (chained.length, chained.bits) > (best[0].length, best[0].bits):
+                    best = (chained, first, last)
+            if best is None:
+                break
+            chained, start, end = best
+            for position in range(*chained.span):
+                remaining[position] = frozenset()
+            found = self._chain_match(
+                chained, vrs, book, chapter, start, end, first_token, tokens, words,
+                language, weigh, lexicon, rivals,
+            )
+            if found is not None:
+                matches.append(found)
+        return matches
+
+    def _chain_match(
+        self,
+        chained: LemmaChain,
+        vrs: str,
+        book: str,
+        chapter: int,
+        start: int,
+        end: int,
+        first_token: int,
+        tokens: Sequence[str],
+        words: Sequence[tuple[str, int, int]],
+        language: str,
+        weigh: Callable[[str], float],
+        lexicon: Lexicon,
+        rivals: Sequence[tuple[float, int, int]],
+    ) -> Match | None:
+        """One chain of a cluster weighed into a finding, or refused by the gates."""
         low, high = first_token + chained.span[0], first_token + chained.span[1]
         if high - low < _MIN_QUOTE_WORDS or high > len(words):
             return None

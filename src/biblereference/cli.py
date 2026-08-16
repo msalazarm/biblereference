@@ -247,6 +247,7 @@ def cmd_search(args: argparse.Namespace) -> int:
             families=getattr(args, "family", None) or None,
             languages=getattr(args, "language", None) or None,
             inflected=args.inflected,
+            concave=args.concave,
             gates=_gates(args),
         ) as searcher:
             matches = searcher.search(text, limit=args.limit)
@@ -293,6 +294,13 @@ def _inflected_options(parser: argparse.ArgumentParser) -> None:
         help="what a graded match must reach; repeatable, and a match passes if any gate "
         "admits it. Defaults to the measured set -- see `Searcher`",
     )
+    parser.add_argument(
+        "--concave",
+        action="store_true",
+        help="pay for chain gaps with a concave cost instead of walling them at 8/2 -- "
+        "one long interpolated clause is cheap, scattered slack is not. Opt-in until "
+        "the control corpus prices it",
+    )
 
 
 def cmd_scan(args: argparse.Namespace) -> int:
@@ -306,6 +314,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
             families=getattr(args, "family", None) or None,
             languages=getattr(args, "language", None) or None,
             inflected=args.inflected,
+            concave=args.concave,
             gates=_gates(args),
         ) as searcher:
             if args.debts:

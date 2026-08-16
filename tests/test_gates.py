@@ -236,6 +236,90 @@ def test_the_formula_changes_no_threshold() -> None:
 
 
 # --------------------------------------------------------------------------------------
+# Formal chaining: gaps paid for, and one finding per source of a conflation
+# --------------------------------------------------------------------------------------
+
+#: Polycarp to the Philippians 2.3: one sentence remembering three sayings of the Lord --
+#: Matthew 7:1 word for word, then the forgiving/mercy/measure material re-inflected
+#: toward Luke 6:37-38, then the beatitude. A single best answer per cluster reported the
+#: verbatim clause and made the rest structurally unreachable.
+POLYCARP_2_3 = (
+    "μνημονεύοντες δὲ ὧν εἶπεν ὁ κύριος διδάσκων· μὴ κρίνετε, ἵνα μὴ κριθῆτε· ἀφίετε, "
+    "καὶ ἀφεθήσεται ὑμῖν· ἐλεᾶτε, ἵνα ἐλεηθῆτε· ᾧ μέτρῳ μετρεῖτε, ἀντιμετρηθήσεται ὑμῖν· "
+    "καὶ ὅτι μακάριοι οἱ πτωχοὶ καὶ οἱ διωκόμενοι ἕνεκεν δικαιοσύνης, ὅτι αὐτῶν ἐστὶν "
+    "ἡ βασιλεία τοῦ θεοῦ."
+)
+
+
+def test_a_long_interpolated_clause_is_paid_for_and_scattered_slack_is_not() -> None:
+    """The concave cost is the walls grown up: one long gap costs little per word, so a
+    father's own clause in the middle of a quotation no longer severs it, while the same
+    slack scattered across the span still buys nothing."""
+    from biblereference.search import lemma_chain
+
+    weight = {"α": 8.0, "β": 7.0, "γ": 9.0, "δ": 6.0}
+    weigh = weight.__getitem__
+    reading = [frozenset(x) for x in "αβ" + "." * 12 + "γδ"]
+    verse = [frozenset(x) for x in "αβγδ"]
+    assert lemma_chain(reading, verse, weigh).length == 2, "the 8-word wall severs it"
+    assert lemma_chain(reading, verse, weigh, concave=True).length == 4, "the cost does not"
+
+
+def test_every_disjoint_chain_is_reported_not_only_the_winner() -> None:
+    from biblereference.search import lemma_chains
+
+    weight = {"α": 8.0, "β": 7.0, "γ": 9.0, "δ": 6.0}
+    weigh = lambda lemma: weight.get(lemma, 2.0)  # noqa: E731
+    reading = [frozenset(x) for x in "αβ..γδ"]
+    assert [c.span for c in lemma_chains(reading, [frozenset(x) for x in "αβ"], weigh)] == [(0, 2)]
+    both = lemma_chains(reading, [frozenset(x) for x in "αβγδ"], weigh, concave=True)
+    assert both[0].length == 4, "one chain when the verse carries both clauses"
+
+
+def test_a_conflated_sentence_yields_one_finding_per_source() -> None:
+    """Polycarp's verbatim Matthew clause used to be the cluster's whole answer. The
+    uncovered remainder is now graded too, so the Lukan material stands beside it as its
+    own finding, on its own axes, at a gate that admits its evidence."""
+    with greek(inflected=True, gates=(Gate(chain=5, bits=25.0),)) as rich:
+        found = {str(m.passage): m.grade for m in rich.scan(POLYCARP_2_3)}
+    assert found.get("MAT 7:1-2") == "direct", "the verbatim clause, as before"
+    assert "LUK 6:38" in found or "LUK 6:37-38" in found, "and the re-inflected one beside it"
+
+
+def test_the_defaults_admit_nothing_new_until_the_price_is_known() -> None:
+    """The same sentence at the default gates: the Lukan clause's 35 bits do not clear
+    them, and multi-chain reporting must widen nothing by itself -- the consumer's
+    standing rule is that no default moves before the control corpus prices it."""
+    with greek(inflected=True) as rich:
+        found = {str(m.passage) for m in rich.scan(POLYCARP_2_3)}
+    assert "MAT 7:1-2" in found
+    assert not any(p.startswith("LUK 6:") for p in found)
+
+
+def test_magnesians_9_1_stays_denied_through_every_new_path() -> None:
+    """The highest-scoring false positive of the first calibration, and the fixture the
+    consumer watches: neither the concave cost, the extra chains, nor the remainder pass
+    may bring it back at the defaults."""
+    with greek(inflected=True) as rich:
+        assert rich.scan(MAGNESIANS_9_1) == []
+    with greek(inflected=True, concave=True) as rich:
+        assert rich.scan(MAGNESIANS_9_1) == []
+
+
+def test_concave_costs_change_nothing_the_walls_already_allowed() -> None:
+    """Ignatius's interpolations are all shorter than the walls, so paying for gaps and
+    walling them agree about him exactly. The loosening is confined to what it exists
+    for -- the one long interpolated clause -- and a case the walls handled is reported
+    to the bit as it was."""
+    axes = {}
+    for concave in (False, True):
+        with greek(inflected=True, concave=concave) as rich:
+            match = next(m for m in rich.scan(POLYCARP_2_2) if str(m.passage) == "MAT 10:16")
+            axes[concave] = (match.chain, match.lemma_run, match.bits)
+    assert axes[False] == axes[True]
+
+
+# --------------------------------------------------------------------------------------
 # The debt ledger: the formula's other direction
 # --------------------------------------------------------------------------------------
 
