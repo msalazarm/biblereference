@@ -59,6 +59,7 @@ __all__ = [
     "IDENTIFIED",
     "QUOTATION",
     "RESOLUTION_ORDER",
+    "FormulaDebt",
     "IndexCoverage",
     "IndexIncomplete",
     "IndexResult",
@@ -255,6 +256,15 @@ _MAX_SEEDS: Final = 8
 _MAX_PASSAGE: Final = 20
 
 _WORD_RE: Final = re.compile(r"[^\W_]+", re.UNICODE)
+
+#: The books whose first and last verses are a letter's frame -- salutation and farewell
+#: blessing -- for :attr:`Match.positional_candidate`. The twenty-one epistles, and
+#: Revelation, which is no epistle but opens and closes as one: χάρις ὑμῖν καὶ εἰρήνη at
+#: 1:4 and a farewell grace at 22:21 are the very registers the flag exists to mark.
+_EPISTLES: Final = frozenset(
+    "ROM 1CO 2CO GAL EPH PHP COL 1TH 2TH 1TI 2TI TIT "
+    "PHM HEB JAS 1PE 2PE 1JN 2JN 3JN JUD REV".split()
+)
 
 
 def _tokens(text: str, language: str | None = None) -> list[str]:
@@ -1214,6 +1224,16 @@ class Match:
     """The citation formula introducing this quotation, where one does -- *it is written*,
     *the scripture says*. Reported and never acted on: see :mod:`biblereference.formulae`
     for the measurement that says why it is evidence but not a threshold."""
+    positional_candidate: bool = False
+    """Whether the passage is an epistle's first or last verse.
+
+    Epistles open with a salutation and close with a farewell blessing, and the fathers
+    write both registers constantly without quoting anybody -- *grace to you and peace* is
+    how a letter starts, whoever writes it. A match here is not wrong, but a consumer who
+    knows *their* document's shape -- this paragraph is Polycarp's own address, that one
+    his farewell -- can put this flag beside that knowledge and settle a class of findings
+    no threshold can. Computed from the store's own verse numbering; reported, never
+    acted on, like :attr:`formula`."""
 
     @property
     def ambiguous(self) -> bool:
@@ -1320,6 +1340,7 @@ class Match:
             "bits": round(self.bits, 2),
             "matched_lemmas": list(self.matched_lemmas),
             "formula": self.formula,
+            "positional_candidate": self.positional_candidate,
             "translations": [
                 {
                     "corpus": w.corpus,
@@ -1329,6 +1350,43 @@ class Match:
                 }
                 for w in self.translations(margin)
             ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class FormulaDebt:
+    """A citation formula with no quotation found after it.
+
+    *It is written* is a promise that scripture follows. When the library finds nothing
+    within reach of one, either the announced text is absent from the library or the gates
+    refused it -- and either way this is the one kind of false negative visible without
+    gold data, because the document itself says a quotation is there. A ledger of these is
+    a self-updating account of recall debt: it shrinks when a missing corpus arrives or a
+    gate learns something, and every entry is an address to go look at.
+
+    Reported, never gated, like :attr:`Match.formula` -- this is that field's dual.
+    """
+
+    formula: str
+    """The formula found, folded, exactly as :attr:`Match.formula` reports it."""
+    language: str
+    """Which language's formula list recognised it."""
+    at: int
+    """Character offset in the document where the formula begins, as written."""
+    end: int
+    """Character offset just past the formula, as written."""
+    announced: str
+    """The words that follow the formula, as written -- what was promised and not found.
+    A dozen words, enough to read the ledger without the document open."""
+
+    def to_dict(self) -> dict[str, object]:
+        """The JSONL record: one broken promise, ready for a pipeline to aggregate."""
+        return {
+            "unmatched_formula": self.formula,
+            "language": self.language,
+            "at": self.at,
+            "end": self.end,
+            "announced": self.announced,
         }
 
 
@@ -1469,6 +1527,9 @@ class Searcher:
         self._min_query = min_query
         self._connection = sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)
         self._corpora = self._load_corpora(home, corpora, families, languages)
+        #: Last verse of each book already asked about, per versification. Filled lazily:
+        #: most scans never touch an epistle's ending, and the whole table is never needed.
+        self._ends: dict[tuple[str, str], tuple[int, int]] = {}
         self._texts = int(
             self._connection.execute("SELECT COUNT(*) FROM search_text").fetchone()[0]
         )
@@ -1896,7 +1957,7 @@ class Searcher:
         matches.sort(key=lambda m: -m.similarity)
         exact = _one_per_passage(matches)
         if not self._inflected:
-            return exact[:limit]
+            return self._flag_positional(exact[:limit])
 
         # Settled first and settled whole. Letting the two sets compete for `limit` places
         # cost eight passages in four hundred that the exact path had found on its own --
@@ -1909,7 +1970,7 @@ class Searcher:
             if self._graded_enough(match)
         ]
         graded.sort(key=lambda m: (-GRADES.index(m.grade), -m.bits, -m.similarity))
-        return (exact + graded)[:limit]
+        return self._flag_positional((exact + graded)[:limit])
 
     # -- matching on dictionary forms ---------------------------------------------------
 
@@ -2087,7 +2148,88 @@ class Searcher:
                     matches.append(found)
 
         matches.sort(key=lambda m: (-m.similarity, m.span or (0, 0)))
-        return _without_overlaps(matches)
+        return self._flag_positional(_without_overlaps(matches))
+
+    def formula_debts(
+        self,
+        text: str,
+        *,
+        window: int = _WINDOW,
+        stride: int = _STRIDE,
+    ) -> list[FormulaDebt]:
+        """Announced quotations this library failed to find. See :class:`FormulaDebt`.
+
+        Runs the same scan a caller would and then asks the opposite question: not *what
+        matched* but *what was promised* -- every citation formula in the document, minus
+        those with a match beginning within :data:`~biblereference.formulae.REACH` words.
+        The remainder is the recall debt, one record per broken promise.
+
+        The reach is counted exactly as :func:`~biblereference.formulae.preceding` counts
+        it, so a debt here and a filled :attr:`Match.formula` there are the two halves of
+        one measurement and cannot disagree at the boundary.
+        """
+        from .formulae import FORMULAE, REACH, announced
+
+        words = [(m.group(0), m.start(), m.end()) for m in _WORD_RE.finditer(text)]
+        if not words:
+            return []
+        starts = {offset: index for index, (_, offset, _) in enumerate(words)}
+        opened = {
+            starts[match.span[0]]
+            for match in self.scan(text, window=window, stride=stride)
+            if match.span and match.span[0] in starts
+        }
+        debts: list[FormulaDebt] = []
+        spoken = sorted({meta.language for meta in self._corpora.values()} & set(FORMULAE))
+        for language in spoken:
+            tokens = [fold(word, language) for word, _, _ in words]
+            for formula, first, after in announced(tokens, language):
+                # Kept promises: a quotation starting anywhere from the formula's own
+                # first word (a verse can contain the formula's words) to REACH words
+                # past its end, which is as far as `preceding` would have looked back.
+                if any(first <= start < after + REACH for start in opened):
+                    continue
+                tail = words[after : after + 12]
+                debts.append(
+                    FormulaDebt(
+                        formula=formula,
+                        language=language,
+                        at=words[first][1],
+                        end=words[after - 1][2],
+                        announced=text[tail[0][1] : tail[-1][2]] if tail else "",
+                    )
+                )
+        debts.sort(key=lambda debt: debt.at)
+        return debts
+
+    def _book_end(self, vrs: str, book: str) -> tuple[int, int]:
+        """The last verse this numbering gives the book, from the verses actually held."""
+        cached = self._ends.get((vrs, book))
+        if cached is None:
+            held = [c for c, meta in self._corpora.items() if meta.versification == vrs]
+            row = self._connection.execute(
+                "SELECT chapter, verse FROM verse WHERE book = ? AND corpus IN "
+                f"({','.join('?' * len(held))}) ORDER BY chapter DESC, verse DESC LIMIT 1",
+                [book, *held],
+            ).fetchone()
+            cached = self._ends[(vrs, book)] = (row[0], row[1]) if row else (0, 0)
+        return cached
+
+    def _positional(self, passage: VerseRange) -> bool:
+        """Whether the passage is an epistle's first or last verse. See :attr:`Match.
+        positional_candidate`."""
+        first, last = passage.start, passage.end
+        if first.book in _EPISTLES and (first.chapter, first.verse) == (1, 1):
+            return True
+        return last.book in _EPISTLES and (last.chapter, last.verse) == self._book_end(
+            last.vrs, last.book
+        )
+
+    def _flag_positional(self, matches: list[Match]) -> list[Match]:
+        return [
+            replace(match, positional_candidate=True) if self._positional(match.passage) else match
+            for match in matches
+        ]
 
     def _sweep(
         self, tokens: Sequence[str], window: int, stride: int

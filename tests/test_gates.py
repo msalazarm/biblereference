@@ -236,6 +236,84 @@ def test_the_formula_changes_no_threshold() -> None:
 
 
 # --------------------------------------------------------------------------------------
+# The debt ledger: the formula's other direction
+# --------------------------------------------------------------------------------------
+
+#: An announcement kept: γέγραπται, and the words of Job 1:1 follow verbatim.
+ANNOUNCED_AND_KEPT = (
+    "ἔτι δὲ καὶ περὶ Ἰὼβ οὕτως γέγραπται: Ἰὼβ δὲ ἦν δίκαιος καὶ ἄμεμπτος, ἀληθινός, "
+    "θεοσεβής, ἀπεχόμενος ἀπὸ παντὸς κακοῦ."
+)
+
+#: An announcement broken: the same γέγραπται, and what follows is nobody's scripture.
+ANNOUNCED_AND_BROKEN = (
+    "περὶ δὲ τούτων οὕτως γέγραπται: ὁ γὰρ ἀγρὸς τῆς πόλεως μικρὸς ἦν καὶ οἱ ἵπποι "
+    "τῶν βαρβάρων ἔφυγον εἰς τὰ ὄρη ταχέως πάνυ."
+)
+
+
+def test_every_formula_in_a_document_is_found_with_its_place() -> None:
+    """`announced` is `preceding` walked forward: same folded forms, same longest-first
+    rule, but over the whole document, which is what a ledger needs."""
+    from biblereference.emphasis import fold
+    from biblereference.formulae import announced
+
+    tokens = [fold(w, "grc") for w in "λεγει η γραφη ταδε και παλιν λεγει αλλα".split()]
+    assert list(announced(tokens, "grc")) == [
+        ("λεγει η γραφη", 0, 3),
+        ("και παλιν λεγει", 4, 7),
+    ]
+
+
+def test_an_announced_quotation_with_no_match_is_a_debt() -> None:
+    """A formula is a promise that scripture follows. Where nothing is found in reach, the
+    document itself has testified to a false negative -- the only kind visible without
+    gold data -- and the record says where to go look."""
+    with greek(inflected=True) as rich:
+        debts = rich.formula_debts(ANNOUNCED_AND_BROKEN)
+    assert len(debts) == 1
+    assert debts[0].formula == "γεγραπται"
+    assert ANNOUNCED_AND_BROKEN[debts[0].at : debts[0].end] == "γέγραπται"
+    assert debts[0].announced.startswith("ὁ γὰρ ἀγρὸς")
+
+
+def test_an_announced_and_matched_quotation_is_no_debt() -> None:
+    with greek(inflected=True) as rich:
+        assert rich.formula_debts(ANNOUNCED_AND_KEPT) == []
+
+
+# --------------------------------------------------------------------------------------
+# The positional flag: an epistle's frame, reported and never acted on
+# --------------------------------------------------------------------------------------
+
+
+def test_an_epistles_first_and_last_verses_are_flagged() -> None:
+    """The consumer knows which paragraph of *their* document is an address and which a
+    farewell; this flag is the scripture-side half they combine it with. First verse and
+    last verse, from the store's own numbering, no threshold anywhere."""
+    with greek() as searcher:
+        opening = searcher.search(
+            "Ἰάκωβος θεοῦ καὶ κυρίου Ἰησοῦ Χριστοῦ δοῦλος ταῖς δώδεκα φυλαῖς "
+            "ταῖς ἐν τῇ διασπορᾷ χαίρειν"
+        )
+        closing = searcher.search("Ὁ κύριος μετὰ τοῦ πνεύματός σου. ἡ χάρις μεθ' ὑμῶν.")
+    assert any(m.passage.book == "JAS" and m.positional_candidate for m in opening), (
+        "James opens his letter, and the flag says so"
+    )
+    assert any(m.passage.book == "2TI" and m.positional_candidate for m in closing), (
+        "2 Timothy's farewell blessing is its last verse"
+    )
+
+
+def test_a_gospel_verse_is_never_a_positional_candidate() -> None:
+    """Matthew 10:16 is mid-discourse in a narrative book: whatever its wording, it is not
+    the frame of a letter, and flagging it would dilute the one thing the flag means."""
+    with greek(inflected=True) as rich:
+        found = [m for m in rich.scan(POLYCARP_2_2) if m.passage.book == "MAT"]
+    assert found and not any(m.positional_candidate for m in found)
+
+
+# --------------------------------------------------------------------------------------
 # What reading eighty-eight findings by hand turned up
 #
 # The consumer scanned the nine Greek works a scholar had tabulated, read every match at a

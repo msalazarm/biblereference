@@ -23,11 +23,12 @@ people who asked for this said they would rather weigh the evidence than be hand
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator, Sequence
 from typing import Final
 
 from .emphasis import fold
 
-__all__ = ["FORMULAE", "preceding"]
+__all__ = ["FORMULAE", "announced", "preceding"]
 
 #: How far back to look, in words. A formula introduces what comes next; a clause away it is
 #: introducing something else.
@@ -72,6 +73,40 @@ _PATTERNS: Final[dict[str, re.Pattern[str]]] = {
     )
     for language, forms in FORMULAE.items()
 }
+
+
+#: The formulae as word tuples, longest first, for matching against a tokenised document.
+#: Longest first so that at one position ``λεγει η γραφη`` is the announcement found and
+#: not the ``λεγει`` it begins with -- the same rule the regex encodes by ordering.
+_SPLIT: Final[dict[str, tuple[tuple[str, ...], ...]]] = {
+    language: tuple(sorted((tuple(form.split()) for form in forms), key=len, reverse=True))
+    for language, forms in FORMULAE.items()
+}
+
+
+def announced(tokens: Sequence[str], language: str) -> Iterator[tuple[str, int, int]]:
+    """Every citation formula in a tokenised document, and where each one sits.
+
+    The other direction from :func:`preceding`: that starts from a quotation and asks what
+    introduced it, this starts from the document and asks what was introduced -- which is
+    the question a false-negative ledger needs, because a formula with no quotation after
+    it is the announcement of something the library failed to find.
+
+    :param tokens: The document's words, folded one by one -- punctuation already shed by
+        the tokeniser, which is why this can match on word tuples where :func:`preceding`
+        needs a regex.
+    :returns: ``(formula, start, after)`` word indices, non-overlapping, in order.
+    """
+    forms = _SPLIT.get(language, ())
+    at = 0
+    while at < len(tokens):
+        for form in forms:
+            if tuple(tokens[at : at + len(form)]) == form:
+                yield " ".join(form), at, at + len(form)
+                at += len(form)
+                break
+        else:
+            at += 1
 
 
 def preceding(text: str, start: int, language: str, *, reach: int = REACH) -> str | None:

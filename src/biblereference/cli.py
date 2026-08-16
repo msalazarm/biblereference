@@ -308,6 +308,16 @@ def cmd_scan(args: argparse.Namespace) -> int:
             inflected=args.inflected,
             gates=_gates(args),
         ) as searcher:
+            if args.debts:
+                # The opposite stream: not what matched but what was announced and did
+                # not. Separate from the match stream because the records answer
+                # different questions and a pipeline should not have to tell them apart
+                # by shape.
+                debts = searcher.formula_debts(text)
+                for debt in debts:
+                    print(json.dumps(debt.to_dict(), ensure_ascii=False))
+                _say(f"{len(debts)} announced quotation(s) with no match in reach")
+                return 0
             matches = searcher.scan(text)
             if args.resolve:
                 matches = _resolve_inline(home, searcher, matches, args)
@@ -1169,6 +1179,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--family", action="append", help="search only this versification; repeatable"
     )
     scan.add_argument("--language", action="append", help="search only this language; repeatable")
+    scan.add_argument(
+        "--debts",
+        action="store_true",
+        help="emit announced-but-unmatched citation formulae instead of matches: the "
+        "recall-debt ledger, one JSONL record per formula with nothing found in reach",
+    )
     _inflected_options(scan)
     _add_resolve_options(scan)
     scan.set_defaults(func=cmd_scan)

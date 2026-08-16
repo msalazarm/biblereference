@@ -235,7 +235,12 @@ def test_scan_and_search_return_what_they_returned_before(home: DataHome) -> Non
 #: difference between the two honest: an addition has to be named to be tolerated, and
 #: anything else moving still fails.
 ADDED: frozenset[str] = frozenset(
-    {"grade", "run", "lemma_run", "chain", "bits", "matched_lemmas", "formula"}
+    {"grade", "run", "lemma_run", "chain", "bits", "matched_lemmas", "formula"},
+) | frozenset(
+    # The positional flag, added for the consumer's salutation/farewell combination --
+    # threshold-free, computed from the store's own numbering, and like `formula` it
+    # reports evidence without acting on it.
+    {"positional_candidate"},
 )
 
 

@@ -63,17 +63,31 @@ class Mark:
     verse: int
     vrs: str
     quoted: str
+    announced: bool = False
+    """Whether a citation formula stands within reach before the quotation *in the
+    witness document* -- judged by the library's own `preceding`, so "announced" means
+    here exactly what `Match.formula` means on a match."""
 
 
 def marks(limit: int | None, seed: int = 0) -> list[Mark]:
-    """Editor-marked Greek quotations that name a verse this library could hold."""
+    """Editor-marked Greek quotations that name a verse this library could hold.
+
+    Each mark carries whether its document announced it, read from the passage the editor
+    marked it in. Recall stratified on that bit is the report §10 asks for: an announced
+    quotation the matcher misses is the loudest kind of false negative, and averaging it
+    together with unannounced ones is how a recall number hides it.
+    """
+    from biblereference.formulae import preceding
+
     db = sqlite3.connect(f"file:{MARKS}?mode=ro", uri=True)
     rows = db.execute(
-        "SELECT e.raw, e.quoted FROM editor_reference e JOIN witness w ON w.id = e.witness "
+        "SELECT e.raw, e.quoted, e.offset, p.text FROM editor_reference e "
+        "JOIN witness w ON w.id = e.witness "
+        "LEFT JOIN passage p ON p.witness = e.witness AND p.locus = e.locus "
         "WHERE w.language = 'grc' AND e.quoted IS NOT NULL AND e.quoted <> ''"
     ).fetchall()
     out: list[Mark] = []
-    for raw, quoted in rows:
+    for raw, quoted, offset, context in rows:
         parts = str(raw).split(":")
         if len(parts) != 4 or parts[0] not in SYSTEMS:
             continue
@@ -84,7 +98,19 @@ def marks(limit: int | None, seed: int = 0) -> list[Mark]:
             continue
         if not chapter.isdigit() or not verse.isdigit():
             continue
-        out.append(Mark(usfm, int(chapter), int(verse), SYSTEMS[system], str(quoted)))
+        quoted = str(quoted)
+        announced = False
+        if context:
+            # The recorded offset when it is real, else the span found by eye; either
+            # way the question is the library's own: what stood within REACH before it?
+            start = int(offset) if offset is not None and int(offset) >= 0 else -1
+            if start < 0 or str(context)[start : start + len(quoted)] != quoted:
+                start = str(context).find(quoted)
+            if start > 0:
+                announced = preceding(str(context), start, "grc") is not None
+        out.append(
+            Mark(usfm, int(chapter), int(verse), SYSTEMS[system], quoted, announced)
+        )
     if limit and len(out) > limit:
         # Sampled deterministically, so two runs of the same size are comparable.
         out = random.Random(seed).sample(out, limit)
@@ -92,8 +118,11 @@ def marks(limit: int | None, seed: int = 0) -> list[Mark]:
 
 
 def run(home: DataHome, found: list[Mark], **options: object) -> dict[str, int]:
-    """How many marks the searcher lands on, by grade of the match that found them."""
+    """How many marks the searcher lands on, by grade of the match that found them --
+    and, for POD stratification, split by whether the document announced the mark."""
     tally = {"marks": len(found), "hit": 0, "book": 0, **{grade: 0 for grade in GRADES}}
+    tally["announced"] = sum(1 for mark in found if mark.announced)
+    tally["announced_hit"] = 0
     with Searcher(home, languages=["grc"], **GREEK, **options) as searcher:  # type: ignore[arg-type]
         for mark in found:
             for match in searcher.search(mark.quoted, limit=5):
@@ -104,14 +133,21 @@ def run(home: DataHome, found: list[Mark], **options: object) -> dict[str, int]:
                 if span.start.verse <= mark.verse <= span.end.verse:
                     tally["hit"] += 1
                     tally[match.grade] += 1
+                    if mark.announced:
+                        tally["announced_hit"] += 1
                 break
     return tally
 
 
 def show(label: str, tally: dict[str, int]) -> None:
     total = tally["marks"] or 1
+    loud = tally.get("announced", 0)
+    quiet = total - loud
+    quiet_hit = tally["hit"] - tally.get("announced_hit", 0)
     print(
-        f"  {label:28} {tally['hit']:>5}/{total:<5} {100 * tally['hit'] / total:5.1f}%   "
+        f"  {label:28} {tally['hit']:>5}/{total:<5} POD {100 * tally['hit'] / total:5.1f}%   "
+        f"announced {100 * tally.get('announced_hit', 0) / (loud or 1):5.1f}%   "
+        f"unannounced {100 * quiet_hit / (quiet or 1):5.1f}%   "
         f"book {100 * tally['book'] / total:5.1f}%   "
         + "  ".join(f"{grade} {tally[grade]}" for grade in GRADES)
     )
@@ -185,11 +221,17 @@ def control_text(cap: int) -> tuple[list[str], int]:
     return out, words
 
 
-def evidence(home: DataHome, texts: list[str], window: int = 12, stride: int = 6) -> list[tuple]:
+def evidence(
+    home: DataHome, texts: list[str], window: int = 12, stride: int = 6
+) -> tuple[list[tuple], int]:
     """Every graded match the permissive gate finds, with all four axes measured.
 
     One pass, because the axes are properties of a match rather than of a gate: collecting
     them once lets twenty candidate gates be scored offline instead of twenty scans.
+
+    :returns: The matches, and how many windows were scanned -- the denominator PFA needs.
+        A false-positive rate without its number of opportunities is not a probability,
+        and the CFAR convention this report borrows from is nothing without one.
     """
     lexicon, weights = Lexicon(home), LemmaWeights(home)
     weigh = weights.of("grc")
@@ -198,10 +240,12 @@ def evidence(home: DataHome, texts: list[str], window: int = 12, stride: int = 6
         home, languages=["grc"], inflected=True, min_query=3, gates=[COLLECT], **GREEK
     )
     found: list[tuple] = []
+    windows = 0
     with searcher:
         for text in texts:
             tokens = text.split()
             for start in range(0, max(1, len(tokens) - window + 1), stride):
+                windows += 1
                 chunk = " ".join(tokens[start : start + window])
                 for match in searcher.search(chunk, limit=3):
                     if match.grade == "direct":
@@ -219,7 +263,7 @@ def evidence(home: DataHome, texts: list[str], window: int = 12, stride: int = 6
                     if not row:
                         continue
                     found.append(axes(chunk, str(row[0]), lexicon, weigh))
-    return found
+    return found, windows
 
 
 def axes(text: str, verse: str, lexicon: Lexicon, weigh: object) -> tuple[int, int, int, float]:
@@ -254,15 +298,38 @@ CANDIDATES = [
 
 
 def cmd_control(args: argparse.Namespace) -> int:
+    import json
+
     home = DataHome()
-    texts, words = control_text(args.control)
-    print(f"control: {words:,} words of classical / pre-christian / pre-septuagint Greek\n")
-    found = evidence(home, texts)
-    print(f"collected at {COLLECT}: {len(found):,} graded matches, all of them false\n")
-    print(f"{'gate':34} {'false positives':>15} {'per 1,000 words':>16}")
+    saved = Path(args.save) if args.save else None
+    if saved and saved.exists():
+        # The collected evidence is the expensive half of this measurement, and it is
+        # also the u-side input the Fellegi-Sunter calibration will want: axes measured
+        # over text where every match is false by construction. Re-reading it makes the
+        # gate table below reproducible without a rescan, and hands the same file on.
+        record = json.loads(saved.read_text("utf-8"))
+        words, windows = int(record["words"]), int(record["windows"])
+        found = [tuple(row) for row in record["axes"]]
+        print(f"control (from {saved}): {words:,} words\n")
+    else:
+        texts, words = control_text(args.control)
+        print(f"control: {words:,} words of classical / pre-christian / pre-septuagint Greek\n")
+        found, windows = evidence(home, texts)
+        if saved:
+            saved.write_text(
+                json.dumps({"words": words, "windows": windows, "axes": found}),
+                "utf-8",
+            )
+            print(f"evidence written to {saved}\n")
+    print(f"collected at {COLLECT}: {len(found):,} graded matches, all of them false")
+    print(f"over {windows:,} windows -- the opportunities PFA is a probability of\n")
+    print(f"{'gate':34} {'false positives':>15} {'per 1,000 words':>16} {'PFA':>10}")
     for gate in CANDIDATES:
         n = sum(1 for row in found if gate.admits(*row))
-        print(f"  {gate!s:32} {n:>15,} {n / words * 1000:>16.4f}")
+        print(
+            f"  {gate!s:32} {n:>15,} {n / words * 1000:>16.4f} "
+            f"{n / (windows or 1):>10.6f}"
+        )
     return 0
 
 
