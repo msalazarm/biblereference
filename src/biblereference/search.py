@@ -40,7 +40,10 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from difflib import Match as Match_
 from difflib import SequenceMatcher
-from typing import Final
+from typing import TYPE_CHECKING, Final
+
+if TYPE_CHECKING:
+    from .parallels import Parallels
 
 from .corpora.base import CorpusError, VerseUnavailable
 from .corpora.web import KNOWN_VERSIONS, BibleGatewayCorpus
@@ -1359,6 +1362,14 @@ class Match:
     """The citation formula introducing this quotation, where one does -- *it is written*,
     *the scripture says*. Reported and never acted on: see :mod:`biblereference.formulae`
     for the measurement that says why it is evidence but not a threshold."""
+    family: tuple[str, ...] = ()
+    """Verses that carry these same words, verified verbally. See :mod:`.parallels`.
+
+    Acts 8:32 *is* Isaiah 53:7 — Acts is quoting Isaiah — and a consumer scoring this
+    match against a scholar who wrote "Isaiah 53" needs to know they agreed. Coordinates
+    are the ones the library's Greek is held in (``org`` for the New Testament, ``lxx``
+    for the Old), best-chained first. Empty until ``biblereference parallels`` builds the
+    index, and always empty for a passage with no verbal parallel."""
     positional_candidate: bool = False
     """Whether the passage is an epistle's first or last verse.
 
@@ -1475,6 +1486,7 @@ class Match:
             "bits": round(self.bits, 2),
             "matched_lemmas": list(self.matched_lemmas),
             "formula": self.formula,
+            "family": list(self.family),
             "positional_candidate": self.positional_candidate,
             "translations": [
                 {
@@ -1671,6 +1683,8 @@ class Searcher:
         #: Last verse of each book already asked about, per versification. Filled lazily:
         #: most scans never touch an epistle's ending, and the whole table is never needed.
         self._ends: dict[tuple[str, str], tuple[int, int]] = {}
+        #: The parallel-family reader, opened on first use for the same reason.
+        self._parallels: Parallels | None = None
         self._texts = int(
             self._connection.execute("SELECT COUNT(*) FROM search_text").fetchone()[0]
         )
@@ -2364,9 +2378,30 @@ class Searcher:
             last.vrs, last.book
         )
 
+    def _family(self, passage: VerseRange) -> tuple[str, ...]:
+        """The passage's verbal parallels, from the index `biblereference parallels`
+        builds. Silence where it was never built."""
+        if self._parallels is None:
+            from .parallels import Parallels
+
+            self._parallels = Parallels(self._connection)
+        chapter = passage.start.chapter
+        if not isinstance(chapter, int):
+            # Esther's lettered additions: the index is numbered, so a letter chapter
+            # has no family by construction.
+            return ()
+        return self._parallels.of(
+            passage.start.book, chapter, passage.start.verse, passage.end.verse
+        )
+
     def _flag_positional(self, matches: list[Match]) -> list[Match]:
+        """Both reported-never-gated decorations, in one pass over the answer."""
         return [
-            replace(match, positional_candidate=True) if self._positional(match.passage) else match
+            replace(
+                match,
+                positional_candidate=self._positional(match.passage),
+                family=self._family(match.passage),
+            )
             for match in matches
         ]
 

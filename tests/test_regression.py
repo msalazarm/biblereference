@@ -237,10 +237,11 @@ def test_scan_and_search_return_what_they_returned_before(home: DataHome) -> Non
 ADDED: frozenset[str] = frozenset(
     {"grade", "run", "lemma_run", "chain", "bits", "matched_lemmas", "formula"},
 ) | frozenset(
-    # The positional flag, added for the consumer's salutation/farewell combination --
-    # threshold-free, computed from the store's own numbering, and like `formula` it
-    # reports evidence without acting on it.
-    {"positional_candidate"},
+    # The positional flag and the parallel family, added for the consumer's
+    # salutation/farewell combination and the 34-verdict inner-biblical class --
+    # threshold-free, computed from the store's own tables, and like `formula` they
+    # report evidence without acting on it.
+    {"positional_candidate", "family"},
 )
 
 

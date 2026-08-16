@@ -119,13 +119,25 @@ def marks(limit: int | None, seed: int = 0) -> list[Mark]:
 
 def run(home: DataHome, found: list[Mark], **options: object) -> dict[str, int]:
     """How many marks the searcher lands on, by grade of the match that found them --
-    and, for POD stratification, split by whether the document announced the mark."""
+    and, for POD stratification, split by whether the document announced the mark.
+
+    `family` counts the marks recovered *only* through the parallel-family index: the
+    scholar names Isaiah 53, the searcher lands on Acts 8:32, and the two are the same
+    words. Counted apart from `hit`, never inside it, so every older number in every
+    older report stays comparable. Zero until `biblereference parallels` has built the
+    index -- silence, not an error."""
+    from biblereference.parallels import Parallels
+
     tally = {"marks": len(found), "hit": 0, "book": 0, **{grade: 0 for grade in GRADES}}
     tally["announced"] = sum(1 for mark in found if mark.announced)
     tally["announced_hit"] = 0
+    tally["family"] = 0
+    index = Parallels(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True))
     with Searcher(home, languages=["grc"], **GREEK, **options) as searcher:  # type: ignore[arg-type]
         for mark in found:
-            for match in searcher.search(mark.quoted, limit=5):
+            matches = searcher.search(mark.quoted, limit=5)
+            landed = False
+            for match in matches:
                 span = match.passage
                 if span.book != mark.book:
                     continue
@@ -133,9 +145,21 @@ def run(home: DataHome, found: list[Mark], **options: object) -> dict[str, int]:
                 if span.start.verse <= mark.verse <= span.end.verse:
                     tally["hit"] += 1
                     tally[match.grade] += 1
+                    landed = True
                     if mark.announced:
                         tally["announced_hit"] += 1
                 break
+            if landed:
+                continue
+            name = f"{mark.book} {mark.chapter}:{mark.verse}"
+            for match in matches:
+                span = match.passage
+                family = index.of(
+                    span.start.book, span.start.chapter, span.start.verse, span.end.verse
+                )
+                if name in family:
+                    tally["family"] += 1
+                    break
     return tally
 
 
@@ -144,9 +168,11 @@ def show(label: str, tally: dict[str, int]) -> None:
     loud = tally.get("announced", 0)
     quiet = total - loud
     quiet_hit = tally["hit"] - tally.get("announced_hit", 0)
+    family = tally.get("family", 0)
     print(
         f"  {label:28} {tally['hit']:>5}/{total:<5} POD {100 * tally['hit'] / total:5.1f}%   "
-        f"announced {100 * tally.get('announced_hit', 0) / (loud or 1):5.1f}%   "
+        + (f"+family {100 * (tally['hit'] + family) / total:5.1f}%   " if family else "")
+        + f"announced {100 * tally.get('announced_hit', 0) / (loud or 1):5.1f}%   "
         f"unannounced {100 * quiet_hit / (quiet or 1):5.1f}%   "
         f"book {100 * tally['book'] / total:5.1f}%   "
         + "  ".join(f"{grade} {tally[grade]}" for grade in GRADES)

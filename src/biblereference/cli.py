@@ -303,6 +303,23 @@ def _inflected_options(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def cmd_parallels(args: argparse.Namespace) -> int:
+    """Fetch and verify the parallel-family index. See :mod:`biblereference.parallels`."""
+    from .fetch import fetch_source
+    from .parallels import SOURCE, build_parallels
+
+    home = _home(args)
+    _say(f"{SOURCE.label}")
+    _say(f"  terms: {SOURCE.license}")
+    fetch_source(SOURCE, home, report=_say, force=args.force)
+    result = build_parallels(home, report=_say)
+    _say(
+        f"\n{result.pairs:,} seed rows; {result.resolved:,} pairs resolved to held Greek; "
+        f"{result.verified:,} verified as verbal and indexed"
+    )
+    return 0
+
+
 def cmd_scan(args: argparse.Namespace) -> int:
     """Find every quotation in a document, one JSONL record each."""
     home = _home(args)
@@ -1282,6 +1299,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="download again even if already archived"
     )
     lemmata.set_defaults(func=cmd_lemmata)
+
+    parallels = subparsers.add_parser(
+        "parallels",
+        help="fetch and verify the Bible's internal parallels, for family reporting",
+        description="Downloads OpenBible.info's cross-reference list (CC BY) and keeps "
+        "only the verbally verified pairs -- each pair chained against the Greek actually "
+        "held, so Acts 8:32 is in Isaiah 53:7's family and a merely topical link is not. "
+        "Fills `Match.family` on every scan and search.",
+    )
+    parallels.add_argument(
+        "--force", action="store_true", help="download again even if already archived"
+    )
+    parallels.set_defaults(func=cmd_parallels)
 
     passage = subparsers.add_parser(
         "passage",
