@@ -274,3 +274,25 @@ def test_a_source_asking_for_a_crawl_delay_declares_one() -> None:
     """vatican.va publishes Crawl-delay: 2, and the Nova Vulgata is 73 pages of it."""
     assert get_source("novavulgata").crawl_delay == 2.0
     assert get_source("latvuc").crawl_delay == 0.0
+
+
+def test_every_derived_layer_names_the_command_that_rebuilds_it(home: Path) -> None:
+    """The library is derivable from zero, and that is only a real property if the whole
+    chain is written down. `sync` builds two of the five steps and said nothing about the
+    other three, so a rebuild from zero produced a library that answered every ordinary
+    query while holding no lexicon, no lemma index and no families -- each of which fails
+    by returning less, which is the failure mode that does not announce itself.
+
+    An empty data home must report every layer absent and name its command. A sixth layer
+    added without a line here fails this test rather than shipping silent.
+    """
+    from biblereference.cli import _DERIVED, _derived_state
+
+    state = _derived_state(DataHome(home))
+    assert [label for label, _, _, _ in state] == [label for label, _, _, _ in _DERIVED]
+    assert all(count == 0 for _, count, _, _ in state), "nothing is derived in an empty home"
+    assert all(
+        command.startswith("biblereference ") for _, _, command, _ in state
+    ), "every layer says what rebuilds it"
+    tables = {table for _, table, _, _ in _DERIVED}
+    assert tables == {"search_ref", "lemma_form", "lemma_ref", "parallel_family"}

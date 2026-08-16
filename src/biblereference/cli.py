@@ -12,8 +12,10 @@ import argparse
 import hashlib
 import json
 import os
+import sqlite3
 import sys
 from collections.abc import Sequence
+from contextlib import closing
 from pathlib import Path
 from typing import Final
 
@@ -200,6 +202,19 @@ def cmd_sync(args: argparse.Namespace) -> int:
         f"{total:,} verses built into {home.database}\n"
         f"{indexed.verses:,} verses indexed for search as {indexed.texts:,} distinct texts"
     )
+
+    # What this command does *not* do, said before somebody discovers it by getting empty
+    # answers. The lexicon and the cross-references are separate downloads under separate
+    # licences, so `sync` does not reach for them on its own -- but a library missing them
+    # is not a whole library, and silence here is what makes a rebuild from zero look
+    # finished when it is two steps short.
+    remaining = [
+        (label, command) for label, count, command, _ in _derived_state(home) if not count
+    ]
+    if remaining:
+        _say("\nstill to build, and nothing here does it for you:")
+        for label, command in remaining:
+            _say(f"  {label:18} `{command}`")
     return 1 if failed else 0
 
 
@@ -833,6 +848,45 @@ def _print_verse_differences(result: BookComparison) -> None:
         print(f"- {difference.right}\n")
 
 
+#: Everything derived *from* the texts, in build order: what it is, the table that proves
+#: it, and the command that rebuilds it. Five steps make a whole library and `sync` runs
+#: two of them, which nothing said until a rebuild from zero produced a library that
+#: answered every ordinary query while quietly holding no families and no inflected
+#: matching at all. Derivable-from-zero is only a real property if the whole chain is
+#: written down somewhere a person will look.
+_DERIVED: Final = (
+    ("search index", "search_ref", "biblereference index", "sync builds this"),
+    ("lemma lexicon", "lemma_form", "biblereference lemmata", ""),
+    ("lemma index", "lemma_ref", "biblereference index --lemmata", ""),
+    ("parallel families", "parallel_family", "biblereference parallels", ""),
+)
+
+
+def _derived_state(home: DataHome) -> list[tuple[str, int, str, str]]:
+    """Each derived layer with the rows it holds. Absent tables count zero, not raise:
+    the whole point is to report a layer that was never built."""
+    out: list[tuple[str, int, str, str]] = []
+    if not home.database.exists():
+        return [(label, 0, command, note) for label, _, command, note in _DERIVED]
+    with closing(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)) as db:
+        for label, table, command, note in _DERIVED:
+            try:
+                count = int(db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            except sqlite3.OperationalError:
+                count = 0
+            out.append((label, count, command, note))
+    return out
+
+
+def _say_derived(home: DataHome) -> None:
+    _say("\nderived from the texts:")
+    for label, count, command, note in _derived_state(home):
+        if count:
+            _say(f"  {label:18} {count:>10,} rows" + (f"  ({note})" if note else ""))
+        else:
+            _say(f"  {label:18} {'absent':>10}   build it with `{command}`")
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Say what is cached, what is missing, and what the texts are."""
     home = _home(args)
@@ -947,6 +1001,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             _say(f"  not fetched: {', '.join(absent)} -- `biblereference lemmata`")
     else:
         _say("\nlemmata: none. `scan --inflected` needs `biblereference lemmata` first")
+
+    _say_derived(home)
 
     # The question a person actually has, which no per-corpus line answers: of everything
     # I hold, what may I not use freely? Counted rather than listed, because the list is
