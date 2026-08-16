@@ -13,7 +13,7 @@ from typing import Any
 
 from ..refs import parse_reference
 from ..versification import AVAILABLE_SYSTEMS, DEFAULT_SYSTEMS, VersificationError, fingerprint
-from .jobs import job_scan_one, job_search_one
+from .jobs import job_debts_one, job_scan_one, job_search_one
 from .library import VRS, corpora, home, library_stamp
 
 
@@ -126,9 +126,18 @@ def api_scan(params: dict[str, list[str]], body: str) -> Any:
     posted, so a caller can point back at its own text -- which is what makes a finding
     checkable rather than merely plausible.
     """
-    from .server import search_options
+    from .server import _flag, search_options
 
     options = search_options(params)
+    if params.get("debts") and _flag("debts", params["debts"][0]):
+        # The other stream: not what matched but what was announced and did not. Its own
+        # key rather than a differently-shaped `matches`, so a pipeline cannot mistake one
+        # for the other.
+        return {
+            "debts": _jobs().run(job_debts_one, body, options),
+            "words": len(body.split()),
+            "library": library_stamp(),
+        }
     return {
         "matches": _jobs().run(job_scan_one, body, options),
         "words": len(body.split()),

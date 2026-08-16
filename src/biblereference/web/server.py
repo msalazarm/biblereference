@@ -91,6 +91,13 @@ _OTHER: Final = {
     # switched on answering as though it had been.
     "inflected",
     "gate",
+    # The two opt-in tiers, by the same reasoning: both exist to be *priced* by a caller
+    # on their own corpus, and a tier nobody can switch on from the network cannot be.
+    "concave",
+    "itacised",
+    # `debts` is the scan endpoint's own, not a `Searcher` option -- allowed here so the
+    # validator passes it, read in `api_scan` rather than folded into the options.
+    "debts",
 }
 
 #: Query parameters the job endpoint owns. Named explicitly rather than folded into the
@@ -195,6 +202,10 @@ def search_options(
 
     if params.get("inflected"):
         options["inflected"] = _flag("inflected", params["inflected"][0])
+    if params.get("concave"):
+        options["concave"] = _flag("concave", params["concave"][0])
+    if params.get("itacised"):
+        options["itacised"] = _flag("itacised", params["itacised"][0])
     if params.get("gate"):
         # Repeatable, and a union: a match passes if any gate admits it. Spelled
         # `run:lemma_run:chain:bits`, as the command line spells it.

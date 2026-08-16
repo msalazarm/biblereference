@@ -167,6 +167,17 @@ def job_scan_one(text: str, options: dict[str, Any]) -> list[Any]:
     return [match.to_dict() for match in worker_searcher(options).scan(text)]
 
 
+def job_debts_one(text: str, options: dict[str, Any]) -> list[Any]:
+    """One document's announced-but-unmatched citation formulae, in a worker process.
+
+    The recall-debt ledger over the wire. It costs a full scan to compute -- the debts
+    are what the scan did *not* answer -- so it runs where every other scan runs.
+    """
+    if not text.strip():
+        return []
+    return [debt.to_dict() for debt in worker_searcher(options).formula_debts(text)]
+
+
 def job_search_one(text: str, limit: int, options: dict[str, Any]) -> list[Any]:
     """One quotation, in a worker process. Same reasoning as :func:`job_scan_one`."""
     return [match.to_dict() for match in worker_searcher(options).search(text, limit=limit)]

@@ -299,6 +299,22 @@ def test_inflected_matching_can_be_asked_for_over_the_wire() -> None:
         serve.search_options({"inflected": ["maybe"]})
 
 
+def test_the_opt_in_tiers_and_the_debt_ledger_are_reachable_over_the_wire() -> None:
+    """Same fault as `inflected` had, and the same fix. Both tiers exist to be *priced*
+    by the consumer on their own corpus, and a tier nobody can switch on from the network
+    cannot be; the debt ledger is the recall instrument they asked for first, and it runs
+    on the machine holding the library rather than the one holding the documents.
+
+    `debts` is allowed but is not a `Searcher` option -- the scan endpoint reads it -- so
+    it must pass the validator without appearing in what a `Searcher` is built from.
+    """
+    assert serve.search_options({"concave": ["true"]}) == {"concave": True}
+    assert serve.search_options({"itacised": ["1"]}) == {"itacised": True}
+    assert serve.search_options({"debts": ["true"]}) == {}
+    with pytest.raises(ValueError, match="true or false"):
+        serve.search_options({"itacised": ["sometimes"]})
+
+
 def test_gates_travel_as_a_repeatable_parameter() -> None:
     """A union, because the gates are complementary rather than nested and expressing that
     took three separate passes before."""
