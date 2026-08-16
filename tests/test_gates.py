@@ -420,22 +420,61 @@ def test_an_announced_and_matched_quotation_is_no_debt() -> None:
 # --------------------------------------------------------------------------------------
 
 
-def test_an_epistles_first_and_last_verses_are_flagged() -> None:
+def test_an_epistles_two_ends_are_named_not_merely_flagged() -> None:
     """The consumer knows which paragraph of *their* document is an address and which a
-    farewell; this flag is the scripture-side half they combine it with. First verse and
-    last verse, from the store's own numbering, no threshold anywhere."""
+    farewell, so *which end* is the answer they can use: an opening matched against a
+    farewell is as much a mismatch as no match at all."""
     with greek() as searcher:
         opening = searcher.search(
             "Ἰάκωβος θεοῦ καὶ κυρίου Ἰησοῦ Χριστοῦ δοῦλος ταῖς δώδεκα φυλαῖς "
             "ταῖς ἐν τῇ διασπορᾷ χαίρειν"
         )
         closing = searcher.search("Ὁ κύριος μετὰ τοῦ πνεύματός σου. ἡ χάρις μεθ' ὑμῶν.")
-    assert any(m.passage.book == "JAS" and m.positional_candidate for m in opening), (
-        "James opens his letter, and the flag says so"
-    )
-    assert any(m.passage.book == "2TI" and m.positional_candidate for m in closing), (
-        "2 Timothy's farewell blessing is its last verse"
-    )
+    assert any(
+        m.passage.book == "JAS" and m.positional_candidate == "opening" for m in opening
+    ), "James opens his letter, and it is named an opening"
+    assert any(
+        m.passage.book == "2TI" and m.positional_candidate == "close" for m in closing
+    ), "2 Timothy's farewell blessing is named a close"
+
+
+def test_the_window_catches_the_three_verses_a_strict_rule_missed() -> None:
+    """First-and-last-verse-only missed three of the consumer's eight hand-read
+    salutations: two open past verse 1, and Ephesians' closing grace stands one verse
+    before the true last. Three in and two back is what they measured, so it is what
+    this holds -- and a verse further in than either window is still nothing."""
+    from biblereference.refs import VerseRange, VerseRef
+
+    def at(book: str, chapter: int, verse: int) -> VerseRange:
+        ref = VerseRef(book, chapter, verse, vrs="org")
+        return VerseRange(ref, ref)
+
+    with greek() as searcher:
+        assert searcher._positional(at("2TH", 1, 2)) == "opening"
+        assert searcher._positional(at("EPH", 6, 23)) == "close"
+        assert searcher._positional(at("EPH", 6, 24)) == "close"
+        assert searcher._positional(at("ROM", 1, 4)) is None, "one verse past the window"
+        assert searcher._positional(at("MAT", 1, 1)) is None, "a gospel is not a letter"
+
+
+def test_a_one_chapter_letter_does_not_read_as_all_farewell() -> None:
+    """Philemon's first chapter is also its last, so a rule asking "is this the last
+    chapter" makes the whole letter a farewell -- which would have mislabelled the very
+    salutation the window was widened to catch. The closing test is anchored to the
+    book's final *verse* instead, so both ends of a one-chapter letter come out right
+    and its middle stays empty."""
+    from biblereference.refs import VerseRange, VerseRef
+
+    def at(book: str, verse: int) -> VerseRange:
+        ref = VerseRef(book, 1, verse, vrs="org")
+        return VerseRange(ref, ref)
+
+    with greek() as searcher:
+        assert searcher._positional(at("PHM", 3)) == "opening"
+        assert searcher._positional(at("PHM", 10)) is None
+        assert searcher._positional(at("PHM", 25)) == "close"
+        assert searcher._positional(at("2JN", 13)) == "close"
+        assert searcher._positional(at("JUD", 12)) is None
 
 
 def test_a_gospel_verse_is_never_a_positional_candidate() -> None:

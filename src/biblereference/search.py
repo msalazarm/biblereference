@@ -294,6 +294,14 @@ _EPISTLES: Final = frozenset(
     "PHM HEB JAS 1PE 2PE 1JN 2JN 3JN JUD REV".split()
 )
 
+#: How far into a letter its address runs, and how far back its farewell, in verses.
+#: Measured rather than chosen: the consumer read all eight of their salutation findings
+#: and the strict first-and-last rule missed three of them -- 2 Thessalonians 1:2 and
+#: Philemon 1:3 sit past the first verse, and Ephesians' closing grace at 6:23 stands one
+#: verse before the true last. Three and two catch all eight and nothing further in.
+_OPENING: Final = 3
+_CLOSING: Final = 2
+
 
 def _tokens(text: str, language: str | None = None) -> list[str]:
     return _WORD_RE.findall(fold(text, language))
@@ -1441,16 +1449,20 @@ class Match:
     are the ones the library's Greek is held in (``org`` for the New Testament, ``lxx``
     for the Old), best-chained first. Empty until ``biblereference parallels`` builds the
     index, and always empty for a passage with no verbal parallel."""
-    positional_candidate: bool = False
-    """Whether the passage is an epistle's first or last verse.
+    positional_candidate: str | None = None
+    """Which end of a letter this passage sits at: ``"opening"``, ``"close"``, or ``None``.
 
     Epistles open with a salutation and close with a farewell blessing, and the fathers
     write both registers constantly without quoting anybody -- *grace to you and peace* is
     how a letter starts, whoever writes it. A match here is not wrong, but a consumer who
     knows *their* document's shape -- this paragraph is Polycarp's own address, that one
-    his farewell -- can put this flag beside that knowledge and settle a class of findings
-    no threshold can. Computed from the store's own verse numbering; reported, never
-    acted on, like :attr:`formula`."""
+    his farewell -- can put this beside that knowledge and settle a class of findings no
+    threshold can.
+
+    Which end, rather than merely whether, because the two registers are different claims
+    and the consumer knows which part of *their* document they are reading: an opening
+    matched against a farewell is as much a mismatch as no match at all. Computed from the
+    store's own verse numbering; reported, never acted on, like :attr:`formula`."""
 
     @property
     def ambiguous(self) -> bool:
@@ -2189,7 +2201,7 @@ class Searcher:
         matches.sort(key=lambda m: -m.similarity)
         exact = _one_per_passage(matches)
         if not self._inflected:
-            return self._flag_positional(exact[:limit])
+            return self._decorate(exact[:limit])
 
         # Settled first and settled whole. Letting the two sets compete for `limit` places
         # cost eight passages in four hundred that the exact path had found on its own --
@@ -2202,7 +2214,7 @@ class Searcher:
             if self._graded_enough(match)
         ]
         graded.sort(key=lambda m: (-GRADES.index(m.grade), -m.bits, -m.similarity))
-        return self._flag_positional((exact + graded)[:limit])
+        return self._decorate((exact + graded)[:limit])
 
     # -- matching on dictionary forms ---------------------------------------------------
 
@@ -2392,7 +2404,7 @@ class Searcher:
                 )
 
         matches.sort(key=lambda m: (-m.similarity, m.span or (0, 0)))
-        return self._flag_positional(_without_overlaps(matches))
+        return self._decorate(_without_overlaps(matches))
 
     def formula_debts(
         self,
@@ -2459,15 +2471,30 @@ class Searcher:
             cached = self._ends[(vrs, book)] = (row[0], row[1]) if row else (0, 0)
         return cached
 
-    def _positional(self, passage: VerseRange) -> bool:
-        """Whether the passage is an epistle's first or last verse. See :attr:`Match.
-        positional_candidate`."""
+    def _positional(self, passage: VerseRange) -> str | None:
+        """Which end of a letter this passage sits at: ``opening``, ``close``, or nothing.
+
+        A window rather than the exact first and last verse, measured by the consumer on
+        their own eight salutation targets: the strict rule missed 2 Thessalonians 1:2,
+        Philemon 1:3, and Ephesians 6:23 -- the closing grace standing one verse before
+        the true last. Three verses in and two back covers all of them.
+
+        The closing test is anchored to the book's *final verse* and not to its final
+        chapter, which is the trap the consumer caught: Philemon's first chapter is also
+        its last, so "in the last chapter" makes the whole letter a farewell. Where a book
+        is short enough for the two windows to touch, the opening wins -- a salutation is
+        the more distinctive register, and a greeting misread as a farewell is the error
+        that would mislead somebody about what a father was doing.
+        """
         first, last = passage.start, passage.end
-        if first.book in _EPISTLES and (first.chapter, first.verse) == (1, 1):
-            return True
-        return last.book in _EPISTLES and (last.chapter, last.verse) == self._book_end(
-            last.vrs, last.book
-        )
+        if first.book in _EPISTLES and first.chapter == 1 and first.verse <= _OPENING:
+            return "opening"
+        if last.book not in _EPISTLES:
+            return None
+        chapter, verse = self._book_end(last.vrs, last.book)
+        if chapter and last.chapter == chapter and last.verse > verse - _CLOSING:
+            return "close"
+        return None
 
     def _family(self, passage: VerseRange) -> tuple[str, ...]:
         """The passage's verbal parallels, from the index `biblereference parallels`
@@ -2485,7 +2512,7 @@ class Searcher:
             passage.start.book, chapter, passage.start.verse, passage.end.verse
         )
 
-    def _flag_positional(self, matches: list[Match]) -> list[Match]:
+    def _decorate(self, matches: list[Match]) -> list[Match]:
         """Both reported-never-gated decorations, in one pass over the answer."""
         return [
             replace(
