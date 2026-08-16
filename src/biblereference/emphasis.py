@@ -25,7 +25,13 @@ from typing import Final
 
 from .tags import Emphasis
 
-__all__ = ["SpanNotFoundError", "apply_spans", "fold"]
+__all__ = ["FOLD_VERSION", "SpanNotFoundError", "apply_spans", "fold"]
+
+#: Bumped whenever `fold` changes its output for any input. Consumers bake folded text
+#: into artefacts (the patristic n-gram tables key on it) and record this constant in
+#: their metadata; a model on a stale fold is silently wrong, and this is what lets
+#: either side notice. Memoisation and other output-identical changes do not bump it.
+FOLD_VERSION: Final = 1
 
 _MARKERS: Final[dict[str, str]] = {"bold": "**", "italic": "*"}
 

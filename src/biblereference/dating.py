@@ -50,6 +50,7 @@ TRANSLATED: Final[dict[str, int | None]] = {
     "rahlfs-alt": None,  # the second text where Rahlfs prints two
     "sblgnt": None,  # the SBL Greek New Testament: a critical edition, ancient wording
     "wh": None,  # Westcott and Hort 1881, likewise a critical edition of ancient Greek
+    "grcbyz": None,  # Robinson-Pierpont: the Byzantine Textform, ancient wording throughout
     "coptic-mark": None,  # the Sahidic version: a third-century translation
     # The Peshitta is a translation, but a second-century one, so its wording is as
     # ancient as anything else in this section and nothing here can be anachronistic to it.
@@ -60,6 +61,7 @@ TRANSLATED: Final[dict[str, int | None]] = {
     # wording is older than the Vulgate's and nothing can be anachronistic to it.
     "oldlatin-a": None,
     "oldlatin-b": None,
+    "bezae-lat": None,  # Codex Bezae's Latin column: a third pre-Vulgate witness, with Acts
     "latvuc": 405,  # Jerome's Vulgate; the Clementine of 1592 is an edition of it
     "novavulgata": 1979,  # a new Latin translation, not an edition of Jerome
     "castellio": 1551,  # a new Latin translation from the originals, owing nothing to Jerome

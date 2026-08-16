@@ -330,3 +330,17 @@ def test_the_keyword_and_positional_spellings_are_one_entry() -> None:
     fold("ἀλήθεια", "grc")
     fold("ἀλήθεια", language="grc")
     assert _folded.cache_info().misses == 1
+
+
+def test_the_fold_version_moves_when_the_fold_does() -> None:
+    """`FOLD_VERSION` is a promise to consumers who bake folded text into artefacts --
+    the patristic n-gram tables record it in their `meta`, and a model built on a stale
+    fold is silently wrong. These canaries pin version 1's output across every folding
+    rule a language exercises; if one of them fails, the fold changed, and the fix is to
+    bump `FOLD_VERSION`, not to update the canary in place."""
+    from biblereference.emphasis import FOLD_VERSION
+
+    assert FOLD_VERSION == 1
+    assert fold("Ἰησοῦς Χριστός, ᾧ ἡ δόξα", "grc") == "ιησουσ χριστοσ, ω η δοξα"
+    assert fold("Jesu naVe", "la") == "iesu naue"
+    assert fold("הָעַלְמָ֗ה אַל־תִּפְגְּעִי", "he") == "העלמה אל תפגעי"

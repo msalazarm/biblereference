@@ -342,6 +342,16 @@ def test_the_alternates_a_scan_already_found_are_not_overwritten() -> None:
     assert [str(p) for p in merged] == ["JOB 1:8", "ISA 53:6"], "both kinds, no repeat"
 
 
+#: Clement's Job quotation as a father would carry it in indirect speech -- every content
+#: word re-inflected to the accusative, so the exact path has no run to find and only the
+#: lemma path can answer. Job 1:1, 1:8 and 2:3 all carry the same epithets, so the rivalry
+#: is in the text itself and survives every index rebuild -- unlike a near-tie in bits,
+#: which moved the day the Byzantine Textform joined the library and reweighed every lemma.
+CLEMENT_17_3_REINFLECTED = (
+    "λέγει γὰρ τὸν Ἰὼβ δίκαιον καὶ ἄμεμπτον, ἀληθινόν, θεοσεβῆ, ἀπεχόμενον ἀπὸ παντὸς κακοῦ"
+)
+
+
 def test_the_graded_path_reports_rivals_as_the_exact_path_does() -> None:
     """The first attempt at this wired `alternates` into the exact path only.
 
@@ -350,9 +360,11 @@ def test_the_graded_path_reports_rivals_as_the_exact_path_does() -> None:
     for exactly that reason, and an empty `alternates` reads as evidence when it is silence.
     """
     with greek(inflected=True) as rich:
-        graded = [m for m in rich.scan(POLYCARP_2_2) if m.grade != "direct"]
-    assert graded, "Ignatius re-inflecting Matthew is found by the lemma path"
-    assert graded[0].alternates, "and it says what else answered nearly as well"
+        graded = [m for m in rich.scan(CLEMENT_17_3_REINFLECTED) if m.grade != "direct"]
+    assert graded, "Clement re-inflecting Job is found by the lemma path"
+    named = {str(span) for match in graded for span in match.alternates}
+    assert named, "and it says what else answered nearly as well"
+    assert named & {"JOB 1:1", "JOB 1:8"}, "naming the other verse with the same epithets"
 
 
 def test_alternates_stay_empty_when_the_feature_was_not_asked_for() -> None:
