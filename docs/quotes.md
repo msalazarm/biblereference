@@ -398,7 +398,11 @@ Public Domain"), official source
 lemma lexicon. Beside it, two companions from the same verified survey: the **Antoniades
 1904 Patriarchal text** (PD, [github.com/byztxt/greektext-antoniades](https://github.com/byztxt/greektext-antoniades)),
 the received Orthodox liturgical text — what a Byzantine-era father's tradition actually
-read aloud; and **Codex Bezae's Latin column** (**CC BY**, TEI-XML at Birmingham eprints
+read aloud — **deferred at fetch time**: the upstream carries only betacode
+transliteration (`textonly/`, `parsed/`), no Unicode text, and a betacode transliterator
+is its own task; and **Codex Bezae's Latin column** (**CC BY-NC-SA** — the survey said
+CC BY; the TEI header's own words govern, and NC-SA is a licence class already held —
+TEI-XML at Birmingham eprints
 [1664](https://epapers.bham.ac.uk/1664)), a fifth Old Latin witness covering Gospels *and
 Acts*, which our two Old Latin codices do not. All three serve the attribution goal too:
 "the father reads the Byzantine text here" is itself a finding of scholarly value, exactly
@@ -697,8 +701,8 @@ means exactly that. Fetched-never-vendored, terms recorded in `licences.py`, as 
 | text | source | licence (verified) | extent | why |
 |---|---|---|---|---|
 | Robinson–Pierpont Byzantine Textform | [github.com/byztxt/byzantine-majority-text](https://github.com/byztxt/byzantine-majority-text) | **Public domain** (stated in repo) | whole NT, TEI/CSV, morphologically parsed | the 8 named variant cases; what most post-4th-c. Greek fathers quote toward |
-| Antoniades 1904 Patriarchal NT | [github.com/byztxt/greektext-antoniades](https://github.com/byztxt/greektext-antoniades) | **Public domain** (stated in repo) | whole NT, parsed | the received Orthodox liturgical text |
-| Codex Bezae, Latin column | [epapers.bham.ac.uk/1664](https://epapers.bham.ac.uk/1664) | **CC BY** | Gospels + Acts, TEI | a fifth Old Latin witness; Acts is new coverage |
+| Antoniades 1904 Patriarchal NT | [github.com/byztxt/greektext-antoniades](https://github.com/byztxt/greektext-antoniades) | **Public domain** (stated in repo) | whole NT, parsed — **betacode only; deferred until a transliterator exists** | the received Orthodox liturgical text |
+| Codex Bezae, Latin column | [epapers.bham.ac.uk/1664](https://epapers.bham.ac.uk/1664) | **CC BY-NC-SA** (per the TEI header; the survey overstated CC BY) | Gospels + Acts, TEI | a fifth Old Latin witness; Acts is new coverage |
 | Coptic Scriptorium Sahidic OT | [copticscriptorium.org](https://copticscriptorium.org/download/corpora/sahidic_bible_ot.html) | **CC BY-SA 4.0** (ShareAlike tracked) | Pentateuch–Jeremiah incl. full Psalter | our whole Coptic holding today is 45 verses of Mark |
 | Van Dyck Arabic | [ebible.org arb-vd](https://ebible.org/find/details.php?id=arb-vd) | **Public domain** (stated on eBible) | whole Bible | positions the Arabic extension, zero licence friction |
 | Elizabeth Bible (Church Slavonic, 1757) | CrossWire/SWORD `CSlElizabeth` | **Public domain** (module .conf) | whole Bible | the only fully open Slavonic scripture found |
