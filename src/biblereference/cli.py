@@ -248,6 +248,7 @@ def cmd_search(args: argparse.Namespace) -> int:
             languages=getattr(args, "language", None) or None,
             inflected=args.inflected,
             concave=args.concave,
+            itacised=args.itacised,
             gates=_gates(args),
         ) as searcher:
             matches = searcher.search(text, limit=args.limit)
@@ -301,6 +302,13 @@ def _inflected_options(parser: argparse.ArgumentParser) -> None:
         "one long interpolated clause is cheap, scattered slack is not. Opt-in until "
         "the control corpus prices it",
     )
+    parser.add_argument(
+        "--itacised",
+        action="store_true",
+        help="re-read spellings the lexicon does not know through the itacism classes "
+        "(ει/ι, η/ι, ω/ο ...) scribes wrote by ear. Greek only; matches that used it "
+        "are flagged `itacised`. Opt-in until the control corpus prices it",
+    )
 
 
 def cmd_parallels(args: argparse.Namespace) -> int:
@@ -332,6 +340,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
             languages=getattr(args, "language", None) or None,
             inflected=args.inflected,
             concave=args.concave,
+            itacised=args.itacised,
             gates=_gates(args),
         ) as searcher:
             if args.debts:

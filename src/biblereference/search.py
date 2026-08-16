@@ -1168,6 +1168,69 @@ def lemma_readings(tokens: Sequence[str], language: str, lexicon: Lexicon) -> li
     return [known.get(token) or frozenset({token}) for token in tokens]
 
 
+#: The itacism classes of `emphasis._ITACISM`, inverted for candidate generation: each
+#: character an orthographic fold can produce, with every spelling a scribe writing by
+#: ear could have meant by it. Exact by construction -- two spellings are itacism-variants
+#: precisely when their orthographic folds agree, so expanding the fold enumerates the
+#: whole equivalence class and nothing else.
+_ITACISM_PREIMAGES: Final[dict[str, tuple[str, ...]]] = {
+    "ι": ("ι", "ει", "οι", "υι", "η", "υ"),
+    "ο": ("ο", "ω"),
+    "ε": ("ε", "αι"),
+}
+
+#: Candidate spellings tried per unknown token before giving up. A long word of many
+#: iotas multiplies past any use -- and a token that itacistic is better left unread than
+#: matched against half the lexicon.
+_MOST_SPELLINGS: Final = 512
+
+
+def _itacism_spellings(token: str) -> list[str]:
+    """Every plain-folded spelling whose orthographic fold is this token's, bounded."""
+    collapsed = fold(token, "grc", orthographic=True)
+    out = [""]
+    for character in collapsed:
+        options = _ITACISM_PREIMAGES.get(character, (character,))
+        out = [prefix + option for prefix in out for option in options]
+        if len(out) > _MOST_SPELLINGS:
+            return []
+    return [spelling for spelling in out if spelling != token]
+
+
+def itacised_readings(
+    tokens: Sequence[str],
+    language: str,
+    lexicon: Lexicon,
+    plain: Sequence[Reading],
+) -> tuple[list[Reading], frozenset[int]]:
+    """The plain readings, with unknown spellings re-read through the itacism classes.
+
+    The second tier the design asks for: exact fold first, and only where the lexicon
+    declines -- an out-of-vocabulary token -- are the spellings a scribe writing by ear
+    could have meant looked up in its place. ὑμεῖς and ἡμεῖς stay distinct wherever the
+    text spells them; a spelling the lexicon has never seen is the one place the collapse
+    can only add.
+
+    :returns: The readings, and which positions were re-read -- the provenance
+        :attr:`Match.itacised` is set from, so the looseness is visible on every match
+        that used it.
+    """
+    out = list(plain)
+    marked: list[int] = []
+    for index, token in enumerate(tokens):
+        if out[index] != frozenset({token}) or lexicon.lemmas(token, language):
+            continue
+        candidates = _itacism_spellings(token)
+        if not candidates:
+            continue
+        found = lexicon.of(candidates, language)
+        lemmas = frozenset().union(*found.values())
+        if lemmas:
+            out[index] = lemmas
+            marked.append(index)
+    return out, frozenset(marked)
+
+
 class IndexIncomplete(UserWarning):
     """Some of the library is built but not folded into the search index.
 
@@ -1362,6 +1425,14 @@ class Match:
     """The citation formula introducing this quotation, where one does -- *it is written*,
     *the scripture says*. Reported and never acted on: see :mod:`biblereference.formulae`
     for the measurement that says why it is evidence but not a threshold."""
+    itacised: bool = False
+    """Whether the itacised second tier read any spelling inside this match's span.
+
+    True only under ``Searcher(itacised=True)``, and only where a spelling the lexicon
+    does not know was re-read through the classes scribes wrote by ear -- ει/ι, η/ι,
+    ω/ο and their kin. The flag is what makes the looseness survivable: a consumer can
+    hold these matches to a stricter gate, or read them, without either policy touching
+    a match the exact tier answered."""
     family: tuple[str, ...] = ()
     """Verses that carry these same words, verified verbally. See :mod:`.parallels`.
 
@@ -1486,6 +1557,7 @@ class Match:
             "bits": round(self.bits, 2),
             "matched_lemmas": list(self.matched_lemmas),
             "formula": self.formula,
+            "itacised": self.itacised,
             "family": list(self.family),
             "positional_candidate": self.positional_candidate,
             "translations": [
@@ -1565,6 +1637,7 @@ class Searcher:
         composed: int | None = None,
         inflected: bool = False,
         concave: bool = False,
+        itacised: bool = False,
         min_grade: str | None = None,
         gates: Sequence[Gate] | None = None,
         min_lemma_run: int | None = None,
@@ -1654,6 +1727,10 @@ class Searcher:
         #: reports mean the same things, but a wall refused what a cost now weighs, and
         #: what that admits on pre-Christian Greek is a measurement nobody has made yet.
         self._concave = concave
+        #: The itacised second tier: spellings the lexicon does not know, re-read through
+        #: the classes scribes wrote by ear. Opt-in and flagged on every match that used
+        #: it, for the same pricing discipline as `concave`.
+        self._itacised = itacised
         # Off, and off is today. Nothing below runs, no lemma table is opened and no query
         # takes a different path unless a caller has asked for one in so many words.
         self._home = home
@@ -2144,6 +2221,19 @@ class Searcher:
         self._lexicon.require(language)
         return self._lexicon, self._weights
 
+    def _readings(
+        self, tokens: Sequence[str], language: str, lexicon: Lexicon
+    ) -> tuple[list[Reading], frozenset[int]]:
+        """The query's readings, itacised-tier included where it was asked for.
+
+        Only the query side: the verses are edited texts and their spellings are the
+        editor's, so itacism lives on the father's side of the comparison alone.
+        """
+        plain = lemma_readings(list(tokens), language, lexicon)
+        if not self._itacised or language != "grc":
+            return plain, frozenset()
+        return itacised_readings(tokens, language, lexicon, plain)
+
     def _lemma_languages(self) -> list[str]:
         """Which of the loaded corpora's languages a lemma pass can be run in."""
         return sorted({m.language for m in self._corpora.values()} & set(LEMMA_LANGUAGES))
@@ -2162,7 +2252,7 @@ class Searcher:
             query = _tokens(text, language)
             if len(query) < self._min_query:
                 continue
-            readings = lemma_readings(query, language, lexicon)
+            readings, re_read = self._readings(query, language, lexicon)
             weigh = weights.of(language)
 
             # The rarest shared *lemmas* are what narrow this, exactly as the rarest words
@@ -2209,6 +2299,7 @@ class Searcher:
                         chain=chained.length,
                         bits=weight,
                         matched_lemmas=evidence,
+                        itacised=bool(re_read),
                     )
                 )
         return out
@@ -2743,7 +2834,7 @@ class Searcher:
             return []
         lexicon, weights = self._lemma_tools(language)
         weigh = weights.of(language)
-        mine = lemma_readings(list(query), language, lexicon)
+        mine, _ = self._readings(query, language, lexicon)
         for position in range(max(masked[0], 0), min(masked[1], len(mine))):
             # Words an exact match already answered for: not evidence twice.
             mine[position] = frozenset()
@@ -2832,8 +2923,9 @@ class Searcher:
         held = self._witnesses(vrs, book, chapter, start, end, tokens[low:high])
         if not held:
             return None
+        trimmed, re_read = self._readings(tokens[low:high], language, lexicon)
         graded = self._grade(
-            lemma_readings(list(tokens[low:high]), language, lexicon),
+            trimmed,
             tokens[low:high],
             held[0],
             language,
@@ -2859,6 +2951,7 @@ class Searcher:
             bits=weight,
             matched_lemmas=evidence,
             formula=self._formula_before(words, low, language),
+            itacised=bool(re_read),
             # The same rivalry the exact path reports. Leaving it off here meant a match
             # found by dictionary form -- which is most of what this feature exists to find
             # -- came back saying nothing else fitted, on cases where something else fitted

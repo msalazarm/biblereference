@@ -320,6 +320,55 @@ def test_concave_costs_change_nothing_the_walls_already_allowed() -> None:
 
 
 # --------------------------------------------------------------------------------------
+# The itacised tier: spellings written by ear, read on request, flagged always
+# --------------------------------------------------------------------------------------
+
+#: Clement's Job quotation as a scribe writing by ear might leave it: every itacism class
+#: exercised -- αι/ε twice, ι/ει, η/ι, ω/ο twice -- until no exact run and no known
+#: spelling survives to match on.
+CLEMENT_17_3_ITACISED = (
+    "ἔτι δὲ καὶ περὶ Ἰὼβ οὕτως γέγραπτε: Ἰὼβ δὲ ἦν δίκεος καὶ ἄμεμπτος, ἀληθεινός, "
+    "θεοσεβίς, ἀπεχώμενος ἀπὸ παντὼς κακοῦ."
+)
+
+
+def test_the_itacism_class_is_enumerated_exactly() -> None:
+    """Two spellings are itacism-variants precisely when their orthographic folds agree,
+    so expanding the fold enumerates the whole equivalence class -- the scribe's
+    `γέγραπτε` reaches the lexicon's `γεγραπται` -- and nothing outside it."""
+    from biblereference.emphasis import fold
+    from biblereference.search import _itacism_spellings
+
+    spellings = _itacism_spellings("γεγραπτε")
+    assert "γεγραπται" in spellings
+    collapsed = fold("γεγραπτε", "grc", orthographic=True)
+    assert all(fold(s, "grc", orthographic=True) == collapsed for s in spellings)
+
+
+def test_an_itacised_quotation_is_found_only_when_asked_and_flagged_always() -> None:
+    """Off by default, priced before any default moves, and never silent about itself:
+    the misspelled Clement is invisible to the plain tiers and found by the itacised one
+    with the flag set, so a consumer can hold these matches to their own policy."""
+    with greek(inflected=True) as plain:
+        assert plain.scan(CLEMENT_17_3_ITACISED) == []
+    with greek(inflected=True, itacised=True) as eared:
+        found = [m for m in eared.scan(CLEMENT_17_3_ITACISED) if m.passage.book == "JOB"]
+    assert found, "the quotation is recovered through the itacism classes"
+    assert all(m.itacised for m in found), "and says so"
+
+
+def test_the_itacised_tier_changes_nothing_the_lexicon_already_knew() -> None:
+    """Exact fold first, itacised only where the lexicon declines: a cleanly spelled
+    text answers identically with the tier on, unflagged, because ὑμεῖς and ἡμεῖς must
+    stay distinct wherever the text actually spells them."""
+    with greek(inflected=True) as plain:
+        before = [(str(m.passage), m.grade) for m in plain.scan(CLEMENT_17_3)]
+    with greek(inflected=True, itacised=True) as eared:
+        after = [(str(m.passage), m.grade, m.itacised) for m in eared.scan(CLEMENT_17_3)]
+    assert [(p, g, False) for p, g in before] == after
+
+
+# --------------------------------------------------------------------------------------
 # The debt ledger: the formula's other direction
 # --------------------------------------------------------------------------------------
 
