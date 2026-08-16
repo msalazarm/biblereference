@@ -47,8 +47,10 @@ false-positive rate on pre-Christian Greek is refused whatever it recalls.
 ## 2. The miss ledger
 
 Everything proposed below buys rows in this table and nothing else. Sources:
-`review/extras-verdicts.json` (**115** verdicts — grown from 102 when the frontier search
-widened the envelope; every open-gate proposal in the nine works read by hand), `review/indirect-misses.json` (35 records), `review/gate-calibration-greek.md`,
+`review/extras-verdicts.json` (**102** verdicts — a later message said 115, and its
+sender retracted it: 115 was the count of *proposals* at the recommended gate, a
+different quantity under the wrong name; every open-gate proposal in the nine works read
+by hand), `review/indirect-misses.json` (35 records), `review/gate-calibration-greek.md`,
 and Boyce's own prose (extraction: 231 pp., all six papers).
 
 **Misses** — citations Boyce grades that no gate reaches:
@@ -61,7 +63,7 @@ and Boyce's own prose (extraction: 231 pp., all six papers).
 | **Paraphrase substitution.** Synonym, title, or case swaps inside otherwise-close quotation (1 Clem 4:4 → Gen 4:6-7: "the Lord God"→"God", added πρὸς, dropped article — the one miss inside a six-verse run otherwise found exactly). | Moritz et al. (EMNLP 2016, [D16-1190](https://aclanthology.org/D16-1190/)) taxonomize exactly these operations on BiblIndex-annotated Bible reuse and find most real reuse shares under 50% of tokens. | Stratum 1 scoring + Stratum 3 annex |
 | **Zero-content-word allusions.** Boyce read the sense; there are no words to match. | **9 of 35** indirect misses share zero content words with the verse (`indirect-misses.json`); 22 share 1–3. | Stratum 3, honestly bounded — and §13 |
 
-**Misfires** — the 115 verdicts on what the open gate proposes:
+**Misfires** — the 102 verdicts on what the open gate proposes:
 
 | class | n | bought by |
 |---|---|---|
@@ -497,7 +499,7 @@ this is calibrated; nothing ships on the theory alone.
 
 ## 6. Stratum 2 — quotation families, and the profile that makes them matchable
 
-The single largest verdict class (34 of 115) is the scanner being right in a way the
+The single largest verdict class (34 of 102) is the scanner being right in a way the
 scoring calls wrong: it names Acts 8:32 where Boyce names Isaiah 53, and *both are the same
 words* because Acts is quoting Isaiah. The doxology is the same shape harder: one prayer,
 five biblical addresses, no principled winner.
