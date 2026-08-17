@@ -144,12 +144,22 @@ _SEARCHERS: dict[Any, Any] = {}
 
 
 def worker_searcher(options: dict[str, Any]) -> Any:
+    import os
+
     from biblereference.search import Searcher
     from biblereference.store import DataHome
 
     key = tuple(sorted((name, repr(value)) for name, value in options.items()))
     if key not in _SEARCHERS:
-        _SEARCHERS[key] = Searcher(DataHome(), **options)
+        # The composite artifact arrives by environment, not by option: this worker was
+        # spawned, and `serve --composite` set the variable before the pool existed.
+        # Injected here rather than folded into `options` so the cache key stays what
+        # the request asked for.
+        built = dict(options)
+        artifact = os.environ.get("BIBLEREFERENCE_COMPOSITE")
+        if artifact:
+            built["composite"] = artifact
+        _SEARCHERS[key] = Searcher(DataHome(), **built)
     return _SEARCHERS[key]
 
 

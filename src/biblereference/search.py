@@ -40,11 +40,13 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from difflib import Match as Match_
 from difflib import SequenceMatcher
+from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
     from .parallels import Parallels
 
+from .composite import Composite
 from .corpora.base import CorpusError, VerseUnavailable
 from .corpora.web import KNOWN_VERSIONS, BibleGatewayCorpus
 from .dating import translated as _translated
@@ -1512,6 +1514,18 @@ class Match:
     """The citation formula introducing this quotation, where one does -- *it is written*,
     *the scripture says*. Reported and never acted on: see :mod:`biblereference.formulae`
     for the measurement that says why it is evidence but not a threshold."""
+    composite: float | None = None
+    """The Fellegi-Sunter composite: every axis weighed at log2(m/u) and summed, under
+    the calibration artifact this `Searcher` was handed. Six ordinary words in a row is
+    what no arm of a union gate can price and a sum prices naturally. ``None`` when no
+    artifact was configured -- and always ``None`` under ``inflected=False``, whose
+    matches carry default zero axes that a calibrated score would dress up as data."""
+    e_value: float | None = None
+    """Expected chance hits this good, from the artifact's control-corpus null: *"0.03
+    expected chance hits in this document"* is a defensible sentence in a way *"41
+    bits"* is not. Denominated in windows -- a scan's E is over the windows the document
+    presented, a search's over the one question asked. 0.0 means below the null's
+    resolution, never impossible."""
     itacised: bool = False
     """Whether the itacised second tier read any spelling inside this match's span.
 
@@ -1648,6 +1662,8 @@ class Match:
             "bits": round(self.bits, 2),
             "matched_lemmas": list(self.matched_lemmas),
             "formula": self.formula,
+            "composite": None if self.composite is None else round(self.composite, 2),
+            "e_value": None if self.e_value is None else round(self.e_value, 6),
             "itacised": self.itacised,
             "family": list(self.family),
             "positional_candidate": self.positional_candidate,
@@ -1729,6 +1745,7 @@ class Searcher:
         inflected: bool = False,
         concave: bool = False,
         itacised: bool = False,
+        composite: str | Path | Composite | None = None,
         min_grade: str | None = None,
         gates: Sequence[Gate] | None = None,
         min_lemma_run: int | None = None,
@@ -1822,6 +1839,12 @@ class Searcher:
         #: the classes scribes wrote by ear. Opt-in and flagged on every match that used
         #: it, for the same pricing discipline as `concave`.
         self._itacised = itacised
+        #: The Fellegi-Sunter calibration artifact, loaded eagerly so a bad file fails
+        #: at construction rather than on the ten-thousandth match. Reported, never
+        #: gated: it fills `Match.composite` and `Match.e_value` and touches no gate.
+        self._composite = (
+            Composite.load(composite) if isinstance(composite, (str, Path)) else composite
+        )
         # Off, and off is today. Nothing below runs, no lemma table is opened and no query
         # takes a different path unless a caller has asked for one in so many words.
         self._home = home
@@ -2483,7 +2506,10 @@ class Searcher:
                 )
 
         matches.sort(key=lambda m: (-m.similarity, m.span or (0, 0)))
-        return self._decorate(_without_overlaps(matches))
+        return self._decorate(
+            _without_overlaps(matches),
+            windows=float(len(_offsets(len(tokens), window, stride))),
+        )
 
     def formula_debts(
         self,
@@ -2591,16 +2617,38 @@ class Searcher:
             passage.start.book, chapter, passage.start.verse, passage.end.verse
         )
 
-    def _decorate(self, matches: list[Match]) -> list[Match]:
-        """Both reported-never-gated decorations, in one pass over the answer."""
-        return [
-            replace(
-                match,
-                positional_candidate=self._positional(match.passage),
-                family=self._family(match.passage),
+    def _decorate(self, matches: list[Match], windows: float = 1.0) -> list[Match]:
+        """Every reported-never-gated decoration, in one pass over the answer.
+
+        ``windows`` is the E-value's denominator: how many chances this request gave a
+        coincidence -- a scan passes the window count its document presented, matching
+        the unit the control null was measured in; a search passes 1.0, one question.
+        """
+        out: list[Match] = []
+        for match in matches:
+            score, chance = self._weighed(match, windows)
+            out.append(
+                replace(
+                    match,
+                    positional_candidate=self._positional(match.passage),
+                    family=self._family(match.passage),
+                    composite=score,
+                    e_value=chance,
+                )
             )
-            for match in matches
-        ]
+        return out
+
+    def _weighed(self, match: Match, windows: float) -> tuple[float | None, float | None]:
+        """The composite score and its E-value, where an artifact was configured.
+
+        Only under `inflected`: an exact-only match carries default zero axes, and a
+        calibrated score computed on zeros would be a garbage number wearing calibrated
+        clothes. None is the honest value there.
+        """
+        if self._composite is None or not self._inflected:
+            return (None, None)
+        score = self._composite.score(match.run, match.lemma_run, match.chain, match.bits)
+        return (score, self._composite.e_value(score, windows))
 
     def _sweep(
         self, tokens: Sequence[str], window: int, stride: int

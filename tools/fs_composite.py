@@ -1,30 +1,22 @@
-"""The first Fellegi–Sunter calibration: composite weights from measured m and u.
+"""The Fellegi–Sunter calibration: weights, thresholds, and the artifact both sides load.
 
-The gate union asks four questions and admits a match if any one answer is strong enough.
-Record linkage has scored this exact problem since 1969 the other way: every axis answers,
-each answer carries a weight of log2(m/u) — how much more often true matches score in this
-bin than false ones — and the *sum* decides, against two thresholds instead of one (link,
-review, non-link). The union's calibration data is exactly what teaches the composite:
+The math lives in `biblereference.composite` — this tool collects the samples, derives
+the two thresholds, writes the artifact (`--weights`), and renders the human report.
 
 - **m** — the axes of true pairs, measured over editor-marked quotations (each mark's
-  quoted words against the verse the editor named), the same instrument the gate
-  calibration used.
-- **u** — the axes of false pairs, measured over the control corpus where every match is
-  false by construction: the file `calibrate_inflected.py --control --save` writes. The
-  census literature estimates u; this library measures it, which is the one advantage no
-  census has.
+  quoted words against the verse the editor named). A deterministic held-out split (seed
+  0) prices the lower threshold on marks the weights never saw.
+- **u** — the axes of false pairs, from the control corpus where every match is false by
+  construction: the file `calibrate_inflected.py --control N --save PATH` writes. Read
+  exactly as written — an axes-only file with no ``fields`` key is the four-axis order
+  `axes()` has always used, so the consumer's control runs drop in unchanged.
 
-Winkler's caveat is applied: `lemma_run` is nested inside `chain` (a lemma run *is* a
-chain with no gaps), and summing both would count the same evidence twice — so the
-composite uses `run`, `chain` and `bits`, three fields with defensible independence, and
-reports the collapse out loud.
+`lemma_run` is collapsed into `chain` (nested axes; Winkler); §5.6's `formula` and
+`rivalry` fields activate only when a u-file declares them, by name, never by position.
 
-Ships as a report, not a gate: the output is the weight table, the two score
-distributions, and the threshold curve with POD beside PFA. Nothing here changes what any
-`Searcher` admits.
-
-    venv/bin/python tools/fs_composite.py --sample 1200 \\
-        --control-evidence control-evidence.json --report fs-composite.md
+    venv/bin/python tools/fs_composite.py --sample 0 \\
+        --control-evidence control-evidence.json \\
+        --weights composite.json --report fs-composite.md
 """
 
 from __future__ import annotations
@@ -32,77 +24,35 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import random
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from calibrate_inflected import MARKS, axes, marks
+from calibrate_inflected import COLLECT, MARKS, axes, marks
 
+from biblereference.composite import (
+    BINS,
+    DEFAULT_ROW_FIELDS,
+    SCHEMA,
+    Composite,
+    bin_label,
+    bin_of,
+    field_weights,
+)
+from biblereference.emphasis import FOLD_VERSION
 from biblereference.lemmata import Lexicon
 from biblereference.search import LemmaWeights
 from biblereference.store import DataHome
 
-#: Bin edges per field, half-open on the right, last bin unbounded. Chosen to put the
-#: decision region -- where the gates argue -- into single-unit bins, and the tails into
-#: broad ones that smoothing can support.
-BINS: dict[str, Sequence[float]] = {
-    "run": (1, 2, 3, 4, 6),
-    "chain": (2, 3, 4, 5, 6, 7, 8, 10),
-    "bits": (5, 10, 15, 20, 25, 30, 35, 40, 50, 60),
-}
-
-
-def _bin(field: str, value: float) -> int:
-    for index, edge in enumerate(BINS[field]):
-        if value < edge:
-            return index
-    return len(BINS[field])
-
-
-def _bin_label(field: str, index: int) -> str:
-    edges = BINS[field]
-    if index == 0:
-        return f"<{edges[0]:g}"
-    if index == len(edges):
-        return f">={edges[-1]:g}"
-    return f"{edges[index - 1]:g}-{edges[index]:g}"
-
-
-def _weights(
-    true_rows: Sequence[tuple], false_rows: Sequence[tuple]
-) -> dict[str, list[float]]:
-    """log2(m/u) per field bin, Laplace-smoothed so an empty bin is a strong signal
-    rather than an infinite one."""
-    fields = {"run": 0, "chain": 2, "bits": 3}
-    out: dict[str, list[float]] = {}
-    for field, column in fields.items():
-        size = len(BINS[field]) + 1
-        m_counts = [0] * size
-        u_counts = [0] * size
-        for row in true_rows:
-            m_counts[_bin(field, row[column])] += 1
-        for row in false_rows:
-            u_counts[_bin(field, row[column])] += 1
-        out[field] = [
-            math.log2(
-                ((m_counts[i] + 0.5) / (len(true_rows) + size / 2))
-                / ((u_counts[i] + 0.5) / (len(false_rows) + size / 2))
-            )
-            for i in range(size)
-        ]
-    return out
-
-
-def composite(row: tuple, weights: dict[str, list[float]]) -> float:
-    """The summed field weights of one pair's axes ``(run, lemma_run, chain, bits)``."""
-    return (
-        weights["run"][_bin("run", row[0])]
-        + weights["chain"][_bin("chain", row[2])]
-        + weights["bits"][_bin("bits", row[3])]
-    )
+#: Below this composite score the null tail keeps one score in `_DECIMATION`; at or
+#: above, every score. The decision region stays exact and the artifact stays small.
+_EXACT_ABOVE = 0.0
+_DECIMATION = 50
 
 
 def true_axes(home: DataHome, sample: int) -> list[tuple]:
@@ -125,82 +75,216 @@ def true_axes(home: DataHome, sample: int) -> list[tuple]:
     return out
 
 
+def score_rows(
+    rows: Sequence[Sequence[float]],
+    fields: Sequence[str],
+    columns: dict[str, int],
+    weights: dict[str, list[float]],
+) -> list[float]:
+    return [
+        sum(weights[f][bin_of(BINS[f], row[columns[f]])] for f in fields) for row in rows
+    ]
+
+
+def _gumbel_fit(exact_tail: Sequence[float]) -> tuple[float, float] | None:
+    """Method-of-moments Gumbel over the exact tail, kept only if it roughly agrees with
+    the empirical counts it extends -- a fit that contradicts its own data is worse than
+    the honest 0.0."""
+    if len(exact_tail) < 30:
+        return None
+    n = len(exact_tail)
+    mean = sum(exact_tail) / n
+    variance = sum((s - mean) ** 2 for s in exact_tail) / (n - 1)
+    beta = math.sqrt(6 * variance) / math.pi
+    if beta <= 0:
+        return None
+    mu = mean - 0.5772156649 * beta
+    top = sorted(exact_tail)[-max(3, n // 20) :]
+    predicted = n * (1.0 - math.exp(-math.exp(-(top[0] - mu) / beta)))
+    observed = float(len(top))
+    if predicted <= 0 or not (1 / 3 <= predicted / observed <= 3):
+        return None
+    return (mu, beta)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sample", type=int, default=1200, help="marks for the m-sample")
+    parser.add_argument("--sample", type=int, default=1200, help="marks for m (0 = all)")
     parser.add_argument(
         "--control-evidence",
         required=True,
         metavar="PATH",
-        help="the u-sample: axes over control text, from `calibrate_inflected.py "
-        "--control N --save PATH`",
+        help="the u-sample, from `calibrate_inflected.py --control N --save PATH`",
     )
+    parser.add_argument("--weights", metavar="PATH", help="write the artifact here as JSON")
     parser.add_argument("--report", metavar="PATH", help="write the report here as markdown")
+    parser.add_argument(
+        "--fp-target",
+        type=float,
+        default=0.0,
+        help="expected false links per control window tolerated at/above the upper "
+        "threshold (0 = the zero-false-positive line)",
+    )
+    parser.add_argument(
+        "--miss-target",
+        type=float,
+        default=0.05,
+        help="share of held-out true matches tolerated below the lower threshold",
+    )
+    parser.add_argument(
+        "--held-out",
+        type=int,
+        default=200,
+        help="marks withheld from the weights to price the lower threshold honestly",
+    )
+    parser.add_argument(
+        "--gumbel",
+        action="store_true",
+        help="fit a Gumbel tail past the empirical maximum; kept only if it agrees "
+        "with the counts it extends",
+    )
     args = parser.parse_args()
 
     if not MARKS.exists():
         print(f"no ground truth at {MARKS}", file=sys.stderr)
         return 1
     record = json.loads(Path(args.control_evidence).read_text("utf-8"))
+    u_fields = tuple(record.get("fields", DEFAULT_ROW_FIELDS))
+    u_columns = {name: index for index, name in enumerate(u_fields)}
     false_rows = [tuple(row) for row in record["axes"]]
-    home = DataHome()
-    true_rows = true_axes(home, args.sample)
 
-    weights = _weights(true_rows, false_rows)
-    m_scores = sorted(composite(row, weights) for row in true_rows)
-    u_scores = sorted(composite(row, weights) for row in false_rows)
+    home = DataHome()
+    all_true = true_axes(home, args.sample)
+    m_fields = DEFAULT_ROW_FIELDS
+    m_columns = {name: index for index, name in enumerate(m_fields)}
+
+    # Which fields the artifact carries: the collapsed v1 core, plus any §5.6 field both
+    # samples measured. A field only one side holds cannot have an honest m/u ratio.
+    fields = [
+        f
+        for f in ("run", "chain", "bits", "formula", "rivalry")
+        if f in u_columns and f in m_columns
+    ]
+
+    # The held-out split, deterministic, so the lower threshold is priced on marks the
+    # weights never saw and two runs of this tool agree to the digit.
+    order = list(range(len(all_true)))
+    random.Random(0).shuffle(order)
+    held_count = min(args.held_out, len(all_true) // 3)
+    held_rows = [all_true[i] for i in order[:held_count]]
+    train_rows = [all_true[i] for i in order[held_count:]]
+
+    weights = field_weights(train_rows, false_rows, fields, m_columns)
+    # u rows are scored through their own column map -- by name, never by position.
+    u_scores = sorted(score_rows(false_rows, fields, u_columns, weights))
+    held_scores = sorted(score_rows(held_rows, fields, m_columns, weights))
+    windows = int(record["windows"]) or 1
+    words = int(record["words"])
+
+    # Upper: at or above it, the control corpus offers at most fp_target expected false
+    # links per window. Lower: below it, at most miss_target of held-out gold is lost.
+    allowed = math.floor(args.fp_target * windows)
+    upper = (
+        u_scores[-1 - allowed] + 1e-9 if allowed < len(u_scores) else u_scores[0] - 1e-9
+    )
+    lower_index = math.floor(args.miss_target * len(held_scores)) if held_scores else 0
+    lower = held_scores[lower_index] if held_scores else upper
+
+    # The null tail: exact in the decision region, decimated below.
+    tail = [s for s in u_scores if s >= _EXACT_ABOVE]
+    tail = [s for i, s in enumerate(u_scores) if s < _EXACT_ABOVE and i % _DECIMATION == 0] + tail
+    exact_tail = [s for s in u_scores if s >= _EXACT_ABOVE]
+    fitted = _gumbel_fit(exact_tail) if args.gumbel else None
+
+    artifact = {
+        "schema": SCHEMA,
+        "created": datetime.now(UTC).isoformat(timespec="seconds"),
+        "language": "grc",
+        "fold_version": FOLD_VERSION,
+        "fields": fields,
+        "bins": {f: list(BINS[f]) for f in fields},
+        "weights": {f: weights[f] for f in fields},
+        "m": {
+            "sample": len(train_rows),
+            "held_out": len(held_rows),
+            "source": "editor-marks",
+            "seed": 0,
+        },
+        "u": {
+            "sample": len(false_rows),
+            "words": words,
+            "windows": windows,
+            "collect_gate": str(COLLECT),
+            "source": str(args.control_evidence),
+        },
+        "thresholds": {
+            "upper": upper,
+            "lower": lower,
+            "fp_target": args.fp_target,
+            "miss_target": args.miss_target,
+        },
+        "null_tail": {
+            "scores": tail,
+            "exact_above": _EXACT_ABOVE,
+            "decimation": _DECIMATION,
+            "total": len(u_scores),
+        },
+        "gumbel": list(fitted) if fitted else None,
+    }
+
+    if args.weights:
+        Path(args.weights).write_text(json.dumps(artifact), "utf-8")
+        print(f"artifact written to {args.weights}")
+        loaded = Composite.load(args.weights)  # fail fast on our own output
+        assert loaded.upper == upper
 
     lines: list[str] = []
     say = lines.append
-    say("# Fellegi–Sunter composite: first calibration\n")
+    say("# Fellegi–Sunter composite calibration\n")
     say(
-        f"m-sample: **{len(true_rows):,}** editor-marked quotations; "
-        f"u-sample: **{len(false_rows):,}** control-corpus pairs over "
-        f"{int(record['words']):,} words / {int(record['windows']):,} windows.\n"
+        f"m-sample: **{len(train_rows):,}** editor-marked quotations "
+        f"(+{len(held_rows):,} held out, seed 0); "
+        f"u-sample: **{len(false_rows):,}** control pairs over {words:,} words / "
+        f"{windows:,} windows, collected through `{COLLECT}` — the null is truncated "
+        f"below that gate and E-values there are unsupported.\n"
     )
-    say("`lemma_run` is collapsed into `chain` (nested axes; Winkler), and the")
-    say("composite sums `run + chain + bits` field weights of log2(m/u).\n")
-
+    say(f"Fields: `{' + '.join(fields)}` (lemma_run collapsed into chain; Winkler).\n")
     say("## Field weights\n")
-    for field, table in weights.items():
+    for field in fields:
         say(f"### {field}\n")
         say("| bin | weight (bits of evidence) |")
         say("|---|---|")
-        for index, weight in enumerate(table):
-            say(f"| {_bin_label(field, index)} | {weight:+.2f} |")
+        for index, weight in enumerate(weights[field]):
+            say(f"| {bin_label(BINS[field], index)} | {weight:+.2f} |")
         say("")
-
+    say("## Thresholds\n")
+    pod_upper = sum(1 for s in held_scores if s >= upper) / (len(held_scores) or 1)
+    say(
+        f"| zone | threshold | operating point |\n|---|---|---|\n"
+        f"| accept | ≥ {upper:+.2f} | ≤ {args.fp_target:g} expected false links per "
+        f"control window; held-out POD {100 * pod_upper:.1f}% |\n"
+        f"| reject | < {lower:+.2f} | ≤ {100 * args.miss_target:g}% of held-out gold "
+        f"lost |\n"
+        f"| review | between | the clerical zone, 1969's own |\n"
+    )
     say("## Threshold curve\n")
-    say("| composite ≥ | POD (of marks) | PFA (per control window) |")
+    say("| composite ≥ | POD (held-out) | PFA (per control window) |")
     say("|---|---|---|")
-    windows = int(record["windows"]) or 1
-    curve = []
     for threshold in range(-10, 26, 2):
-        pod = sum(1 for s in m_scores if s >= threshold) / (len(m_scores) or 1)
+        pod = sum(1 for s in held_scores if s >= threshold) / (len(held_scores) or 1)
         false_hits = sum(1 for s in u_scores if s >= threshold)
-        curve.append((threshold, pod, false_hits / windows))
         say(f"| {threshold:+d} | {100 * pod:5.1f}% | {false_hits / windows:.6f} |")
     say("")
-
-    clean = next((t for t, _, pfa in curve if pfa == 0.0), None)
-    if clean is not None:
-        pod_at = next(pod for t, pod, _ in curve if t == clean)
-        say(
-            f"**Upper threshold candidate:** composite ≥ {clean:+d} admits nothing on the "
-            f"control corpus and keeps POD {100 * pod_at:.1f}%. The lower threshold — the "
-            f"review zone's floor — is a policy choice this report only charts.\n"
-        )
     say(
-        "*A report, not a gate: nothing here changes what any `Searcher` admits. The "
-        "weight table is the artefact the composite rule would consume, and its shelf "
-        "life is the calibration data's.*"
+        "*The artifact is the interface: `Searcher(composite=...)` reports `composite` "
+        "and `e_value` on every graded match, and nothing here changes what any gate "
+        "admits.*"
     )
-
     text = "\n".join(lines)
     if args.report:
         Path(args.report).write_text(text, "utf-8")
         print(f"report written to {args.report}")
-    else:
+    elif not args.weights:
         print(text)
     return 0
 

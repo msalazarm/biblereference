@@ -241,7 +241,7 @@ ADDED: frozenset[str] = frozenset(
     # salutation/farewell combination and the 34-verdict inner-biblical class --
     # threshold-free, computed from the store's own tables, and like `formula` they
     # report evidence without acting on it.
-    {"positional_candidate", "family", "itacised"},
+    {"positional_candidate", "family", "itacised", "composite", "e_value"},
 )
 
 

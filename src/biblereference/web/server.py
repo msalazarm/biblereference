@@ -66,6 +66,11 @@ TOKEN: str | None = None
 #: times that, and going over is refused with a 413 rather than silently truncated.
 MAX_BODY: int = 64 * 1024 * 1024
 
+#: Where a `serve --composite` artifact path travels to the spawned workers, by the same
+#: reasoning as the data home's ENV_VAR: a spawned process inherits the environment and
+#: nothing else.
+COMPOSITE_VAR: Final = "BIBLEREFERENCE_COMPOSITE"
+
 
 # --------------------------------------------------------------------------------------
 # Parameters: refused, not ignored
@@ -609,6 +614,7 @@ def serve(
     max_body: int | None = None,
     workers: int | None = None,
     data_home: Path | None = None,
+    composite: Path | None = None,
     announce: bool = True,
 ) -> None:
     """Configure the globals, build the pools, and serve until interrupted."""
@@ -623,6 +629,17 @@ def serve(
 
         os.environ[ENV_VAR] = str(data_home)
         HOME = DataHome(data_home)
+
+    if composite is not None:
+        # Loaded here only to fail fast -- a bad artifact should refuse to serve, not
+        # surface as an exception on the ten-thousandth scan. The workers load their own
+        # copy from the environment, by the same spawned-pool reasoning as `data_home`;
+        # a *path* in a query string is refused by `search_options` as unknown, which is
+        # the path-traversal defense, so this startup flag is the only way in.
+        from ..composite import Composite
+
+        Composite.load(composite)
+        os.environ[COMPOSITE_VAR] = str(Path(composite).resolve())
 
     TOKEN = token or None
     if max_body is not None:

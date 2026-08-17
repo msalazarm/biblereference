@@ -264,6 +264,7 @@ def cmd_search(args: argparse.Namespace) -> int:
             inflected=args.inflected,
             concave=args.concave,
             itacised=args.itacised,
+            composite=args.composite,
             gates=_gates(args),
         ) as searcher:
             matches = searcher.search(text, limit=args.limit)
@@ -324,6 +325,13 @@ def _inflected_options(parser: argparse.ArgumentParser) -> None:
         "(ει/ι, η/ι, ω/ο ...) scribes wrote by ear. Greek only; matches that used it "
         "are flagged `itacised`. Opt-in until the control corpus prices it",
     )
+    parser.add_argument(
+        "--composite",
+        metavar="PATH",
+        help="a Fellegi-Sunter calibration artifact (from `tools/fs_composite.py "
+        "--weights`); every graded match then reports `composite` and `e_value` "
+        "beside its axes. Reported, never gated",
+    )
 
 
 def cmd_parallels(args: argparse.Namespace) -> int:
@@ -356,6 +364,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
             inflected=args.inflected,
             concave=args.concave,
             itacised=args.itacised,
+            composite=args.composite,
             gates=_gates(args),
         ) as searcher:
             if args.debts:
@@ -1126,6 +1135,14 @@ def _serve_arguments(parser: argparse.ArgumentParser) -> None:
     # same thing as --cores, since there is only one pool for them to have meant.
     parser.add_argument("--workers", type=int, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--interactive-workers", type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--composite",
+        metavar="PATH",
+        default=None,
+        help="serve `composite` and `e_value` on every graded match, from this "
+        "Fellegi-Sunter calibration artifact. Loaded at startup -- a bad file refuses "
+        "to serve rather than failing on the ten-thousandth scan",
+    )
 
 
 def _pool_sizes(args: argparse.Namespace) -> dict[str, int]:
@@ -1164,6 +1181,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
             # the raw string means `~` is already expanded when the spawned workers read it
             # back out of the environment.
             data_home=_home(args).root if args.data_home else None,
+            composite=Path(args.composite).expanduser() if args.composite else None,
         )
     return 0
 
