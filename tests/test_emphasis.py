@@ -335,12 +335,45 @@ def test_the_keyword_and_positional_spellings_are_one_entry() -> None:
 def test_the_fold_version_moves_when_the_fold_does() -> None:
     """`FOLD_VERSION` is a promise to consumers who bake folded text into artefacts --
     the patristic n-gram tables record it in their `meta`, and a model built on a stale
-    fold is silently wrong. These canaries pin version 1's output across every folding
+    fold is silently wrong. These canaries pin the current output across every folding
     rule a language exercises; if one of them fails, the fold changed, and the fix is to
-    bump `FOLD_VERSION`, not to update the canary in place."""
+    bump `FOLD_VERSION`, not to update the canary in place.
+
+    It has already earned itself: the elision fix below tripped it, which is exactly how
+    the consumer learned their n-gram model needed rebuilding.
+    """
     from biblereference.emphasis import FOLD_VERSION
 
-    assert FOLD_VERSION == 1
+    assert FOLD_VERSION == 2
     assert fold("Ἰησοῦς Χριστός, ᾧ ἡ δόξα", "grc") == "ιησουσ χριστοσ, ω η δοξα"
     assert fold("Jesu naVe", "la") == "iesu naue"
     assert fold("הָעַלְמָ֗ה אַל־תִּפְגְּעִי", "he") == "העלמה אל תפגעי"
+
+
+def test_every_spelling_of_an_elision_folds_the_same_way() -> None:
+    """Five characters for one mark, and folding kept all but the combining one -- so
+    `μετ᾽` and `μετ̓`, the same word digitised by two projects, folded to different
+    tokens and no run could cross either. U+02BC is the worst: Unicode calls it a letter,
+    so it survived the word tokeniser too and sat inside the token."""
+    spellings = ["̓", "᾽", "ʼ", "’", "᾿", "'"]
+    assert {fold("μετ" + mark, "grc") for mark in spellings} == {"μετ"}
+
+
+def test_a_smooth_breathing_is_not_an_elision_mark() -> None:
+    """The combining comma above is both, depending on where it sits: elision after a
+    consonant, a smooth breathing over a vowel -- and in NFD text every breathing *is*
+    that character. So it is left to the accent-stripping pass, which removes it either
+    way, rather than being treated as punctuation and turned into a word break. Fold a
+    decomposed word and a composed one and they must still agree."""
+    import unicodedata
+
+    for word in ("ἀλήθεια", "ὁ", "ἥξει", "ἐν"):
+        assert fold(unicodedata.normalize("NFD", word), "grc") == fold(word, "grc")
+    assert fold("ἀλήθεια", "grc") == "αληθεια"
+
+
+def test_the_elision_rule_is_greek_only() -> None:
+    """An apostrophe in English is a contraction, which is a different thing, and every
+    other language must answer exactly as it did at version 1."""
+    assert fold("don't") == "don't"
+    assert fold("Lord’s", "en") == "lord’s"

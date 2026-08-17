@@ -31,7 +31,11 @@ __all__ = ["FOLD_VERSION", "SpanNotFoundError", "apply_spans", "fold"]
 #: into artefacts (the patristic n-gram tables key on it) and record this constant in
 #: their metadata; a model on a stale fold is silently wrong, and this is what lets
 #: either side notice. Memoisation and other output-identical changes do not bump it.
-FOLD_VERSION: Final = 1
+#:
+#: 2 -- Greek elision marks fold away in all five spacing spellings, not only the
+#: combining one. See :data:`_GREEK_ELISION`. Greek folds change; every other language
+#: answers exactly as it did at version 1.
+FOLD_VERSION: Final = 2
 
 _MARKERS: Final[dict[str, str]] = {"bold": "**", "italic": "*"}
 
@@ -81,6 +85,32 @@ _LATIN_LETTERS: Final[dict[str, str]] = {"j": "i", "v": "u"}
 #: The Clementine brackets quoted speech and canticles, often opening in one verse and
 #: closing in another. An anchor will not include a stray bracket, so it folds away.
 _LATIN_PUNCTUATION: Final = {"[", "]"}
+
+#: The mark a Greek text puts where a vowel was elided -- ``μετ᾽ αὐτοῦ`` for
+#: ``μετὰ αὐτοῦ`` -- in every spelling but the combining one.
+#:
+#: Five characters for one thing, and folding kept them. Only U+0313, which is a
+#: combining mark, fell out with the accents in the NFD pass; the rest are spacing
+#: characters and survived, so ``μετ᾽`` and ``μετ̓`` -- the same word, digitised by two
+#: projects -- folded to different tokens and no run could cross either. U+02BC is the
+#: worst of them, because Unicode calls it a *letter*, so it survived the word tokeniser
+#: too and sat inside the token.
+#:
+#: Counted over this library's nine Greek corpora: 19,745 elision marks, of which the
+#: combining one that already worked appears **once**. The broken spellings are not an
+#: edge case, they are the case. Dropped rather than turned into a space, so that all six
+#: spellings agree with the one that was always right -- and 99.8% of them are followed by
+#: a space in the text anyway, which makes the two choices the same for all but 38.
+#:
+#: Greek only. An apostrophe in English is a contraction and a different thing, and
+#: `fold` must keep answering for English exactly as it did.
+_GREEK_ELISION: Final = {
+    "᾽",  # GREEK KORONIS
+    "ʼ",  # MODIFIER LETTER APOSTROPHE -- a letter to Unicode, so it hid in the token
+    "’",  # RIGHT SINGLE QUOTATION MARK
+    "᾿",  # GREEK PSILI
+    "'",  # APOSTROPHE
+}
 
 #: Greek only. The *nomina sacra*: the words a scribe contracts rather than writes out,
 #: marked in a manuscript with an overline that a transcription usually drops.
@@ -183,6 +213,8 @@ def _fold(text: str, language: str | None = None, *, orthographic: bool = False)
             pending_space = bool(out)
             continue
         if latin and character in _LATIN_PUNCTUATION:
+            continue
+        if greek and character in _GREEK_ELISION:
             continue
 
         decomposed = unicodedata.normalize("NFD", character)

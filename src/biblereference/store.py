@@ -144,7 +144,8 @@ CREATE TABLE IF NOT EXISTS search_state (
     corpus        TEXT PRIMARY KEY,
     indexed_at    TEXT    NOT NULL,
     verses        INTEGER NOT NULL,
-    source_verses INTEGER
+    source_verses INTEGER,
+    fold_version  INTEGER
 );
 
 -- How many distinct texts each word appears in, so a query can be built out of the words
@@ -227,7 +228,8 @@ CREATE TABLE IF NOT EXISTS lemma_state (
     corpus        TEXT PRIMARY KEY,
     indexed_at    TEXT    NOT NULL,
     verses        INTEGER NOT NULL,
-    source_verses INTEGER
+    source_verses INTEGER,
+    fold_version  INTEGER
 );
 """
 
@@ -392,6 +394,12 @@ _ADDED_COLUMNS: Final = (
     # built from, and NULL means exactly that -- not zero, and not "stale". Telling a user
     # to reindex on the strength of a column we only just added would be crying wolf.
     ("search_state", "source_verses", "INTEGER"),
+    # Which fold folded it. The index keys on `sha1(fold(text))`, so a change to the fold
+    # invalidates every entry while leaving every count identical -- the one kind of
+    # staleness the verse comparison provably cannot see. Nullable for the same reason as
+    # `source_verses`: an index built before this column can only say "unknown".
+    ("search_state", "fold_version", "INTEGER"),
+    ("lemma_state", "fold_version", "INTEGER"),
 )
 
 

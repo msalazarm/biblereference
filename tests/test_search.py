@@ -974,3 +974,51 @@ def test_a_scaled_run_is_the_documented_lambda_and_survives_a_pickle() -> None:
 
     with pytest.raises(ValueError, match="at least 1"):
         ScaledRun(0)
+
+
+def test_an_index_folded_by_an_older_rule_is_reported_stale(home: DataHome) -> None:
+    """The staleness check compared verse counts, and a fold change leaves every count
+    identical -- so when Greek elision marks started folding away, every entry in the
+    index was keyed on `sha1` of the old normalisation and `doctor` said all corpora
+    current. The query would say `μετ` and the index would say `μετʼ` and the two would
+    never meet, silently, for as long as nobody reindexed.
+
+    So the index records which fold built it. A recorded version that is not this one is
+    drift, said before the counts are consulted -- they agree and mean nothing.
+    """
+    import sqlite3
+
+    from biblereference.emphasis import FOLD_VERSION
+    from biblereference.search import index_coverage
+
+    write_corpus(
+        home,
+        SourceMeta(corpus="folded", label="Folded", language="grc", versification="org"),
+        [(VerseRef("JHN", 11, 35, vrs="org"), "ἐδάκρυσεν ὁ Ἰησοῦς")],
+    )
+    build_index(home)
+    assert index_is_stale(home) == [], "just built, by this very fold"
+    assert [row.fold_version for row in index_coverage(home)] == [FOLD_VERSION]
+
+    with closing(sqlite3.connect(home.database)) as connection:
+        connection.execute("UPDATE search_state SET fold_version = ?", (FOLD_VERSION - 1,))
+        connection.commit()
+    assert index_is_stale(home) == ["folded"], "folded by a rule this code no longer applies"
+
+
+def test_an_index_that_never_recorded_its_fold_is_not_cried_wolf_over(home: DataHome) -> None:
+    """`NULL` means an index built before the column existed, which cannot say what folded
+    it. Guessing "stale" there would send every existing install off to rebuild a
+    perfectly good index -- the same judgement `source_verses` already makes."""
+    import sqlite3
+
+    write_corpus(
+        home,
+        SourceMeta(corpus="quiet", label="Quiet", language="en", versification="eng"),
+        [(VerseRef("JHN", 11, 35, vrs="eng"), "Jesus wept.")],
+    )
+    build_index(home)
+    with closing(sqlite3.connect(home.database)) as connection:
+        connection.execute("UPDATE search_state SET fold_version = NULL")
+        connection.commit()
+    assert index_is_stale(home) == []

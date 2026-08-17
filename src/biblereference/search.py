@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 from .corpora.base import CorpusError, VerseUnavailable
 from .corpora.web import KNOWN_VERSIONS, BibleGatewayCorpus
 from .dating import translated as _translated
-from .emphasis import fold
+from .emphasis import FOLD_VERSION, fold
 from .lemmata import Lexicon
 from .refs import VerseRange, VerseRef
 from .store import DataHome, open_store, read_chapter
@@ -792,8 +792,14 @@ def _index_corpus(
 
     connection.execute(
         "INSERT OR REPLACE INTO search_state "
-        "(corpus, indexed_at, verses, source_verses) VALUES (?, ?, ?, ?)",
-        (corpus, datetime.now(UTC).isoformat(timespec="seconds"), count, len(rows)),
+        "(corpus, indexed_at, verses, source_verses, fold_version) VALUES (?, ?, ?, ?, ?)",
+        (
+            corpus,
+            datetime.now(UTC).isoformat(timespec="seconds"),
+            count,
+            len(rows),
+            FOLD_VERSION,
+        ),
         # `count` and `len(rows)` differ where a verse folds away to nothing -- a line of
         # editorial sigla, a verse of pure punctuation. Both are recorded because only
         # `len(rows)` can be compared with the store to ask whether this is out of date.
@@ -813,13 +819,43 @@ def _text_id(connection: sqlite3.Connection, digest: bytes, folded: str) -> int:
     return text_id
 
 
+def prune_texts(connection: sqlite3.Connection, report: Reporter = _silent) -> int:
+    """Drop indexed texts no verse points at any more, and say how many.
+
+    A reindex rewrites ``search_ref`` but only ever *adds* to ``search_text``, so every
+    text a corpus used to have and no longer does stayed behind: 14,087 of them by the
+    time anyone looked, and 1,111 in the lemma index. They are unreachable through
+    ``search_ref`` and so cannot be returned -- but :func:`recount_df` counts every row of
+    ``search_fts``, which means the ghosts were inflating document frequency, and document
+    frequency is what BM25 ranks on and what :attr:`Match.bits` is measured against. A
+    superseded rendering of a verse was quietly making its own words look commoner.
+
+    Safe whichever corpora were rebuilt: a text is only dropped when *no* verse of *any*
+    corpus references it.
+    """
+    orphans = [
+        int(row[0])
+        for row in connection.execute(
+            "SELECT id FROM search_text WHERE id NOT IN (SELECT text_id FROM search_ref)"
+        )
+    ]
+    if orphans:
+        connection.executemany("DELETE FROM search_fts WHERE rowid = ?", [(i,) for i in orphans])
+        connection.executemany("DELETE FROM search_text WHERE id = ?", [(i,) for i in orphans])
+        report(f"search: dropped {len(orphans):,} text(s) no verse points at")
+    return len(orphans)
+
+
 def recount_df(connection: sqlite3.Connection, report: Reporter = _silent) -> None:
     """Recount how many distinct texts each word appears in.
 
     Counted over whole texts rather than whole verses on purpose: a sentence carried
     identically by twenty translations is one piece of evidence about how common its words
     are, not twenty.
+
+    Orphans are dropped first, or the count includes texts nothing can return.
     """
+    prune_texts(connection, report)
     connection.execute("DELETE FROM search_df")
     counts: dict[str, int] = {}
     for (text,) in connection.execute("SELECT text FROM search_fts"):
@@ -1042,8 +1078,14 @@ def _index_lemmas(
 
     connection.execute(
         "INSERT OR REPLACE INTO lemma_state "
-        "(corpus, indexed_at, verses, source_verses) VALUES (?, ?, ?, ?)",
-        (corpus, datetime.now(UTC).isoformat(timespec="seconds"), count, len(rows)),
+        "(corpus, indexed_at, verses, source_verses, fold_version) VALUES (?, ?, ?, ?, ?)",
+        (
+            corpus,
+            datetime.now(UTC).isoformat(timespec="seconds"),
+            count,
+            len(rows),
+            FOLD_VERSION,
+        ),
     )
     report(f"lemmata: indexed {corpus} ({count:,} verses)")
     return count
@@ -1085,6 +1127,20 @@ def recount_lemma_df(connection: sqlite3.Connection, report: Reporter = _silent)
     different texts rather than different renderings of one, and their agreement is
     evidence about the language rather than a duplicate to be collapsed.
     """
+    # Orphans here never reached `lemma_df`, which joins through `lemma_ref` and so has
+    # always counted only reachable readings -- `bits` was never touched by this. They do
+    # still sit in `lemma_fts`, where they spend candidate slots a retrieval could give to
+    # a verse that exists, so they go too.
+    orphans = [
+        int(row[0])
+        for row in connection.execute(
+            "SELECT id FROM lemma_text WHERE id NOT IN (SELECT text_id FROM lemma_ref)"
+        )
+    ]
+    if orphans:
+        connection.executemany("DELETE FROM lemma_fts WHERE rowid = ?", [(i,) for i in orphans])
+        connection.executemany("DELETE FROM lemma_text WHERE id = ?", [(i,) for i in orphans])
+        report(f"lemmata: dropped {len(orphans):,} reading(s) no verse points at")
     connection.execute("DELETE FROM lemma_df")
     connection.execute("DELETE FROM lemma_total")
     counts: dict[tuple[str, str], int] = {}
@@ -1267,6 +1323,16 @@ class IndexCoverage:
     source_verses: int | None = None
     """What the store held when it was indexed, or ``None`` for an index built before this
     was recorded."""
+    fold_version: int | None = None
+    """Which :data:`~biblereference.emphasis.FOLD_VERSION` folded this index, or ``None``
+    for an index built before it was recorded.
+
+    The index keys on ``sha1(fold(text))``, so a change to the fold silently invalidates
+    every entry: the stored token says ``μετʼ`` and the query now says ``μετ``, and the
+    two never meet again. Counting verses cannot see that -- the count is identical --
+    which is how the elision fix could have shipped and left Greek search quietly
+    answering less, with `doctor` reporting every corpus current.
+    """
 
     @property
     def searchable(self) -> bool:
@@ -1277,6 +1343,10 @@ class IndexCoverage:
         """``missing`` | ``drifted`` | ``unknown`` | ``current``."""
         if self.indexed is None:
             return "missing"
+        if self.fold_version is not None and self.fold_version != FOLD_VERSION:
+            # Folded by a rule this code no longer applies. Said before the verse counts
+            # are consulted, because they will agree and mean nothing.
+            return "drifted"
         if self.source_verses is None:
             # Indexed before the store recorded what it indexed *from*. Nothing here can
             # say whether it has drifted, and guessing "stale" would send every existing
@@ -1301,8 +1371,9 @@ def index_coverage(home: DataHome) -> list[IndexCoverage]:
         try:
             columns = {row[1] for row in connection.execute("PRAGMA table_info(search_state)")}
             source = "s.source_verses" if "source_verses" in columns else "NULL"
+            folded = "s.fold_version" if "fold_version" in columns else "NULL"
             rows = connection.execute(
-                f"SELECT m.corpus, s.verses, {source} "
+                f"SELECT m.corpus, s.verses, {source}, {folded} "
                 "FROM source_meta m LEFT JOIN search_state s ON s.corpus = m.corpus "
                 "ORDER BY m.corpus"
             ).fetchall()
@@ -1312,8 +1383,8 @@ def index_coverage(home: DataHome) -> list[IndexCoverage]:
         except sqlite3.OperationalError:  # pragma: no cover - database not built yet
             return []
     return [
-        IndexCoverage(str(corpus), int(counted.get(corpus, 0)), indexed, held)
-        for corpus, indexed, held in rows
+        IndexCoverage(str(corpus), int(counted.get(corpus, 0)), indexed, held, folded)
+        for corpus, indexed, held, folded in rows
     ]
 
 
