@@ -32,6 +32,12 @@ def test_seed_references_arrive_in_the_greeks_own_numbering() -> None:
     assert str(_greek_ref(verses, "Ps.121.2")) == "PSA 120:2"
     assert str(_greek_ref(verses, "Acts.8.32")) == "ACT 8:32"
     assert str(_greek_ref(verses, "Gen.1.1")) == "GEN 1:1"
+    # The vrs label itself, asserted -- str() hides it, and hiding it is how every New
+    # Testament verse shipped labelled `lxx`: both versification systems claim the whole
+    # canon, so the book decides, not has_book().
+    assert _greek_ref(verses, "Acts.8.32").vrs == "org"
+    assert _greek_ref(verses, "Ps.121.2").vrs == "lxx"
+    assert _greek_ref(verses, "Matt.10.16").vrs == "org"
     assert _greek_ref(verses, "NotABook.1.1") is None
     assert _greek_ref(verses, "Gen.1") is None
 

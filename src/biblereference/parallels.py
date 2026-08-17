@@ -98,17 +98,26 @@ def _greek_ref(verses: Versification, token: str) -> VerseRef | None:
     except (UnknownBookError, AmbiguousBookError):
         return None
     ref = VerseRef(book, int(parts[1]), int(parts[2]), vrs="eng")
-    # The Septuagint's numbering first: `org` carries the Old Testament too, in the
-    # Hebrew numbering, and asking it first would store English Psalm 121 as 121 when
-    # the Greek that verifies the pair holds it as 120. A New Testament book is not in
-    # `lxx` at all, so the order costs nothing there.
-    for target in ("lxx", "org"):
-        if verses.has_book(target, book):
-            try:
-                return verses.convert(ref, target)
-            except VersificationError:
-                return None
-    return None
+    try:
+        return verses.convert(ref, numbering(book))
+    except VersificationError:
+        return None
+
+
+#: The 27 New Testament books, spelled out because no versification system can be asked
+#: "is this yours": `lxx` answers yes for Acts and `org` answers yes for the Psalms --
+#: both carry the whole canon -- and choosing by has_book() labelled every New Testament
+#: verse `lxx`, which the profiles build then keyed on and silently built nothing for.
+_NEW_TESTAMENT: Final = frozenset(
+    "MAT MRK LUK JHN ACT ROM 1CO 2CO GAL EPH PHP COL 1TH 2TH 1TI 2TI TIT "
+    "PHM HEB JAS 1PE 2PE 1JN 2JN 3JN JUD REV".split()
+)
+
+
+def numbering(book: str) -> str:
+    """Which numbering the library's Greek holds this book in: ``org`` for the New
+    Testament, ``lxx`` for everything the Septuagint carries."""
+    return "org" if book in _NEW_TESTAMENT else "lxx"
 
 
 #: Members a seed range may expand to before it is refused as not verse-shaped. The
