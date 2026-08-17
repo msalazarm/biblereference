@@ -287,6 +287,13 @@ _MAX_PASSAGE: Final = 20
 
 _WORD_RE: Final = re.compile(r"[^\W_]+", re.UNICODE)
 
+#: Aggregate idf (log2, summed over a window's distinct searchable tokens) below which a
+#: window may not seed under `seed_mask`. The doxology's words are individually among the
+#: commonest in the library, which is exactly why its windows fall under any floor that
+#: means anything -- and why the number ships opt-in and is priced on the control corpus
+#: before it defaults to anything.
+_SEED_FLOOR: Final = 20.0
+
 #: The books whose first and last verses are a letter's frame -- salutation and farewell
 #: blessing -- for :attr:`Match.positional_candidate`. The twenty-one epistles, and
 #: Revelation, which is no epistle but opens and closes as one: χάρις ὑμῖν καὶ εἰρήνη at
@@ -1847,6 +1854,7 @@ class Searcher:
         composite: str | Path | Composite | None = None,
         verify: bool = False,
         patristic_model: str | Path | None = None,
+        seed_mask: bool = False,
         min_grade: str | None = None,
         gates: Sequence[Gate] | None = None,
         min_lemma_run: int | None = None,
@@ -1967,6 +1975,11 @@ class Searcher:
             from .ngram_models import NgramModel
 
             self._patristic = NgramModel(patristic_model)
+        #: DUST/SEG for the doxology: a window that is mostly liturgical furniture, or
+        #: whose words carry too little aggregate surprisal, may not *seed* -- it can
+        #: still be covered by a match seeded elsewhere, which is the guarantee that
+        #: makes exclusion survivable. Opt-in until the control corpus prices it.
+        self._seed_mask = seed_mask
         # Off, and off is today. Nothing below runs, no lemma table is opened and no query
         # takes a different path unless a caller has asked for one in so many words.
         self._home = home
@@ -2127,7 +2140,12 @@ class Searcher:
         )
         return {str(token): int(docs) for token, docs in rows}
 
-    def _query_terms(self, tokens: Sequence[str], limit: int = _QUERY_TERMS) -> list[str]:
+    def _query_terms(
+        self,
+        tokens: Sequence[str],
+        limit: int = _QUERY_TERMS,
+        frequency: dict[str, int] | None = None,
+    ) -> list[str]:
         """The words worth searching on, rarest first.
 
         A quotation's distinctive words are the ones that find it. *And it came to pass*
@@ -2135,7 +2153,8 @@ class Searcher:
         merely useless here, they are the whole cost: asking FTS5 for *god* means scoring
         every text that contains it.
         """
-        frequency = self._document_frequency(tokens)
+        if frequency is None:
+            frequency = self._document_frequency(tokens)
         scored: list[tuple[float, str]] = []
         ceiling = self._texts * _COMMON_SHARE
         for token in dict.fromkeys(tokens):
@@ -2153,6 +2172,27 @@ class Searcher:
             scored.append((idf, token))
         scored.sort(reverse=True)
         return [token for _, token in scored[:limit]]
+
+    def _may_not_seed(self, chunk: Sequence[str], frequency: dict[str, int]) -> bool:
+        """Whether this window is furniture: mostly stoplisted, or too cheap to trust.
+
+        Two mechanisms under one flag. The stoplist covers the *named* liturgical
+        phrases; the surprisal floor covers the unnamed rest -- a window whose distinct
+        searchable words sum below :data:`_SEED_FLOOR` bits of idf is made of the words
+        false matches are made of. Either way the window only loses its right to
+        *nominate*; the cluster around a neighbour's nomination still scores it.
+        """
+        from .stoplist import COVER_SHARE, covered
+
+        if chunk and len(covered(tuple(chunk))) / len(chunk) >= COVER_SHARE:
+            return True
+        total = 0.0
+        for token in dict.fromkeys(chunk):
+            if len(token) < 2 or token in _STOPWORDS:
+                continue
+            docs = frequency.get(token, 0)
+            total += math.log2(self._texts / docs) if docs else 1.0
+        return total < _SEED_FLOOR
 
     def _min_run_for(self, length: int) -> int:
         """The contiguity gate for a query of this length."""
@@ -2839,7 +2879,10 @@ class Searcher:
         weight: dict[tuple[str, str, int], float] = {}
         for index in _offsets(len(tokens), window, stride):
             chunk = tokens[index : index + window]
-            terms = self._query_terms(chunk, _SWEEP_TERMS)
+            frequency = self._document_frequency(chunk)
+            if self._seed_mask and self._may_not_seed(chunk, frequency):
+                continue
+            terms = self._query_terms(chunk, _SWEEP_TERMS, frequency=frequency)
             candidates = self._candidates(terms, _SWEEP_CANDIDATES)
             # Negated so that the shared "lower is better" convention holds, as it does
             # for the bm25 scores this argument otherwise carries.

@@ -1,0 +1,24 @@
+{
+  "schema": "biblereference-stoplist/1",
+  "note": "Doxologies, graces and liturgical closings that seed false matches: the research pass found no published stoplist for patristic Greek, so this is the first, curated from the consumer's hand-read verdict classes (19 liturgical-formula verdicts of 102). Phrases are stored as written; the loader folds them exactly as the scanner folds a document, so the two cannot drift. A phrase here may still be COVERED by a match seeded elsewhere -- the list stops seeding, never matching.",
+  "phrases": [
+    {"language": "grc", "text": "ᾧ ἡ δόξα εἰς τοὺς αἰῶνας τῶν αἰώνων ἀμήν",
+     "label": "doxology", "source": "closes eleven sections of 1 Clement; GAL 1:5, 2TI 4:18, HEB 13:21, 1PE 4:11"},
+    {"language": "grc", "text": "ᾧ ἡ δόξα καὶ ἡ μεγαλωσύνη εἰς τοὺς αἰῶνας",
+     "label": "doxology", "source": "1 Clement's fuller form"},
+    {"language": "grc", "text": "εἰς τοὺς αἰῶνας τῶν αἰώνων ἀμήν",
+     "label": "doxology-tail", "source": "the tail every doxology shares"},
+    {"language": "grc", "text": "χάρις ὑμῖν καὶ εἰρήνη",
+     "label": "grace-opening", "source": "the Pauline salutation, ROM 1:7 and everywhere"},
+    {"language": "grc", "text": "ἡ χάρις τοῦ κυρίου ἡμῶν Ἰησοῦ Χριστοῦ μετὰ πάντων ὑμῶν",
+     "label": "grace-closing", "source": "the Pauline farewell"},
+    {"language": "grc", "text": "ἐν Χριστῷ Ἰησοῦ τῷ κυρίῳ ἡμῶν",
+     "label": "formula", "source": "epistolary formula throughout the Pauline corpus"},
+    {"language": "la", "text": "in saecula saeculorum amen",
+     "label": "doxology", "source": "the Latin doxology tail"},
+    {"language": "la", "text": "per omnia saecula saeculorum",
+     "label": "doxology", "source": "liturgical close"},
+    {"language": "la", "text": "gratia vobis et pax",
+     "label": "grace-opening", "source": "the Vulgate's Pauline salutation"}
+  ]
+}

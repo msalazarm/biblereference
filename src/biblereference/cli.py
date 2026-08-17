@@ -265,6 +265,7 @@ def cmd_search(args: argparse.Namespace) -> int:
             concave=args.concave,
             itacised=args.itacised,
             composite=args.composite,
+            seed_mask=args.seed_mask,
             gates=_gates(args),
         ) as searcher:
             matches = searcher.search(text, limit=args.limit)
@@ -332,6 +333,13 @@ def _inflected_options(parser: argparse.ArgumentParser) -> None:
         "--weights`); every graded match then reports `composite` and `e_value` "
         "beside its axes. Reported, never gated",
     )
+    parser.add_argument(
+        "--seed-mask",
+        action="store_true",
+        help="liturgical furniture may not seed: windows that are mostly doxology/grace "
+        "stoplist, or below the aggregate-surprisal floor, lose their right to nominate "
+        "-- they can still be covered by a match seeded elsewhere. Opt-in until priced",
+    )
 
 
 def cmd_parallels(args: argparse.Namespace) -> int:
@@ -365,6 +373,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
             concave=args.concave,
             itacised=args.itacised,
             composite=args.composite,
+            seed_mask=args.seed_mask,
             gates=_gates(args),
         ) as searcher:
             if args.debts:
