@@ -468,7 +468,12 @@ cost, run the optimal O(n log n) chaining DP instead of the current heuristic wa
 report near-optimal secondary chains (§3b). Same objective, actually maximised — a pure
 recall gain at unchanged FP semantics — and the multi-chain output is what 4.3 consumes.
 
-**5.4 Priced experiments and compute controls.** A **spaced lemma-seed** gate axis
+**5.4 Priced experiments and compute controls.** *(Spaced seeds: measured 2026-08-17 and
+closed negative — every candidate at weights 4–6 ran 11–24 points behind its contiguous
+baseline over 396 marks. DNA noise is substitution-shaped and preserves position; Greek
+re-inflection is indel-shaped, and the chain's variable gaps were already the right tool.
+See `tools/spaced_seeds.py`. No pattern earned a control pricing run.)* A **spaced
+lemma-seed** gate axis
 (PatternHunter theory, §3b): candidate patterns priced individually on the control corpus,
 shipped only if a pattern beats the contiguous gates at equal measured FP. **FracMinHash
 containment** as a cheap pre-filter before the chain DP. **Two-hit seeding** and **X-drop**
