@@ -51,6 +51,11 @@ BINS: Final[dict[str, tuple[float, ...]]] = {
     "bits": (5, 10, 15, 20, 25, 30, 35, 40, 50, 60),
     "formula": (1,),
     "rivalry": (1, 3),
+    # The verification stage's offset-histogram concentration (see `verification.py`):
+    # a genuine match aligns its rare lemmas at one constant offset and coincidence
+    # scatters, so the peak's share of all pairs is a likelihood term the moment a
+    # calibration measures its m/u tables.
+    "offset_peak": (0.25, 0.5, 0.75, 0.9),
 }
 
 #: The axes order a control-evidence file uses when it declares no ``fields`` key: the

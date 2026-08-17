@@ -1604,6 +1604,13 @@ class Match:
     bits"* is not. Denominated in windows -- a scan's E is over the windows the document
     presented, a search's over the one question asked. 0.0 means below the null's
     resolution, never impossible."""
+    verified_odds: float | None = None
+    """The verification stage's summed log2 likelihood ratios -- the explicit second
+    look of `verification.py`, under `Searcher(verify=True, composite=...)`. Under a v1
+    artifact this equals :attr:`composite` by the only-calibrated-terms rule; it departs
+    the moment an artifact carries tables for the offset histogram or the formula flag.
+    ``None`` where verification was not asked for or the match has no quoted span to
+    re-read."""
     itacised: bool = False
     """Whether the itacised second tier read any spelling inside this match's span.
 
@@ -1744,6 +1751,7 @@ class Match:
             "fragmentation": None if self.fragmentation is None else round(self.fragmentation, 4),
             "composite": None if self.composite is None else round(self.composite, 2),
             "e_value": None if self.e_value is None else round(self.e_value, 6),
+            "verified_odds": None if self.verified_odds is None else round(self.verified_odds, 2),
             "itacised": self.itacised,
             "family": list(self.family),
             "positional_candidate": self.positional_candidate,
@@ -1826,6 +1834,7 @@ class Searcher:
         concave: bool = False,
         itacised: bool = False,
         composite: str | Path | Composite | None = None,
+        verify: bool = False,
         min_grade: str | None = None,
         gates: Sequence[Gate] | None = None,
         min_lemma_run: int | None = None,
@@ -1925,6 +1934,16 @@ class Searcher:
         self._composite = (
             Composite.load(composite) if isinstance(composite, (str, Path)) else composite
         )
+        #: The explicit second look per candidate (see `verification.py`). Opt-in -- it
+        #: costs a lexicon pass per match -- and meaningless without the artifact that
+        #: holds its likelihood tables, which is why asking for one without the other is
+        #: an error at construction rather than a silent None on every match.
+        if verify and self._composite is None:
+            raise ValueError(
+                "verify=True needs a composite artifact: the verification odds are sums "
+                "of calibrated likelihood ratios, and the artifact is where they live"
+            )
+        self._verify = verify
         # Off, and off is today. Nothing below runs, no lemma table is opened and no query
         # takes a different path unless a caller has asked for one in so many words.
         self._home = home
@@ -2728,9 +2747,34 @@ class Searcher:
                     family=self._family(match.passage),
                     composite=score,
                     e_value=chance,
+                    verified_odds=self._verified(match),
                 )
             )
         return out
+
+    def _verified(self, match: Match) -> float | None:
+        """The verification stage's odds, where it was asked for and can honestly run.
+
+        Only on matches with a quoted span -- the second look re-reads the actual words,
+        and a `search()` match carries none -- and only under `inflected`, for the same
+        zero-axes reason as the composite.
+        """
+        if not self._verify or not self._inflected or not match.quoted or not match.witnesses:
+            return None
+        language = self._language_of(match.witnesses[0])
+        if not language or language not in LEMMA_LANGUAGES:
+            return None
+        from .verification import verify
+
+        lexicon, weights = self._lemma_tools(language)
+        assert self._composite is not None  # construction refused verify without it
+        return verify(
+            match,
+            language=language,
+            lexicon=lexicon,
+            weigh=weights.of(language),
+            composite=self._composite,
+        ).odds
 
     def _weighed(self, match: Match, windows: float) -> tuple[float | None, float | None]:
         """The composite score and its E-value, where an artifact was configured.
