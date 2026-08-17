@@ -706,6 +706,72 @@ def shared_lemmas(left: Sequence[Reading], right: Sequence[Reading]) -> tuple[st
     return tuple(dict.fromkeys(out))
 
 
+#: METEOR's sharpness knob for the fragmentation penalty. Three is the paper's own
+#: setting, and the doc's reason to keep it: the statistic exists to say *how scattered*
+#: the agreement is, and a gentler exponent flattens exactly the distinction it reports.
+_FRAG_BETA: Final = 3.0
+
+
+def _containment(theirs: Sequence[Reading], mine: Sequence[Reading]) -> float:
+    """What share of the *verse* the quotation accounts for, by dictionary form.
+
+    The other direction from `_coverage`, which is matched share of the query: TRACER's
+    lesson is to be deliberate about both, because a whole short verse embedded in a long
+    sentence -- one clause of a conflation -- is fully quoted however diluted the
+    sentence. Measured at the tier that graded the match: a re-inflected quotation shares
+    few spellings, so spelled-token containment would understate exactly the matches this
+    path exists to find. Uses the union of the query's readings, the same approximation
+    `shared_bits` and `_chain_lemmas` already make -- a lemma matched out of order counts.
+    """
+    if not theirs:
+        return 0.0
+    ours: set[str] = set().union(*mine) if mine else set()
+    return sum(1 for reading in theirs if reading & ours) / len(theirs)
+
+
+def _fragmentation(
+    mine: Sequence[Reading], theirs: Sequence[Reading], chained: LemmaChain
+) -> float:
+    """METEOR's `(chunks/matches)^beta` over the chain's own stretch of the text.
+
+    The contiguity doctrine in closed form: one unbroken agreement scores near zero, the
+    same lemmas maximally scattered score 1.0. Cheap -- the same walk `_chain_lemmas`
+    does -- and reported like any candidate axis, priced before it ever gates anything.
+    """
+    first, last = chained.span
+    if not chained.length or last <= first:
+        return 0.0
+    shared: set[str] = set().union(*theirs) if theirs else set()
+    chunks = 0
+    inside = False
+    matches = 0
+    for reading in mine[first:last]:
+        if reading & shared:
+            matches += 1
+            if not inside:
+                chunks += 1
+                inside = True
+        else:
+            inside = False
+    if not matches:
+        return 0.0
+    return float((chunks / matches) ** _FRAG_BETA)
+
+
+@dataclass(frozen=True, slots=True)
+class Graded:
+    """One candidate's footing, weighed: every axis, and the two shape statistics."""
+
+    grade: str
+    run: int
+    lemma_run: LemmaRun
+    chain: LemmaChain
+    bits: float
+    evidence: tuple[str, ...]
+    containment: float
+    fragmentation: float
+
+
 # -- building ---------------------------------------------------------------------------
 
 
@@ -1514,6 +1580,18 @@ class Match:
     """The citation formula introducing this quotation, where one does -- *it is written*,
     *the scripture says*. Reported and never acted on: see :mod:`biblereference.formulae`
     for the measurement that says why it is evidence but not a threshold."""
+    containment: float | None = None
+    """What share of the *verse* this quotation accounts for -- `coverage`'s other
+    direction, and deliberately so: a whole short verse embedded in a long sentence, one
+    clause of a conflation, is fully quoted however diluted the sentence. Measured at the
+    tier that found the match: dictionary forms on the graded path, spellings on the
+    exact one. ``None`` means not computed, never "measured zero"."""
+    fragmentation: float | None = None
+    """METEOR's `(chunks/matches)^3` over the chain: one unbroken agreement scores near
+    zero, the same lemmas maximally scattered score 1.0 -- the contiguity doctrine in
+    closed form, reported as a candidate axis and priced before it ever gates anything.
+    ``None`` on the exact path, where a verbatim run is one chunk by definition and a
+    value would say nothing."""
     composite: float | None = None
     """The Fellegi-Sunter composite: every axis weighed at log2(m/u) and summed, under
     the calibration artifact this `Searcher` was handed. Six ordinary words in a row is
@@ -1662,6 +1740,8 @@ class Match:
             "bits": round(self.bits, 2),
             "matched_lemmas": list(self.matched_lemmas),
             "formula": self.formula,
+            "containment": None if self.containment is None else round(self.containment, 4),
+            "fragmentation": None if self.fragmentation is None else round(self.fragmentation, 4),
             "composite": None if self.composite is None else round(self.composite, 2),
             "e_value": None if self.e_value is None else round(self.e_value, 6),
             "itacised": self.itacised,
@@ -2297,6 +2377,11 @@ class Searcher:
                     run=longest_run(
                         query, _tokens(witnesses[0].text, self._language_of(witnesses[0]))
                     ),
+                    # `_coverage`'s arguments swapped: matched share of the *verse*, at
+                    # the spelled tier, which is the tier that found this match.
+                    containment=_coverage(
+                        _tokens(witnesses[0].text, self._language_of(witnesses[0])), query
+                    ),
                 )
             )
 
@@ -2400,19 +2485,20 @@ class Searcher:
                 graded = self._grade(readings, query, witnesses[0], language, weigh, lexicon)
                 if graded is None:
                     continue
-                grade, run, found, chained, weight, evidence = graded
                 out.append(
                     Match(
                         passage,
                         tuple(witnesses[:20]),
                         composed=self._composed,
                         identified_at=self._identified,
-                        grade=grade,
-                        run=run,
-                        lemma_run=found.length,
-                        chain=chained.length,
-                        bits=weight,
-                        matched_lemmas=evidence,
+                        grade=graded.grade,
+                        run=graded.run,
+                        lemma_run=graded.lemma_run.length,
+                        chain=graded.chain.length,
+                        bits=graded.bits,
+                        matched_lemmas=graded.evidence,
+                        containment=graded.containment,
+                        fragmentation=graded.fragmentation,
                         itacised=bool(re_read),
                     )
                 )
@@ -2426,7 +2512,7 @@ class Searcher:
         language: str,
         weigh: Callable[[str], float],
         lexicon: Lexicon,
-    ) -> tuple[str, int, LemmaRun, LemmaChain, float, tuple[str, ...]] | None:
+    ) -> Graded | None:
         """What footing this passage rests on, or ``None`` if it rests on too little.
 
         Two ways in, and the shorter one is not the looser one. A run of identical spellings
@@ -2459,9 +2545,17 @@ class Searcher:
         weight = sum(weigh(lemma) for lemma in set(chained.lemmas))
         if not any(gate.admits(run, found.length, chained.length, weight) for gate in self._gates):
             return None
-        if _MIN_PARTIAL_RUN <= run < self._min_run_for(len(query)):
-            return (PARTIAL, run, found, chained, weight, evidence)
-        return (INDIRECT, run, found, chained, weight, evidence)
+        grade = PARTIAL if _MIN_PARTIAL_RUN <= run < self._min_run_for(len(query)) else INDIRECT
+        return Graded(
+            grade=grade,
+            run=run,
+            lemma_run=found,
+            chain=chained,
+            bits=weight,
+            evidence=evidence,
+            containment=_containment(theirs, readings),
+            fragmentation=_fragmentation(readings, theirs, chained),
+        )
 
     def _lemma_candidates(self, terms: Sequence[str], limit: int) -> list[tuple[int, float]]:
         """Indexed lemma readings sharing dictionary forms with the query, best first."""
@@ -2956,6 +3050,9 @@ class Searcher:
             # The rule that found it, recorded. `_is_quotation` just measured this and
             # threw it away; a grade a caller cannot check is not evidence.
             run=longest_run(tokens[low:high], _tokens(exact[0].text, self._language_of(exact[0]))),
+            containment=_coverage(
+                _tokens(exact[0].text, self._language_of(exact[0])), tokens[low:high]
+            ),
             formula=self._formula_before(words, low, self._language_of(exact[0])),
             alternates=self._near_ties(rivals, best[0], vrs, book, chapter, start, end),
         )
@@ -3088,7 +3185,6 @@ class Searcher:
         )
         if graded is None:
             return None
-        grade, run, found, chain_here, weight, evidence = graded
         return Match(
             VerseRange(
                 VerseRef(book, chapter, start, vrs=vrs), VerseRef(book, chapter, end, vrs=vrs)
@@ -3098,12 +3194,14 @@ class Searcher:
             quoted=_original(words, low, high),
             composed=self._composed,
             identified_at=self._identified,
-            grade=grade,
-            run=run,
-            lemma_run=found.length,
-            chain=chain_here.length,
-            bits=weight,
-            matched_lemmas=evidence,
+            grade=graded.grade,
+            run=graded.run,
+            lemma_run=graded.lemma_run.length,
+            chain=graded.chain.length,
+            bits=graded.bits,
+            matched_lemmas=graded.evidence,
+            containment=graded.containment,
+            fragmentation=graded.fragmentation,
             formula=self._formula_before(words, low, language),
             itacised=bool(re_read),
             # The same rivalry the exact path reports. Leaving it off here meant a match

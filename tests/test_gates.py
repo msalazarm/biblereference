@@ -623,3 +623,48 @@ def test_alternates_stay_empty_when_the_feature_was_not_asked_for() -> None:
     with greek() as plain:
         for match in plain.scan(CLEMENT_17_3):
             assert match.alternates == ()
+
+
+# --------------------------------------------------------------------------------------
+# The two shape statistics: the verse's own share, and how scattered the agreement is
+# --------------------------------------------------------------------------------------
+
+
+def test_containment_is_the_verses_share_and_fragmentation_the_chains_scatter() -> None:
+    from biblereference.search import _containment, _fragmentation, lemma_chain
+
+    weight = {"α": 8.0, "β": 7.0, "γ": 9.0, "δ": 6.0}
+    weigh = lambda lemma: weight.get(lemma, 2.0)  # noqa: E731
+    verse = [frozenset(x) for x in "αβγδ"]
+    contiguous = [frozenset(x) for x in "αβγδ...."]
+    scattered = [frozenset(x) for x in "α.β.γ.δ."]
+    assert _containment(verse, contiguous) == 1.0, "every verse position is matched"
+    assert _containment(verse, [frozenset("α")]) == 0.25, "one clause of it"
+    assert _containment([], contiguous) == 0.0
+
+    one_chunk = lemma_chain(contiguous, verse, weigh)
+    assert _fragmentation(contiguous, verse, one_chunk) == (1 / 4) ** 3.0, "one chunk of four"
+    four_chunks = lemma_chain(scattered, verse, weigh)
+    assert _fragmentation(scattered, verse, four_chunks) == 1.0, "maximally scattered"
+
+
+def test_an_exact_match_carries_containment_and_no_fragmentation() -> None:
+    """A verbatim run is one chunk by definition, so fragmentation there would say
+    nothing; the verse-side share is real information on both paths."""
+    with greek(inflected=True) as rich:
+        found = [m for m in rich.scan(CLEMENT_17_3) if m.passage.book == "JOB"]
+    assert found and found[0].grade == "direct"
+    assert found[0].containment is not None and 0.0 < found[0].containment <= 1.0
+    assert found[0].fragmentation is None
+
+
+def test_a_graded_match_carries_both_statistics() -> None:
+    with greek(inflected=True) as rich:
+        graded = [m for m in rich.scan(POLYCARP_2_2) if m.grade != "direct"]
+    assert graded
+    assert graded[0].containment is not None and graded[0].containment > 0.5, (
+        "Ignatius reuses most of the verse"
+    )
+    assert graded[0].fragmentation is not None and 0.0 < graded[0].fragmentation < 1.0, (
+        "in Matthew's order with his own words between -- scattered, but far from maximally"
+    )
