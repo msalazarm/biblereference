@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
+    from .entities import Entities
     from .parallels import Parallels
 
 from .composite import Composite
@@ -293,6 +294,20 @@ _WORD_RE: Final = re.compile(r"[^\W_]+", re.UNICODE)
 #: means anything -- and why the number ships opt-in and is priced on the control corpus
 #: before it defaults to anything.
 _SEED_FLOOR: Final = 20.0
+
+#: The allusion pass's grades, Gregory & Tuckett's names, deliberately NOT in `GRADES`:
+#: `GRADES.index` orders `min_grade` comparisons and the calibrate tallies, and the
+#: design's standing doctrine is that allusion and quotation accounts are kept apart and
+#: never merged. An allusion Match never passes through `_graded_enough`.
+ALLUSION_GRADES: Final = ("allusion", "reference")
+
+#: Entity mentions within this many words of each other in the *document* are one
+#: allusive gesture; further apart they are two.
+_MENTION_SPREAD: Final = 30
+
+#: An allusion candidate within this many bits of the leader is a near-tie, which is the
+#: only place the author prior may act.
+_TIE_BITS: Final = 2.0
 
 #: The books whose first and last verses are a letter's frame -- salutation and farewell
 #: blessing -- for :attr:`Match.positional_candidate`. The twenty-one epistles, and
@@ -2011,6 +2026,9 @@ class Searcher:
         self._ends: dict[tuple[str, str], tuple[int, int]] = {}
         #: The parallel-family reader, opened on first use for the same reason.
         self._parallels: Parallels | None = None
+        #: The entity index reader, likewise -- and `allusions()` is silent, not an
+        #: error, where the index was never built.
+        self._entity_index: Entities | None = None
         self._texts = int(
             self._connection.execute("SELECT COUNT(*) FROM search_text").fetchone()[0]
         )
@@ -2738,6 +2756,186 @@ class Searcher:
                 )
         debts.sort(key=lambda debt: debt.at)
         return debts
+
+    def allusions(
+        self,
+        text: str,
+        *,
+        matches: Sequence[Match] | None = None,
+        limit: int = 8,
+    ) -> list[Match]:
+        """Passages the document points at without quoting: the entity pass.
+
+        Runs on the residue only -- the stretches no quotation stratum explained -- which
+        is both the precision discipline (a span already explained needs no looser
+        explanation) and the standing doctrine of keeping the two accounts apart. Pass
+        ``matches`` when a scan's output is already in hand; otherwise one is run.
+
+        v1 is deterministic and entity-first: proper nouns in the residue, resolved
+        through the TIPNR index to *individuals* rather than names, clustered by
+        proximity in the document; a candidate passage is a chapter cluster where at
+        least two of those individuals stand near each other, scored by the entities'
+        own surprisal (log2 of the index's verses over the verses naming each) plus the
+        bits of any rare lemmas shared with the passage's text. The author prior acts on
+        near-ties only -- within :data:`_TIE_BITS` of the leader, a book this document
+        already quotes is preferred, the loser goes to ``alternates``, and the prior can
+        never promote a candidate past the activation floor.
+
+        Grades are :data:`ALLUSION_GRADES`, never the quotation grades, and never merged:
+        ``reference`` where a citation formula stands before the gesture, ``allusion``
+        otherwise. On these matches ``bits`` is the entity-plus-lemma surprisal and
+        ``matched_lemmas`` carries the entity labels beside the shared lemmas -- the
+        evidence itself, as everywhere.
+        """
+        if self._entity_index is None:
+            from .entities import Entities
+
+            self._entity_index = Entities(self._home.root / "db" / "entities.sqlite")
+        index = self._entity_index
+        if not index.held:
+            return []
+        if matches is None:
+            matches = self.scan(text)
+
+        words = [(m.group(0), m.start(), m.end()) for m in _WORD_RE.finditer(text)]
+        spans = [m.span for m in matches if m.span]
+        # The residue excludes the matches' spans AND the announcement stretch before
+        # each -- the REACH words where a formula introduces a quotation belong to the
+        # quotation's account: `περὶ Ἰὼβ γέγραπται` names Job to announce him, and an
+        # entity that announces an adjacent quotation is not an allusive gesture.
+        from .formulae import REACH
+
+        owned: list[tuple[int, int]] = []
+        for a, b in spans:
+            first_inside = next(
+                (i for i, (_, start, end) in enumerate(words) if start >= a), 0
+            )
+            lead = words[max(0, first_inside - REACH)][1] if words else a
+            owned.append((min(lead, a), b))
+        residue = [
+            (position, token, start, end)
+            for position, (token, start, end) in enumerate(words)
+            if not any(a <= start and end <= b for a, b in owned)
+        ]
+        if not residue:
+            return []
+        folded = [
+            (position, fold(token, "grc"), start, end)
+            for position, token, start, end in residue
+        ]
+        by_form = index.by_form("grc", [token for _, token, _, _ in folded])
+        mentions = [
+            (position, start, end, by_form[token])
+            for position, token, start, end in folded
+            if token in by_form
+        ]
+        if len(mentions) < 2:
+            return []
+
+        # Cluster mentions by document proximity -- one allusive gesture per cluster --
+        # and a quotation standing between two mentions is a hard boundary: what is said
+        # before it and after it are different gestures whatever the word distance.
+        def severed(previous_end: int, next_start: int) -> bool:
+            return any(previous_end <= a and b <= next_start for a, b in spans)
+
+        clusters: list[list[tuple[int, int, int, set[str]]]] = []
+        for mention in mentions:
+            if (
+                clusters
+                and mention[0] - clusters[-1][-1][0] <= _MENTION_SPREAD
+                and not severed(clusters[-1][-1][2], mention[1])
+            ):
+                clusters[-1].append(mention)
+            else:
+                clusters.append([mention])
+
+        quoted_books = {m.passage.book for m in matches}
+        out: list[Match] = []
+        for cluster in clusters:
+            ids: set[str] = set()
+            for _, _, _, entity_ids in cluster:
+                ids |= entity_ids
+            candidates = index.co_mentions(ids)
+            if not candidates:
+                continue
+            char_span = (cluster[0][1], cluster[-1][2])
+            gesture = text[char_span[0] : char_span[1]]
+            scored: list[tuple[float, tuple[str, str, int, int, int, frozenset[str]]]] = []
+            for candidate in candidates[: limit * 3]:
+                entity_bits = sum(
+                    math.log2(index.verse_count / max(index.verses_of(entity), 1))
+                    for entity in candidate[5]
+                )
+                lemma_bits = self._shared_lemma_bits(gesture, candidate)
+                scored.append((entity_bits + lemma_bits, candidate))
+            scored.sort(key=lambda pair: -pair[0])
+            best_score = scored[0][0]
+            ties = [pair for pair in scored if best_score - pair[0] <= _TIE_BITS]
+            ties.sort(key=lambda pair: (pair[1][1] not in quoted_books, -pair[0]))
+            winner_score, winner = ties[0]
+            losers = [c for _, c in ties[1:]] + [c for score, c in scored[len(ties):][:3]]
+            vrs, book, chapter, first, last, names = winner
+            grade = (
+                "reference"
+                if self._formula_before(words, cluster[0][0], "grc")
+                else "allusion"
+            )
+            out.append(
+                Match(
+                    VerseRange(
+                        VerseRef(book, chapter, first, vrs=vrs),
+                        VerseRef(book, chapter, last, vrs=vrs),
+                    ),
+                    (),
+                    span=char_span,
+                    quoted=gesture,
+                    composed=self._composed,
+                    identified_at=self._identified,
+                    grade=grade,
+                    bits=winner_score,
+                    matched_lemmas=tuple(sorted(name.split("@")[0] for name in names)),
+                    formula=self._formula_before(words, cluster[0][0], "grc"),
+                    alternates=tuple(
+                        VerseRange(
+                            VerseRef(b, c, v1, vrs=vr), VerseRef(b, c, v2, vrs=vr)
+                        )
+                        for vr, b, c, v1, v2, _ in losers[:4]
+                    ),
+                )
+            )
+        out.sort(key=lambda m: -m.bits)
+        return out[:limit]
+
+    def _shared_lemma_bits(
+        self, gesture: str, candidate: tuple[str, str, int, int, int, frozenset[str]]
+    ) -> float:
+        """Rare-lemma overlap between the gesture and the candidate passage's own text,
+        in bits -- the (b) term of the design's retrieval, using the surprisal machinery
+        that already exists. Zero where no lexicon serves the language."""
+        vrs, book, chapter, first, last, _ = candidate
+        language = next(
+            (m.language for m in self._corpora.values() if m.versification == vrs), ""
+        )
+        if language not in LEMMA_LANGUAGES:
+            return 0.0
+        corpora = [c for c, m in self._corpora.items() if m.versification == vrs]
+        if not corpora:
+            return 0.0
+        marks = ",".join("?" * len(corpora))
+        rows = self._connection.execute(
+            f"SELECT text FROM verse WHERE corpus IN ({marks}) AND book=? AND chapter=? "
+            f"AND verse BETWEEN ? AND ? LIMIT 12",
+            (*corpora, book, chapter, first, last),
+        ).fetchall()
+        if not rows:
+            return 0.0
+        lexicon, weights = self._lemma_tools(language)
+        weigh = weights.of(language)
+        mine = lemma_readings(_tokens(gesture, language), language, lexicon)
+        theirs = lemma_readings(
+            _tokens(" ".join(str(r[0]) for r in rows), language), language, lexicon
+        )
+        return sum(weigh(lemma) for lemma in set(shared_lemmas(mine, theirs)))
 
     def _book_end(self, vrs: str, book: str) -> tuple[int, int]:
         """The last verse this numbering gives the book, from the verses actually held."""
