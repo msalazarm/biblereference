@@ -15,6 +15,13 @@ unverified.*
 
 ## 1. Where we stand
 
+**The golden set is 209, not 159** — the consumer transcribed Boyce's Didache table
+(pp. 160–162, 49 cells, 55 references) on 2026-08-17, after this section was first
+written. Both numbers stay recorded because every percentage below was measured against
+159 and is honest at that denominator; the re-derived frontier over all 209 lives in
+their `review/quotes_response.md` §2 (73/209 · 35% at their sweep gate, precision
+136/136) and supersedes this table for planning.
+
 Against the 159 citations Stephen Boyce tabulated by hand across nine Greek works (80
 direct, 43 partial, 36 indirect — `review/boyce-golden.jsonl`), the recalibrated frontier
 (`review/gate-calibration-greek.md`):
@@ -688,7 +695,9 @@ Two classes are systematic and deserve structural answers rather than thresholds
 - **The fragmentation statistic** (METEOR's `(chunks/matches)^β`, §3d) as a candidate
   reported field: the contiguity doctrine in closed form, cheap to compute on every match,
   priced like any axis before it gates anything.
-- **Gold**: `boyce-golden.jsonl` (159+14), the 5,044 PTA editor marks, the control corpus.
+- **Gold**: `boyce-golden.jsonl` (**209**+14 since the Didache table was transcribed;
+  159+14 before, and every number in §1 was measured at that denominator), the 5,044 PTA
+  editor marks, the control corpus.
   **BiblIndex** (270k verified patristic references, Sources Chrétiennes) has no open
   licence and an auth-gated API — worth one email to Laurence Mellerin's team; as gold it
   would dwarf everything above. Until then it prices nothing and validates methodology only.
