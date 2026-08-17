@@ -1604,6 +1604,14 @@ class Match:
     bits"* is not. Denominated in windows -- a scan's E is over the windows the document
     presented, a search's over the one question asked. 0.0 means below the null's
     resolution, never impossible."""
+    patristic_rate: float | None = None
+    """The quoted span's densest phrase, in occurrences per million words of Christian
+    prose -- read from the consumer's patristic n-gram model when the `Searcher` was
+    handed one. Their measurement: liturgical formulae run at a median 22.3, plain false
+    positives 9.4, genuine citations 1.6 -- and salutations 3.1, *lower* than citations,
+    which is why this signal and the positional flag divide that work rather than
+    compete for it. Frequency alone cannot tell a formula from a much-quoted verse;
+    beside :attr:`family` it can. Reported, never gated."""
     verified_odds: float | None = None
     """The verification stage's summed log2 likelihood ratios -- the explicit second
     look of `verification.py`, under `Searcher(verify=True, composite=...)`. Under a v1
@@ -1752,6 +1760,9 @@ class Match:
             "composite": None if self.composite is None else round(self.composite, 2),
             "e_value": None if self.e_value is None else round(self.e_value, 6),
             "verified_odds": None if self.verified_odds is None else round(self.verified_odds, 2),
+            "patristic_rate": (
+                None if self.patristic_rate is None else round(self.patristic_rate, 2)
+            ),
             "itacised": self.itacised,
             "family": list(self.family),
             "positional_candidate": self.positional_candidate,
@@ -1835,6 +1846,7 @@ class Searcher:
         itacised: bool = False,
         composite: str | Path | Composite | None = None,
         verify: bool = False,
+        patristic_model: str | Path | None = None,
         min_grade: str | None = None,
         gates: Sequence[Gate] | None = None,
         min_lemma_run: int | None = None,
@@ -1944,6 +1956,17 @@ class Searcher:
                 "of calibrated likelihood ratios, and the artifact is where they live"
             )
         self._verify = verify
+        #: The consumer's patristic n-gram model, for the stock-phrase frequency signal:
+        #: a span's peak phrase rate per million words of Christian prose. Their own
+        #: measurement separates liturgical formulae (median 22.3/M) from genuine
+        #: citations (1.6/M) -- and does nothing for salutations, which is what the
+        #: positional flag is for. Opened eagerly so a stale fold refuses at
+        #: construction rather than answering silence that looks like rarity.
+        self._patristic = None
+        if patristic_model is not None:
+            from .ngram_models import NgramModel
+
+            self._patristic = NgramModel(patristic_model)
         # Off, and off is today. Nothing below runs, no lemma table is opened and no query
         # takes a different path unless a caller has asked for one in so many words.
         self._home = home
@@ -2748,6 +2771,11 @@ class Searcher:
                     composite=score,
                     e_value=chance,
                     verified_odds=self._verified(match),
+                    patristic_rate=(
+                        self._patristic.peak_rate(match.quoted)
+                        if self._patristic is not None and match.quoted
+                        else None
+                    ),
                 )
             )
         return out
