@@ -778,11 +778,19 @@ def _index_corpus(
 
     count = 0
     for book, chapter, verse, subverse, text in rows:
-        folded = fold(text, language)
-        if not folded:
+        # Indexed as the words alone. The folded text keeps punctuation, and the two
+        # things that read this index -- FTS retrieval and `recount_df` -- both tokenise
+        # it away again, so all the punctuation ever did here was defeat the sharing:
+        # 59,843 texts across the library were the same words under different commas and
+        # were stored, retrieved and *counted* as separate documents. That last one
+        # matters, because `recount_df` exists to say a sentence carried identically by
+        # twenty editions is one piece of evidence about how common its words are, and it
+        # was quietly saying twenty. Punctuation is an editor's, not a translator's.
+        indexed = " ".join(_tokens(text, language))
+        if not indexed:
             continue
-        digest = hashlib.sha1(folded.encode("utf-8")).digest()
-        text_id = _text_id(connection, digest, folded)
+        digest = hashlib.sha1(indexed.encode("utf-8")).digest()
+        text_id = _text_id(connection, digest, indexed)
         connection.execute(
             "INSERT OR REPLACE INTO search_ref "
             "(corpus, book, chapter, verse, subverse, text_id) VALUES (?, ?, ?, ?, ?, ?)",
@@ -808,14 +816,14 @@ def _index_corpus(
     return count
 
 
-def _text_id(connection: sqlite3.Connection, digest: bytes, folded: str) -> int:
+def _text_id(connection: sqlite3.Connection, digest: bytes, indexed: str) -> int:
     """The id of this exact text, inserting it into the index the first time it is seen."""
     row = connection.execute("SELECT id FROM search_text WHERE hash = ?", (digest,)).fetchone()
     if row is not None:
         return int(row[0])
     cursor = connection.execute("INSERT INTO search_text (hash) VALUES (?)", (digest,))
     text_id = int(cursor.lastrowid or 0)
-    connection.execute("INSERT INTO search_fts (rowid, text) VALUES (?, ?)", (text_id, folded))
+    connection.execute("INSERT INTO search_fts (rowid, text) VALUES (?, ?)", (text_id, indexed))
     return text_id
 
 

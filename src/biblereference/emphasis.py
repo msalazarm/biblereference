@@ -106,11 +106,26 @@ _LATIN_PUNCTUATION: Final = {"[", "]"}
 #: `fold` must keep answering for English exactly as it did.
 _GREEK_ELISION: Final = {
     "᾽",  # GREEK KORONIS
-    "ʼ",  # MODIFIER LETTER APOSTROPHE -- a letter to Unicode, so it hid in the token
     "’",  # RIGHT SINGLE QUOTATION MARK
     "᾿",  # GREEK PSILI
     "'",  # APOSTROPHE
 }
+
+#: U+02BC, which needs stripping in *every* language rather than only in Greek.
+#:
+#: Unicode classes it as a modifier **letter**, so unlike the marks above it survives the
+#: word tokeniser as well as the fold, and sits inside the token where nothing can reach
+#: it. That would not matter if both sides of a comparison folded alike -- but they do
+#: not: the index folds each corpus in its own language and `scan` folds the document it
+#: is given in none, because a document is scanned against a library of many languages at
+#: once and has no one language to be folded in. A rule that fired only for Greek would
+#: therefore strip this from the verse and leave it in the quotation, which is the same
+#: mismatch pointing the other way.
+#:
+#: Stripping it everywhere is right on its own merits. This library holds it in exactly
+#: two places -- Westcott-Hort's Greek elisions, and the Orthodox Jewish Bible's
+#: transliterations -- and in both a reader means the letters on either side of it.
+_MODIFIER_APOSTROPHE: Final = "ʼ"
 
 #: Greek only. The *nomina sacra*: the words a scribe contracts rather than writes out,
 #: marked in a manuscript with an overline that a transcription usually drops.
@@ -214,7 +229,7 @@ def _fold(text: str, language: str | None = None, *, orthographic: bool = False)
             continue
         if latin and character in _LATIN_PUNCTUATION:
             continue
-        if greek and character in _GREEK_ELISION:
+        if character == _MODIFIER_APOSTROPHE or (greek and character in _GREEK_ELISION):
             continue
 
         decomposed = unicodedata.normalize("NFD", character)
