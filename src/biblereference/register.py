@@ -100,21 +100,34 @@ def _windows(text: str, language: str | None, window: int, stride: int) -> Itera
 def _evidence(
     tokens: list[str], scripture: NgramModel, father: NgramModel, order: int
 ) -> float:
-    """Summed per-gram log2((count_s + 0.5) / (count_f + 0.5)) -- centred so that a gram
-    *neither* model has seen contributes exactly zero.
+    """Summed per-gram ``log2( rate_scripture / rate_father )``, add-half smoothed.
 
-    The naive rate LLR carries a corpus-size bias: with 2.4M scripture positions against
-    13.6M patristic ones, every unseen gram hands scripture +2.5 bits, and a whole
-    document of the father's own prose comes out "scripture-shaped". Centring at the
-    both-unseen case removes it, at a stated cost: a gram merely *proportionally*
-    commoner in the smaller corpus scores zero too, so this v1 under-claims -- the right
-    direction for an instrument whose thresholds are not yet calibrated.
+    **The rate, not the count.** The first version of this compared raw counts, centred so
+    that a gram neither model had seen scored exactly zero, to remove the corpus-size bias
+    that hands scripture free bits on every unknown gram. It removed the signal instead.
+    The patristic corpus holds 13.4M order-3 positions against scripture's 2.25M, so a
+    gram appearing at the *same rate* in both scored log2(1/6) = −2.6, and the fathers
+    quote scripture constantly, which puts scriptural grams in the patristic corpus at
+    counts several times scripture's own. Measured consequence: **verbatim Isaiah 53
+    scored negative in every window** and the scan flagged nothing anywhere. An instrument
+    that cannot see scripture in scripture is not conservative, it is broken, and it was
+    shipped that way for a day.
+
+    The size bias the centring existed to fight is real -- an unseen gram is worth
+    ``log2(N_father / N_scripture)`` here, about +2.6 -- and the answer is not to subtract
+    it but to let the **max-scan null absorb it**: control prose collects the same free
+    bits on the same unseen grams, so it lands in the threshold rather than in the claim.
+    That null is exactly what `tools/register_null.py` measures, and its existence is what
+    makes the honest statistic usable where the hack was not.
     """
+    scripture_total = scripture.tokens(order) or 1
+    father_total = father.tokens(order) or 1
     total = 0.0
     for start in range(0, len(tokens) - order + 1):
         gram = " ".join(tokens[start : start + order])
         total += math.log2(
-            (scripture.count(gram, order) + 0.5) / (father.count(gram, order) + 0.5)
+            ((scripture.count(gram, order) + 0.5) / scripture_total)
+            / ((father.count(gram, order) + 0.5) / father_total)
         )
     return total
 

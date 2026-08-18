@@ -697,6 +697,19 @@ detecting scripture **as foreign material in the father's prose, with no source 
 all**. This attacks the two hardest open problems at once — span bounding, which Manjavacas
 showed matters more than scoring, and the zero-overlap allusions no lexical method can see.
 
+> **The one thing to get right here, learned the hard way on 2026-08-18.** Score the
+> **rate**, not the count. The first implementation compared raw counts and centred them
+> so an unseen gram scored zero, to remove the free bits a smaller corpus otherwise hands
+> scripture. With 13.4M patristic order-3 positions against scripture's 2.25M — and
+> fathers who quote scripture constantly, putting scriptural grams at higher raw counts in
+> *their* corpus than in scripture's own — a gram at equal rate scored −2.6, and
+> **verbatim Isaiah 53 came out negative in every window**. The scan flagged nothing
+> anywhere and read as strictness. An instrument that cannot find scripture in scripture
+> is not conservative. The size bias is real, and the max-scan null is what absorbs it:
+> control prose collects the same free bits, so the offset lands in the threshold instead
+> of the claim. That is what the null is *for*, and building it is what made the honest
+> statistic usable.
+
 - **The primary detector: a dual n-gram log-likelihood-ratio scan.** Two count-based
   language models — scripture's (ours, from the held corpora) and the father's own (built
   from his securely-attested prose, which is the consumer's corpus and their side of the
@@ -886,7 +899,7 @@ corpus and the golden set before its default changes anything.
 | 6b | **5.6** Fellegi–Sunter composite (binning + counting over held data) | one calibrated weight over all axes; the three-zone rule | u measured exactly on the control corpus | ✅ **calibrated 2026-08-18** on 1.65M per-candidate control rows: accept +14.65 at zero control false links, ECE 0.66 bits after monotone recalibration (schema 2). Two of this section's own claims corrected there |
 | 6c | **5.5** sequential verification stage + offset-histogram statistic | the FP control the gates approximate | its own odds bar, priced end to end | ✅ `verified_odds` (opt-in `verify=`), offset histogram; v2 fields collect in the new u-file |
 | 7 | **6b** per-verse profiles (MSA over editions + family) | edition-variant dilution, structurally; free "which reading" output | none — attested readings only | ✅ profiles.sqlite (30,723 profiles); ROM 8:1 Byzantine chains 7 vs 0 |
-| 8 | **R** register scanning, instrumentation-first | span bounds; the only visibility into zero-overlap spans | strict: control-priced, default never until then | ✅ ledger v1 + MC max-scan null artifact + rolling Delta; default stays never |
+| 8 | **R** register scanning, instrumentation-first | span bounds; the only visibility into zero-overlap spans | strict: control-priced, default never until then | ✅ ledger + MC max-scan null + rolling Delta — but **the v1 statistic could not see scripture in scripture** (raw-count centring against a 6× larger patristic corpus scored verbatim Isaiah 53 negative in every window). Fixed to compare rates 2026-08-18; the null is being re-measured and the old artifact is superseded |
 | 9 | **3** allusion pass | the 26 one-to-three-word indirects, bounded honestly | full control pricing gate before any default | ✅ entities + episodes + PPMI rerank-only backoff (`--ppmi`); default off until priced |
 | 10 | **4** convention immunity: seed masking, stoplist, positional flag | 29 doxology/salutation verdicts | none — flags and masks | ✅ `--seed-mask` + stoplist.json + `positional_candidate` |
 | — | breadth fetches: Sahidic OT, Van Dyck, Elizabeth, Samaritan Pent. | future languages, not today's recall | none | ✅ all four build-verified 2026-08-18 (SP licence corrected to CC BY-NC); indexing queued behind the control run |

@@ -219,3 +219,41 @@ def test_the_null_loader_rounds_documents_up_and_refuses_drift(tmp_path: Path) -
     path.write_text(json.dumps(artifact), "utf-8")
     with pytest.raises(ValueError, match="folds at"):
         RegisterNull.load(path)
+
+
+def test_the_register_scan_can_see_scripture_in_scripture(tmp_path: Path) -> None:
+    """The regression that shipped for a day, pinned.
+
+    The first `_evidence` compared raw counts and centred them, so a gram appearing at the
+    *same rate* in a corpus six times larger scored −2.6 bits. Since the fathers quote
+    scripture constantly, scriptural grams stand at higher raw counts in patristic prose
+    than in scripture itself — and verbatim Isaiah 53 scored **negative in every window**.
+    The scan flagged nothing, anywhere, and read as "these passages are not scriptural"
+    when it was saying nothing at all.
+
+    Here the father corpus is ten times the scripture corpus and holds every gram at the
+    *same rate*. A count comparison calls that father-idiom; a rate comparison calls it a
+    draw, and only the rate answer is true."""
+    grams = {(3, f"σ{i} σ{i+1} σ{i+2}"): 10 for i in range(12)}
+    scripture = NgramModel(build_model(tmp_path / "s.sqlite3", grams,
+                                       tokens={n: 1_000 for n in range(1, 6)}))
+    # Same grams, ten times the count, ten times the corpus: identical rates throughout.
+    father = NgramModel(build_model(
+        tmp_path / "f.sqlite3", {(order, g): 100 for order, g in grams},
+        tokens={n: 10_000 for n in range(1, 6)}))
+
+    from biblereference.register import _evidence
+
+    tokens = [f"σ{i}" for i in range(14)]
+    llr = _evidence(tokens, scripture, father, 3)
+    assert abs(llr) < 1.0, (
+        "equal rates must score about zero; the count version scored this "
+        "strongly negative and could not have found scripture anywhere"
+    )
+
+    # And a gram scripture holds at ten times the father's rate must score positive.
+    richer = NgramModel(build_model(tmp_path / "r.sqlite3", {(3, "α β γ"): 100},
+                                    tokens={n: 1_000 for n in range(1, 6)}))
+    poorer = NgramModel(build_model(tmp_path / "p.sqlite3", {(3, "α β γ"): 100},
+                                    tokens={n: 10_000 for n in range(1, 6)}))
+    assert _evidence(["α", "β", "γ"], richer, poorer, 3) > 3.0
