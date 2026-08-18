@@ -37,9 +37,15 @@ from biblereference.ngram_models import NgramModel
 from biblereference.register import _STRIDE, _WINDOW, _evidence
 from biblereference.store import DataHome
 
-#: Document lengths measured, in words. The consumer's documents are chapter-sized;
-#: the bands bracket everything from an apostolic-fathers chapter to a whole treatise.
-_LENGTHS = (500, 1_000, 2_000, 5_000, 10_000)
+#: Document lengths measured, in words. **The short bands are not decoration.** A
+#: threshold is the distribution of the maximum over however many windows a document
+#: offers, so a 40-word locus (four windows) and a 500-word chapter (eighty) have very
+#: different maxima -- and `RegisterNull.threshold` rounds *up*, so without a short band
+#: every short passage is judged against a line built from ten times its own windows and
+#: nothing short ever flags. The consumer's loci run 30-60 words; verbatim Isaiah 53
+#: peaks at +25.7 against a 500-word q95 of +30.2, so scripture itself would have read
+#: "not scriptural" a second time, one layer above the bug that caused it the first time.
+_LENGTHS = (50, 100, 250, 500, 1_000, 2_000, 5_000, 10_000)
 
 #: Order statistics reported per band. 0.999 needs ~1,000 replicates to be an order
 #: statistic rather than an extrapolation; with fewer, trust 0.99 and below.

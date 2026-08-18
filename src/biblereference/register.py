@@ -113,21 +113,46 @@ def _evidence(
     that cannot see scripture in scripture is not conservative, it is broken, and it was
     shipped that way for a day.
 
-    The size bias the centring existed to fight is real -- an unseen gram is worth
-    ``log2(N_father / N_scripture)`` here, about +2.6 -- and the answer is not to subtract
-    it but to let the **max-scan null absorb it**: control prose collects the same free
-    bits on the same unseen grams, so it lands in the threshold rather than in the claim.
-    That null is exactly what `tools/register_null.py` measures, and its existence is what
-    makes the honest statistic usable where the hack was not.
+    The size bias is real and it is handled by the **shared smoothing floor** below rather
+    than by subtracting a constant: an unseen-by-both gram must be a draw, and a gram
+    scripture holds at a higher rate must be positive, and no single additive correction
+    delivers both. Measured on the three versions this statistic has had in one day:
+
+    ==========================  ====================  ====================
+    version                     verbatim Isaiah 53    classical control
+    ==========================  ====================  ====================
+    counts, centred (shipped)   **negative**          negative
+    rates, add-half per corpus  +25.7                 **+5.2, and rising**
+    rates, shared floor         **+23.7**             +5.2 peak, -1.3 median
+    ==========================  ====================  ====================
+
+    Only the third can find scripture in scripture *and* leave classical prose alone,
+    which is the minimum any version of this has to clear before its thresholds mean
+    anything.
+
+    **A caveat with teeth**: the father model is built from the father's own corpus, so a
+    passage inside it is memorised and scores negative however scriptural it is. Scanning a
+    father requires a model that excludes him -- the patristic artifact carries per-author
+    counts, so pooled-minus-author is computable -- and without that this statistic
+    measures whether a text is in the training corpus, not whether it sounds like
+    scripture.
     """
     scripture_total = scripture.tokens(order) or 1
     father_total = father.tokens(order) or 1
+    # One smoothing floor, in rate space, shared by both models -- and that sharing is the
+    # whole point. Add-half *inside* each corpus gives an unseen gram the rate 0.5/N, which
+    # is larger for the smaller corpus, so every gram neither model knows would hand
+    # scripture log2(N_father / N_scripture) = +2.6 free bits. Classical Greek is mostly
+    # such grams, and under that version control prose outscored scripture. A common floor
+    # makes unseen-by-both an honest draw while leaving a gram scripture holds at a higher
+    # *rate* strongly positive, which is the only thing this statistic is asked to say.
+    floor = 0.5 / max(scripture_total, father_total)
     total = 0.0
     for start in range(0, len(tokens) - order + 1):
         gram = " ".join(tokens[start : start + order])
         total += math.log2(
-            ((scripture.count(gram, order) + 0.5) / scripture_total)
-            / ((father.count(gram, order) + 0.5) / father_total)
+            (scripture.count(gram, order) / scripture_total + floor)
+            / (father.count(gram, order) / father_total + floor)
         )
     return total
 

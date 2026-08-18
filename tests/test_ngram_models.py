@@ -257,3 +257,28 @@ def test_the_register_scan_can_see_scripture_in_scripture(tmp_path: Path) -> Non
     poorer = NgramModel(build_model(tmp_path / "p.sqlite3", {(3, "α β γ"): 100},
                                     tokens={n: 10_000 for n in range(1, 6)}))
     assert _evidence(["α", "β", "γ"], richer, poorer, 3) > 3.0
+
+
+def test_unseen_by_both_is_a_draw_and_classical_prose_does_not_outscore_scripture(
+    tmp_path: Path,
+) -> None:
+    """The second wrong version, pinned beside the first.
+
+    Smoothing add-half *inside each corpus* gives an unseen gram the rate 0.5/N, which is
+    larger for the smaller corpus — so every gram neither model knows hands scripture
+    log2(N_father/N_scripture) free bits. Classical Greek is mostly such grams, and under
+    that version control prose outscored scripture itself. A shared floor makes
+    unseen-by-both an honest draw."""
+    from biblereference.register import _evidence
+
+    # Scripture's corpus a tenth the size, and a window of grams neither model has seen.
+    scripture = NgramModel(build_model(tmp_path / "s.sqlite3", {(3, "α β γ"): 5},
+                                       tokens={n: 1_000 for n in range(1, 6)}))
+    father = NgramModel(build_model(tmp_path / "f.sqlite3", {(3, "α β γ"): 50},
+                                    tokens={n: 10_000 for n in range(1, 6)}))
+    unknown = [f"ξ{i}" for i in range(14)]
+    assert abs(_evidence(unknown, scripture, father, 3)) < 0.5, (
+        "grams neither corpus knows must be a draw, not free bits for the smaller one"
+    )
+    # And the shared gram, held at the same rate in both, is likewise a draw.
+    assert abs(_evidence(["α", "β", "γ"], scripture, father, 3)) < 0.5
