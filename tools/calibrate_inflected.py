@@ -301,8 +301,50 @@ def _worker_init(tiers: dict[str, bool] | None = None) -> None:
     _W["weigh"] = LemmaWeights(home).of("grc")
 
 
+#: Windows one pool task may carry. A control text is not bounded in length -- the corpus
+#: holds one of 66,461 words -- and an unsharded task builds every row for that text as a
+#: single list and returns it as a single pickle. That is what killed the first 3M run:
+#: not an unrelated process, but one worker's return value. It also froze the progress
+#: counter for half an hour, because the ordered `imap` that makes `--resume` exact cannot
+#: yield past a slow task. Sharding by *window range* rather than by text keeps every
+#: window and every window's preceding context byte-identical -- the text is still
+#: windowed whole, the shard only chooses which windows to score.
+_SHARD_WINDOWS = 400
+
+
+def _window_count(text: str, window: int = 12, stride: int = 6) -> int:
+    tokens = len(text.split())
+    return len(range(0, max(1, tokens - window + 1), stride))
+
+
+def _shards(texts: list[str], most: int = _SHARD_WINDOWS) -> list[tuple[int, str, int, int]]:
+    """``(text index, text, first window, last window)`` per pool task, in corpus order.
+
+    A text short enough for one task yields exactly one shard, so the common case is
+    unchanged; only the handful of enormous texts split, and they split at window
+    boundaries so no window is duplicated, dropped, or seen without its context."""
+    out: list[tuple[int, str, int, int]] = []
+    for index, text in enumerate(texts):
+        count = _window_count(text)
+        for first in range(0, count, most):
+            out.append((index, text, first, min(first + most, count)))
+    return out
+
+
+def _evidence_shard(task: tuple[int, str, int, int]) -> tuple[list[tuple], int, int, int]:
+    """One shard's rows. ``words`` is counted on the first shard of a text only, so a
+    split text is not counted twice in the denominator."""
+    _index, text, first, last = task
+    rows, windows, words, cut = _evidence_one(text, first_window=first, last_window=last)
+    return (rows, windows, words if first == 0 else 0, cut)
+
+
 def _evidence_one(
-    text: str, window: int = 12, stride: int = 6
+    text: str,
+    window: int = 12,
+    stride: int = 6,
+    first_window: int = 0,
+    last_window: int | None = None,
 ) -> tuple[list[tuple], int, int, int]:
     """One control text's evidence rows: ``(rows, windows, words, truncated)``.
 
@@ -325,7 +367,8 @@ def _evidence_one(
     rows: list[tuple] = []
     tokens = text.split()
     windows = truncated = 0
-    for start in range(0, max(1, len(tokens) - window + 1), stride):
+    starts = list(range(0, max(1, len(tokens) - window + 1), stride))
+    for start in starts[first_window : last_window if last_window is not None else len(starts)]:
         windows += 1
         chunk = " ".join(tokens[start : start + window])
         before = " ".join(tokens[max(0, start - REACH) : start])
@@ -466,7 +509,12 @@ def _checkpoint(
             "windows": windows,
             "axes": rows,
             "fields": list(ROW_FIELDS),
+            # `done_texts` counts completed *shards*, not texts, and the name is kept so
+            # an older reader still finds a number where it expects one. `shard_windows`
+            # is what makes the two distinguishable: a file without it was written before
+            # sharding existed and its count means something else.
             "done_texts": done,
+            "shard_windows": _SHARD_WINDOWS,
             "cap": cap,
             "complete": complete,
         }
@@ -520,21 +568,35 @@ def cmd_control(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
+        if int(record.get("shard_windows", 0)) != _SHARD_WINDOWS:
+            print(
+                f"checkpoint was written with shard_windows="
+                f"{record.get('shard_windows', 'absent (pre-sharding)')} and this harness "
+                f"uses {_SHARD_WINDOWS}; its progress count enumerates different work and "
+                f"resuming would skip or repeat windows. Start over.",
+                file=sys.stderr,
+            )
+            return 2
         words = int(record["words"])
         windows = int(record["windows"])
         found = [tuple(row) for row in record["axes"]]
         done = int(record.get("done_texts", 0))
-        print(f"resuming {saved} at text {done:,} ({words:,} words in)\n")
+        print(f"resuming {saved} at shard {done:,} ({words:,} words in)\n")
 
     texts, capped_words = control_text(args.control)
-    if done >= len(texts):
-        print("checkpoint already covers every text; finishing")
+    if done >= len(_shards(texts)):
+        print("checkpoint already covers every shard; finishing")
     print(
         f"control: {capped_words:,} words of classical / pre-christian / pre-septuagint "
         f"Greek, {len(texts):,} texts, {args.workers} worker(s)\n"
     )
 
-    remaining = texts[done:]
+    # Tasks, not texts: a shard is one text's window range (see `_shards`). `done` counts
+    # shards and stays a contiguous prefix of this list, which is the resume invariant --
+    # so a checkpoint written by the pre-shard harness cannot be resumed by this one, and
+    # `shard_windows` in the file is what lets a resume notice.
+    plan = _shards(texts)
+    remaining = plan[done:]
     last_write = time.monotonic()
     if remaining:
         context = multiprocessing.get_context("spawn")
@@ -544,9 +606,9 @@ def cmd_control(args: argparse.Namespace) -> int:
         with context.Pool(
             args.workers, initializer=_worker_init, initargs=(tiers,)
         ) as pool:
-            # Ordered imap: `done_texts` stays a contiguous prefix, which is the whole
-            # resume invariant. chunksize amortises the pickle traffic.
-            for rows, seen, length, cut in pool.imap(_evidence_one, remaining, chunksize=4):
+            # Ordered imap: `done` stays a contiguous prefix, which is the whole resume
+            # invariant. chunksize amortises the pickle traffic.
+            for rows, seen, length, cut in pool.imap(_evidence_shard, remaining, chunksize=4):
                 found.extend(rows)
                 windows += seen
                 words += length
@@ -559,7 +621,9 @@ def cmd_control(args: argparse.Namespace) -> int:
                     )
                     last_write = time.monotonic()
                 if done % 200 == 0:
-                    print(f"  {done:,}/{len(texts):,} texts, {len(found):,} rows", flush=True)
+                    print(
+                        f"  {done:,}/{len(plan):,} shards, {len(found):,} rows", flush=True
+                    )
     if saved:
         _checkpoint(
             saved, words=words, windows=windows, rows=found, done=done,
