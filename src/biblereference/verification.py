@@ -86,22 +86,27 @@ def offset_histogram(
 class VerificationResult:
     """One candidate's second look, with every term named."""
 
-    odds: float
-    """Summed log₂ likelihood ratios of the *calibrated* terms — under a v1 artifact,
-    exactly the composite score. Not a posterior probability and never presented as one:
-    P(findings | proposition), the direction ENFSI's never-transpose rule permits."""
+    odds: float | None
+    """The artifact's calibrated log₂ likelihood ratio for this candidate's whole
+    evidence — the axes plus the verification terms, summed once and mapped once. Not a
+    posterior probability and never presented as one: P(findings | proposition), the
+    direction ENFSI's never-transpose rule permits. ``None`` where the evidence sits
+    below the control sample's collection gate and the artifact has no counts to speak
+    from — unscored, which is not the same as zero."""
     offset_peak: float
     """The offset histogram's peak share, 0..1. Raw evidence until an artifact carries
     its m/u tables; a likelihood term afterwards."""
     offset_pairs: int
     """How many rare-lemma pairs the peak stands on."""
     terms: tuple[tuple[str, float], ...]
-    """Every contribution actually summed into :attr:`odds`, by name — the audit trail
-    that keeps the odds honest."""
+    """What the sum was made of, by name, in the artifact's **raw** field weights — the
+    audit trail. Once a calibration is in play these do not add to :attr:`odds`, and are
+    not meant to: the calibration maps a complete raw sum to what the held-out data
+    actually paid, so the parts and the whole are different quantities by design."""
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "odds": round(self.odds, 2),
+            "odds": None if self.odds is None else round(self.odds, 2),
             "offset_peak": round(self.offset_peak, 4),
             "offset_pairs": self.offset_pairs,
             "terms": {name: round(value, 2) for name, value in self.terms},
@@ -131,30 +136,43 @@ def verify(
     theirs = lemma_readings(_tokens(source, language), language, lexicon)
     peak, pairs = offset_histogram(mine, theirs, weigh)
 
-    # Below the u-sample's collection gate the composite is not defined (the artifact
-    # has no control counts there), and a verification that summed a phantom term would
-    # be worse than one that declines: the composite term is simply absent, and the odds
-    # then carry only the terms that were actually measured.
-    base = composite.score(match.run, match.lemma_run, match.chain, match.bits)
-    terms: list[tuple[str, float]] = [] if base is None else [("composite", base)]
-    if "offset_peak" in composite.fields:
-        from .composite import bin_of
+    # One sum, scored once. The artifact's calibration is a map from a *complete* summed
+    # weight to observed log-odds, so the verification terms are handed to `score` rather
+    # than added to its output: adding a raw field weight to a calibrated total would put
+    # two different quantities on one scale and call the result odds.
+    #
+    # Below the u-sample's collection gate the composite is not defined at all (the
+    # artifact has no control counts there), and `score` returns None; a verification
+    # that invented a number there would be worse than one that declines.
+    odds = composite.score(
+        match.run,
+        match.lemma_run,
+        match.chain,
+        match.bits,
+        formula=bool(match.formula) if "formula" in composite.fields else None,
+        offset_peak=peak if "offset_peak" in composite.fields else None,
+    )
 
-        terms.append(
-            ("offset_peak", composite.weights["offset_peak"][
-                bin_of(composite.bins["offset_peak"], peak)
-            ])
-        )
-    if "formula" in composite.fields:
-        from .composite import bin_of
+    # The per-field contributions, in the artifact's own raw weights, so a reader can see
+    # what the sum was made of. They do not add up to `odds` once a calibration is in
+    # play, and the field name says which is which.
+    from .composite import bin_of
 
-        terms.append(
-            ("formula", composite.weights["formula"][
-                bin_of(composite.bins["formula"], 1.0 if match.formula else 0.0)
-            ])
-        )
+    terms: list[tuple[str, float]] = []
+    offered: dict[str, float] = {
+        "run": float(match.run),
+        "chain": float(match.chain),
+        "bits": match.bits,
+        "offset_peak": peak,
+        "formula": 1.0 if match.formula else 0.0,
+    }
+    for field in composite.fields:
+        if field in offered:
+            terms.append(
+                (field, composite.weights[field][bin_of(composite.bins[field], offered[field])])
+            )
     return VerificationResult(
-        odds=sum(value for _, value in terms),
+        odds=odds,
         offset_peak=peak,
         offset_pairs=pairs,
         terms=tuple(terms),

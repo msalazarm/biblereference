@@ -234,6 +234,7 @@ class Composite:
         *,
         formula: bool | None = None,
         rivalry: int | None = None,
+        offset_peak: float | None = None,
     ) -> float | None:
         """The summed field weights of one match's evidence, or ``None`` where the
         control sample never measured evidence this weak (see :meth:`supported`).
@@ -241,6 +242,13 @@ class Composite:
         Takes all four axes so no call site ever changes shape; uses only the fields the
         artifact names. The keyword fields are v2 evidence -- ``None`` means "not
         offered", and a v1 artifact ignores them even when offered.
+
+        **A caller that cannot offer a field reads low, never high.** The calibration was
+        fitted on sums carrying every field the artifact names, so omitting one maps a
+        short sum through a map built for a full one; every omitted field here is a
+        positive-weighted one in the decision region, so the error is conservative. The
+        verification stage offers all of them; a bare scan match cannot know its
+        ``offset_peak`` without paying for the second look, and reads slightly low.
         """
         if not self.supported(run, lemma_run, chain, bits):
             return None
@@ -251,6 +259,7 @@ class Composite:
             "bits": float(bits),
             "formula": None if formula is None else float(formula),
             "rivalry": None if rivalry is None else float(rivalry),
+            "offset_peak": offset_peak,
         }
         total = 0.0
         for field in self.fields:

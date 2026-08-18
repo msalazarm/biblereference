@@ -54,7 +54,12 @@ def test_no_pairs_is_zero_not_an_error() -> None:
     assert offset_histogram([R({"α"})], [R({"β"})], weigh) == (0.0, 0)
 
 
-def _artifact(tmp_path: Path, fields: list[str], weights: dict[str, list[float]]) -> Composite:
+def _artifact(
+    tmp_path: Path,
+    fields: list[str],
+    weights: dict[str, list[float]],
+    calibration: list[list[float]] | None = None,
+) -> Composite:
     bins = {"run": [1, 2, 3, 4, 6], "chain": [2, 3, 4, 5, 6, 7, 8, 10],
             "bits": [5, 10, 15, 20, 25, 30, 35, 40, 50, 60],
             "formula": [1.0], "offset_peak": [0.25, 0.5, 0.75, 0.9]}
@@ -68,6 +73,7 @@ def _artifact(tmp_path: Path, fields: list[str], weights: dict[str, list[float]]
         "thresholds": {"upper": 5.0, "lower": -5.0, "fp_target": 0.0, "miss_target": 0.05},
         "null_tail": {"scores": [0.0], "exact_above": 0.0, "decimation": 1, "total": 1},
         "gumbel": None,
+        "calibration": calibration or [],
     }), "utf-8")
     return Composite.load(path)
 
@@ -103,7 +109,9 @@ def test_v1_odds_equal_the_composite_and_name_their_one_term(tmp_path: Path) -> 
         weigh=lambda lemma: 8.0,
         composite=artifact,
     )
-    assert [name for name, _ in result.terms] == ["composite"]
+    assert [name for name, _ in result.terms] == ["bits"], (
+        "terms name the artifact's own fields, which is what the audit trail is for"
+    )
     assert result.odds == artifact.score(5, 5, 5, 42.0)
     assert result.offset_pairs == 5 and result.offset_peak == 1.0, (
         "reported as raw evidence even while uncalibrated"
@@ -127,11 +135,42 @@ def test_v2_terms_activate_when_the_artifact_carries_their_tables(tmp_path: Path
         composite=artifact,
     )
     names = [name for name, _ in result.terms]
-    assert names == ["composite", "offset_peak", "formula"]
+    assert names == ["bits", "offset_peak", "formula"]
     contributions = dict(result.terms)
     assert contributions["offset_peak"] == 2.0, "a total spike lands in the top bin"
     assert contributions["formula"] == 1.5, "the announcement is present"
+    # One sum, scored once: the verification terms go *into* `score`, they are not added
+    # to its output. With no calibration on this artifact the two agree exactly; with one
+    # they would not, and `terms` is the raw audit trail either way.
+    assert result.odds == pytest.approx(
+        artifact.score(5, 5, 5, 42.0, formula=True, offset_peak=1.0)
+    )
     assert result.odds == pytest.approx(sum(contributions.values()))
+
+
+def test_a_calibrated_artifact_maps_the_whole_sum_once(tmp_path: Path) -> None:
+    """The bug this guards: adding a raw field weight to an already-calibrated total puts
+    two different quantities on one scale and calls the result odds."""
+    from biblereference.verification import verify
+
+    artifact = _artifact(
+        tmp_path,
+        ["bits", "offset_peak", "formula"],
+        {"bits": [0.0] * 11, "offset_peak": [-1.0, -0.5, 0.0, 0.5, 2.0],
+         "formula": [-0.5, 1.5]},
+        calibration=[[0.0, 0.0], [3.5, 1.0], [10.0, 2.0]],
+    )
+    result = verify(
+        _Match(),  # type: ignore[arg-type]
+        language="grc",
+        lexicon=_EmptyLexicon(),  # type: ignore[arg-type]
+        weigh=lambda lemma: 8.0,
+        composite=artifact,
+    )
+    raw = sum(value for _, value in result.terms)
+    assert raw == pytest.approx(3.5), "the raw parts still add up to the raw sum"
+    assert result.odds == pytest.approx(1.0), "and the whole is mapped once, not summed"
+    assert result.odds != pytest.approx(raw)
 
 
 def test_verify_without_an_artifact_is_refused_at_construction(tmp_path: Path) -> None:
