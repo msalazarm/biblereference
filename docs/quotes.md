@@ -547,11 +547,14 @@ this is calibrated; nothing ships on the theory alone.
 > is built from 1,653,902 per-candidate control rows over 3,000,128 words / 474,021
 > windows, with `offset_peak` and `formula` active (v2). Measured, not predicted:
 >
-> * The accept line sits at **+29.81** (zero control false links). Held-out detection
->   there is **36.8%**, and the full POD/PFA curve is in the report.
+> * The accept line sits at **+14.65 calibrated bits** (+29.81 in the raw summed weight
+>   the first artifact reported; the recalibration below is why there are two numbers and
+>   they name the same line). Held-out detection there is **36.6%**, and the full POD/PFA
+>   curve is in the report.
 > * Of the two refused citations this section rests its argument on, **one clears and
->   one does not**. Didache 16:7 against Zechariah 14:5 scores **+30.4 — accept**. But
->   1 Clement 13:2 against Matthew 7:2 scores **+20.7 — review**, not accept. The
+>   one does not**. Didache 16:7 against Zechariah 14:5 scores **+14.7 — accept**. But
+>   1 Clement 13:2 against Matthew 7:2 scores **+12.6 — review**, not accept. (Raw:
+>   +30.4 and +20.7 against a raw line of +29.81 — the same verdicts either way.) The
 >   sentence "both clear the summed weight's zero-false-positive line" was written from
 >   the prototype weights and is **wrong** against the real ones. Review is still a
 >   better answer than the flat refusal the gate gives it, and that is the three-zone
