@@ -207,6 +207,7 @@ def _reconcile(
 _DRA_FILE: Final = "engDRA_usfm.zip"
 _WEBC_FILE: Final = "eng-web-c_usfm.zip"
 _LATVUC_FILE: Final = "latVUC_usfm.zip"
+_ARBVD_FILE: Final = "arb-vd_usfm.zip"
 
 
 def build_dra(archive: Path) -> Iterator[BuiltCorpus]:
@@ -263,6 +264,25 @@ def build_latvuc(archive: Path) -> Iterator[BuiltCorpus]:
     )
 
 
+def build_arbvd(archive: Path) -> Iterator[BuiltCorpus]:
+    yield _build(
+        archive,
+        _ARBVD_FILE,
+        BuiltCorpus(
+            id="arbvd",
+            label="Van Dyck Arabic Bible (1865)",
+            language="ar",
+            versification="eng",
+            verses=[],
+            notes=[
+                "the standard Arabic Protestant Bible; positions the Arabic extension "
+                "of quotes.md §11 -- Graf's corpus of Christian Arabic literature "
+                "quotes toward this wording's ancestors",
+            ],
+        ),
+    )
+
+
 DRA: Final = Source(
     id="dra",
     label="Douay-Rheims 1899 American Edition",
@@ -285,6 +305,18 @@ WEBC: Final = Source(
     files=(RemoteFile(url=f"https://ebible.org/Scriptures/{_WEBC_FILE}", name=_WEBC_FILE),),
     build=build_webc,
     note="The English deuterocanon, in Greek numbering.",
+)
+
+ARBVD: Final = Source(
+    id="arbvd",
+    label="Van Dyck Arabic Bible",
+    homepage="https://ebible.org/find/details.php?id=arb-vd",
+    license="Public domain, stated on eBible.",
+    terms=get("public-domain"),
+    attribution=None,
+    files=(RemoteFile(url=f"https://ebible.org/Scriptures/{_ARBVD_FILE}", name=_ARBVD_FILE),),
+    build=build_arbvd,
+    note="The 1865 Smith–Van Dyck translation, the received Arabic Protestant text.",
 )
 
 LATVUC: Final = Source(

@@ -80,6 +80,7 @@ class Source:
 def _sources() -> dict[str, Source]:
     # Imported here so that fetching one source does not import every parser.
     from .corpora import (
+        antoniades,
         bezae,
         byzantine,
         corpuscorporum,
@@ -91,6 +92,9 @@ def _sources() -> dict[str, Source]:
         oshb,
         perseus,
         pta,
+        sahidicot,
+        samaritan,
+        slavonic,
         swete,
     )
 
@@ -106,11 +110,16 @@ def _sources() -> dict[str, Source]:
             corpuscorporum.SOURCE,
             oldlatin.SOURCE,
             byzantine.SOURCE,
+            antoniades.SOURCE,
             bezae.SOURCE,
             ebible.WEBC,
             ebible.DRA,
             ebible.LATVUC,
+            ebible.ARBVD,
             novavulgata.SOURCE,
+            slavonic.SOURCE,
+            sahidicot.SOURCE,
+            samaritan.SOURCE,
             *ebible.ENGLISH,
         )
     }

@@ -51,7 +51,10 @@ TRANSLATED: Final[dict[str, int | None]] = {
     "sblgnt": None,  # the SBL Greek New Testament: a critical edition, ancient wording
     "wh": None,  # Westcott and Hort 1881, likewise a critical edition of ancient Greek
     "grcbyz": None,  # Robinson-Pierpont: the Byzantine Textform, ancient wording throughout
+    "grcant": None,  # Antoniades 1904/1912: the received Patriarchal text, ancient wording
     "coptic-mark": None,  # the Sahidic version: a third-century translation
+    "sahot": None,  # the Sahidic Old Testament: the same third-century version, whole
+    "smp": None,  # the Samaritan Pentateuch: the other tradition's Torah, ancient wording
     # The Peshitta is a translation, but a second-century one, so its wording is as
     # ancient as anything else in this section and nothing here can be anachronistic to it.
     "peshitta-ot": None,
@@ -75,6 +78,8 @@ TRANSLATED: Final[dict[str, int | None]] = {
     "kjv2006": 1611,  # the King James, spelling modernised
     "kjvcpb": 1611,  # the Cambridge Paragraph Bible: the 1611 text, repunctuated
     "dra": 1752,  # Challoner's revision, which is the Douay-Rheims anyone reads
+    "arbvd": 1865,  # Smith-Van Dyck: the received Arabic Protestant translation
+    "chuelz": 1757,  # the Elizabeth Bible: the Orthodox world's Slavonic text
     "webster": 1833,
     "brenton": 1844,
     "ottley": 1904,  # an English translation of the Septuagint as Codex Alexandrinus has it
