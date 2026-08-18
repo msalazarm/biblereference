@@ -266,6 +266,7 @@ def cmd_search(args: argparse.Namespace) -> int:
             itacised=args.itacised,
             composite=args.composite,
             seed_mask=args.seed_mask,
+            recovered=args.recovered,
             gates=_gates(args),
         ) as searcher:
             matches = searcher.search(text, limit=args.limit)
@@ -334,6 +335,13 @@ def _inflected_options(parser: argparse.ArgumentParser) -> None:
         "beside its axes. Reported, never gated",
     )
     parser.add_argument(
+        "--recovered",
+        action="store_true",
+        help="recover spellings neither the lexicon nor the itacism classes know, by "
+        "bounded edit distance over every known form (exact, k<=2). Matches that used "
+        "it are flagged `recovered`. Opt-in until the control corpus prices it",
+    )
+    parser.add_argument(
         "--seed-mask",
         action="store_true",
         help="liturgical furniture may not seed: windows that are mostly doxology/grace "
@@ -374,6 +382,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
             itacised=args.itacised,
             composite=args.composite,
             seed_mask=args.seed_mask,
+            recovered=args.recovered,
             gates=_gates(args),
         ) as searcher:
             if args.debts:

@@ -242,7 +242,7 @@ ADDED: frozenset[str] = frozenset(
     # threshold-free, computed from the store's own tables, and like `formula` they
     # report evidence without acting on it.
     {"positional_candidate", "family", "itacised", "composite", "e_value",
-     "containment", "fragmentation", "verified_odds", "patristic_rate"},
+     "containment", "fragmentation", "verified_odds", "patristic_rate", "recovered"},
 )
 
 

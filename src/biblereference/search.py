@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     from .entities import Entities
     from .parallels import Parallels
+    from .recovery import Recovery
 
 from .composite import Composite
 from .corpora.base import CorpusError, VerseUnavailable
@@ -1641,6 +1642,11 @@ class Match:
     the moment an artifact carries tables for the offset histogram or the formula flag.
     ``None`` where verification was not asked for or the match has no quoted span to
     re-read."""
+    recovered: bool = False
+    """Whether the Levenshtein recovery tier read any spelling inside this match's span
+    -- a token neither the lexicon nor the itacism classes knew, matched to known forms
+    within a bounded edit distance (see `recovery.py`). Flagged always, on by request
+    only: the looseness is visible, and a consumer holds these to their own policy."""
     itacised: bool = False
     """Whether the itacised second tier read any spelling inside this match's span.
 
@@ -1786,6 +1792,7 @@ class Match:
                 None if self.patristic_rate is None else round(self.patristic_rate, 2)
             ),
             "itacised": self.itacised,
+            "recovered": self.recovered,
             "family": list(self.family),
             "positional_candidate": self.positional_candidate,
             "translations": [
@@ -1870,6 +1877,7 @@ class Searcher:
         verify: bool = False,
         patristic_model: str | Path | None = None,
         seed_mask: bool = False,
+        recovered: bool = False,
         min_grade: str | None = None,
         gates: Sequence[Gate] | None = None,
         min_lemma_run: int | None = None,
@@ -1995,6 +2003,12 @@ class Searcher:
         #: still be covered by a match seeded elsewhere, which is the guarantee that
         #: makes exclusion survivable. Opt-in until the control corpus prices it.
         self._seed_mask = seed_mask
+        #: The Levenshtein recovery tier: spellings neither the lexicon nor the itacism
+        #: classes know, matched to every known form within a bounded edit distance --
+        #: exact and enumerative, nothing missed at the stated bound. Opt-in and flagged
+        #: on every match that used it; priced before any default, like every loosening.
+        self._recovered = recovered
+        self._recovery: Recovery | None = None
         # Off, and off is today. Nothing below runs, no lemma table is opened and no query
         # takes a different path unless a caller has asked for one in so many words.
         self._home = home
@@ -2523,15 +2537,53 @@ class Searcher:
     def _readings(
         self, tokens: Sequence[str], language: str, lexicon: Lexicon
     ) -> tuple[list[Reading], frozenset[int]]:
-        """The query's readings, itacised-tier included where it was asked for.
+        """The query's readings, through every tier that was asked for, in order:
+        the lexicon, then the itacism classes, then bounded edit-distance recovery.
 
         Only the query side: the verses are edited texts and their spellings are the
-        editor's, so itacism lives on the father's side of the comparison alone.
+        editor's, so scribal damage lives on the father's side of the comparison alone.
+        The returned positions are everything any loosening tier re-read -- the
+        per-tier flags on the match come from `_re_read`, which remembers which tier
+        answered for which position.
         """
+        readings, itacised_at, recovered_at = self._re_read(tokens, language, lexicon)
+        return readings, itacised_at | recovered_at
+
+    def _re_read(
+        self, tokens: Sequence[str], language: str, lexicon: Lexicon
+    ) -> tuple[list[Reading], frozenset[int], frozenset[int]]:
         plain = lemma_readings(list(tokens), language, lexicon)
-        if not self._itacised or language != "grc":
-            return plain, frozenset()
-        return itacised_readings(tokens, language, lexicon, plain)
+        itacised_at: frozenset[int] = frozenset()
+        if self._itacised and language == "grc":
+            plain, itacised_at = itacised_readings(tokens, language, lexicon, plain)
+        recovered_at: set[int] = set()
+        if self._recovered and language in LEMMA_LANGUAGES:
+            if self._recovery is None or self._recovery.language != language:
+                from .recovery import Recovery
+
+                self._recovery = Recovery(self._home, language)
+            for index, token in enumerate(tokens):
+                if plain[index] != frozenset({token}) or lexicon.lemmas(token, language):
+                    continue
+                if index in itacised_at:
+                    continue
+                # Only what scripture has never spelled. A token with any document
+                # frequency exists in some indexed verse -- a proper noun, a rare but
+                # real word -- and matches as itself; "recovering" it to its
+                # edit-neighbours turned Job into Joab on a clean quotation. A truly
+                # corrupt spelling occurs in no verse anywhere, and that absence is
+                # checkable in one indexed lookup.
+                if self._document_frequency([token]).get(token, 0) > 0:
+                    continue
+                lemmas = self._recovery.lemmas_for(token, lexicon.of)
+                if lemmas:
+                    # Union, never replacement: the unknown spelling standing for itself
+                    # is how a proper noun matches the verse that spells it the same
+                    # way, and recovery that destroyed that link would trade a real
+                    # match for a conjectured one.
+                    plain[index] = lemmas | frozenset({token})
+                    recovered_at.add(index)
+        return plain, itacised_at, frozenset(recovered_at)
 
     def _lemma_languages(self) -> list[str]:
         """Which of the loaded corpora's languages a lemma pass can be run in."""
@@ -2551,7 +2603,7 @@ class Searcher:
             query = _tokens(text, language)
             if len(query) < self._min_query:
                 continue
-            readings, re_read = self._readings(query, language, lexicon)
+            readings, itacised_at, recovered_at = self._re_read(query, language, lexicon)
             weigh = weights.of(language)
 
             # The rarest shared *lemmas* are what narrow this, exactly as the rarest words
@@ -2599,7 +2651,8 @@ class Searcher:
                         matched_lemmas=graded.evidence,
                         containment=graded.containment,
                         fragmentation=graded.fragmentation,
-                        itacised=bool(re_read),
+                        itacised=bool(itacised_at),
+                        recovered=bool(recovered_at),
                     )
                 )
         return out
@@ -3487,7 +3540,7 @@ class Searcher:
         held = self._witnesses(vrs, book, chapter, start, end, tokens[low:high])
         if not held:
             return None
-        trimmed, re_read = self._readings(tokens[low:high], language, lexicon)
+        trimmed, itacised_at, recovered_at = self._re_read(tokens[low:high], language, lexicon)
         graded = self._grade(
             trimmed,
             tokens[low:high],
@@ -3516,7 +3569,8 @@ class Searcher:
             containment=graded.containment,
             fragmentation=graded.fragmentation,
             formula=self._formula_before(words, low, language),
-            itacised=bool(re_read),
+            itacised=bool(itacised_at),
+            recovered=bool(recovered_at),
             # The same rivalry the exact path reports. Leaving it off here meant a match
             # found by dictionary form -- which is most of what this feature exists to find
             # -- came back saying nothing else fitted, on cases where something else fitted
