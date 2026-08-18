@@ -131,9 +131,12 @@ def verify(
     theirs = lemma_readings(_tokens(source, language), language, lexicon)
     peak, pairs = offset_histogram(mine, theirs, weigh)
 
-    terms: list[tuple[str, float]] = [
-        ("composite", composite.score(match.run, match.lemma_run, match.chain, match.bits))
-    ]
+    # Below the u-sample's collection gate the composite is not defined (the artifact
+    # has no control counts there), and a verification that summed a phantom term would
+    # be worse than one that declines: the composite term is simply absent, and the odds
+    # then carry only the terms that were actually measured.
+    base = composite.score(match.run, match.lemma_run, match.chain, match.bits)
+    terms: list[tuple[str, float]] = [] if base is None else [("composite", base)]
     if "offset_peak" in composite.fields:
         from .composite import bin_of
 

@@ -3179,6 +3179,10 @@ class Searcher:
             match.bits,
             formula=bool(match.formula) if match.quoted else None,
         )
+        # None where the evidence sits below the control sample's collection gate: the
+        # artifact has no null there, so neither a score nor an E-value is supported.
+        if score is None:
+            return (None, None)
         return (score, self._composite.e_value(score, windows))
 
     def _sweep(

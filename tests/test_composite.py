@@ -34,7 +34,10 @@ def artifact_dict(**overrides: object) -> dict:
         "bins": {"bits": [10.0]},
         "weights": {"bits": [-2.0, 3.0]},
         "m": {"sample": 4, "held_out": 0, "source": "test", "seed": 0},
-        "u": {"sample": 8, "words": 1000, "windows": 100, "collect_gate": "chain>=2 bits>=10"},
+        # No collection gate: this synthetic u-sample was never truncated, so every bin
+        # has support and `supported()` admits everything. The truncated case is its own
+        # test below.
+        "u": {"sample": 8, "words": 1000, "windows": 100, "collect_gate": ""},
         "thresholds": {"upper": 3.0, "lower": -1.0, "fp_target": 0.0, "miss_target": 0.05},
         "null_tail": {"scores": [-2.0, -2.0, 3.0], "exact_above": 0.0, "decimation": 2,
                       "total": 7},
@@ -171,3 +174,50 @@ def test_the_two_refused_citations_clear_the_real_upper_threshold(tmp_path: Path
     clement = loaded.score(3, 3, 8, 29.9)
     assert loaded.zone(didache) == "accept"
     assert loaded.zone(clement) == "accept"
+
+
+# -- the truncated-null guard -----------------------------------------------------------
+
+
+def test_evidence_below_the_collection_gate_is_unscored(tmp_path: Path) -> None:
+    """The bug this guard exists for, pinned.
+
+    A control sample collected through `chain>=2 bits>=10` holds **no rows** below that
+    gate, so those bins carry an m count against a u count of zero and the smoothed
+    ratio explodes -- the real 3M-word artifact gave `chain<2` +18.1 bits and `bits<5`
+    +17.7. Unguarded, a match with one shared word collected +35.8 bits of pure absence
+    and outranked a genuine eight-word chain. Below the gate the honest answer is not a
+    number.
+    """
+    artifact = {
+        "schema": SCHEMA,
+        "fold_version": FOLD_VERSION,
+        "fields": ["run", "chain", "bits"],
+        "bins": {f: list(BINS[f]) for f in ("run", "chain", "bits")},
+        # Deliberately the pathological shape: huge positive weights in the empty bins.
+        "weights": {
+            "run": [0.0] * (len(BINS["run"]) + 1),
+            "chain": [18.1] + [0.0] * len(BINS["chain"]),
+            "bits": [17.7, 18.5] + [0.0] * (len(BINS["bits"]) - 1),
+        },
+        "m": {"sample": 100},
+        "u": {
+            "sample": 1000,
+            "words": 3_000_000,
+            "windows": 474_021,
+            "collect_gate": "chain>=2 bits>=10",
+        },
+        "thresholds": {"upper": 29.8, "lower": -3.5},
+        "null_tail": {"scores": [0.0], "exact_above": 0.0, "decimation": 50, "total": 1},
+        "gumbel": None,
+    }
+    path = tmp_path / "composite.json"
+    path.write_text(json.dumps(artifact), "utf-8")
+    loaded = Composite.load(path)
+
+    assert loaded.collect_gate == "chain>=2 bits>=10"
+    assert not loaded.supported(run=1, lemma_run=1, chain=1, bits=3.9)
+    assert loaded.score(1, 1, 1, 3.9) is None, "one shared word scores nothing, not +35.8"
+    assert not loaded.supported(run=9, lemma_run=9, chain=9, bits=4.0), "bits floor too"
+    assert loaded.supported(run=0, lemma_run=0, chain=2, bits=10.0), "on the gate is inside"
+    assert loaded.score(0, 0, 2, 10.0) is not None

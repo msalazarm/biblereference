@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import warnings
 from bisect import bisect_left
 from collections.abc import Mapping, Sequence
@@ -117,6 +118,11 @@ def field_weights(
     return out
 
 
+#: The recorded ``collect_gate`` string, as `calibrate_inflected.Gate.__str__` writes it:
+#: ``chain>=2 bits>=10``, any subset of the four axis names.
+_GATE_RE: Final = re.compile(r"(run|lemma_run|chain|bits)>=([0-9.]+)")
+
+
 @dataclass(frozen=True, slots=True)
 class Composite:
     """A loaded calibration artifact: score, zone, and expected chance hits."""
@@ -187,6 +193,22 @@ class Composite:
             gumbel=(float(fitted[0]), float(fitted[1])) if fitted else None,
         )
 
+    def supported(self, run: int, lemma_run: int, chain: int, bits: float) -> bool:
+        """Whether this evidence lies inside the region the control sample measured.
+
+        The u-sample was collected through :attr:`collect_gate`, so **nothing below that
+        gate has a control count** -- and a bin with no control count and any m count at
+        all produces an enormous positive weight out of pure absence. Left unguarded that
+        inverts the whole instrument: a match with one shared word and four bits collects
+        the empty ``chain<2`` and ``bits<5`` bins and outscores a genuine eight-word
+        chain. Below the gate the honest answer is not a number.
+        """
+        floors = {
+            name: float(value) for name, value in _GATE_RE.findall(self.collect_gate)
+        }
+        held = {"run": run, "lemma_run": lemma_run, "chain": chain, "bits": bits}
+        return all(held[name] >= floor for name, floor in floors.items())
+
     def score(
         self,
         run: int,
@@ -196,13 +218,16 @@ class Composite:
         *,
         formula: bool | None = None,
         rivalry: int | None = None,
-    ) -> float:
-        """The summed field weights of one match's evidence.
+    ) -> float | None:
+        """The summed field weights of one match's evidence, or ``None`` where the
+        control sample never measured evidence this weak (see :meth:`supported`).
 
         Takes all four axes so no call site ever changes shape; uses only the fields the
         artifact names. The keyword fields are v2 evidence -- ``None`` means "not
         offered", and a v1 artifact ignores them even when offered.
         """
+        if not self.supported(run, lemma_run, chain, bits):
+            return None
         values: dict[str, float | None] = {
             "run": float(run),
             "lemma_run": float(lemma_run),

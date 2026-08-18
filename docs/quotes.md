@@ -509,6 +509,38 @@ forensic reporting stack (§3d): the ENFSI verbal ladder on the same log-odds cu
 p-value against the control scores as the finite-sample certificate. Gates remain until
 this is calibrated; nothing ships on the theory alone.
 
+> **Calibrated 2026-08-18, and the headline claim above needs correcting.** The artifact
+> is built from 1,653,902 per-candidate control rows over 3,000,128 words / 474,021
+> windows, with `offset_peak` and `formula` active (v2). Measured, not predicted:
+>
+> * The accept line sits at **+29.81** (zero control false links). Held-out detection
+>   there is **36.8%**, and the full POD/PFA curve is in the report.
+> * Of the two refused citations this section rests its argument on, **one clears and
+>   one does not**. Didache 16:7 against Zechariah 14:5 scores **+30.4 — accept**. But
+>   1 Clement 13:2 against Matthew 7:2 scores **+20.7 — review**, not accept. The
+>   sentence "both clear the summed weight's zero-false-positive line" was written from
+>   the prototype weights and is **wrong** against the real ones. Review is still a
+>   better answer than the flat refusal the gate gives it, and that is the three-zone
+>   rule earning its place — but it is not the claim that was made.
+> * **The composite ranks better than its magnitudes read.** Cllr is 0.287 and the
+>   ordering is sound, but over the bins where both samples have counts the observed
+>   log-ratio falls short of the claimed one, and the shortfall grows with score (+14
+>   claimed pays +9.8; +30 claimed pays +14.8). The cause is the standard
+>   Fellegi–Sunter caveat this section already cites: `run`, `chain` and `bits` measure
+>   overlapping evidence, and a naive-Bayes sum over correlated fields over-counts.
+>   **Read `composite` as an ordering and `e_value` as the calibrated quantity** — the
+>   E-value counts the empirical control tail directly and is immune to the sum's
+>   double-counting. Collapsing the lexical axes into one jointly-estimated field, which
+>   this section proposes and the v1 artifact only half-does (lemma_run into chain), is
+>   the fix; it is not yet built.
+> * **A bug worth recording.** The u-sample is collected through a gate
+>   (`chain>=2 bits>=10`), so bins below it hold m counts against *zero* u counts, and
+>   the smoothed ratio explodes: the first real artifact gave `chain<2` **+18.1** and
+>   `bits<5` **+17.7** bits of evidence made of pure absence, so one shared word
+>   outscored an eight-word chain. `Composite.score` now returns `None` below the
+>   collection gate — unscored, the same honest answer every other unmeasured field
+>   gives — and a regression test pins it.
+
 ## 6. Stratum 2 — quotation families, and the profile that makes them matchable
 
 The single largest verdict class (34 of 102) is the scanner being right in a way the

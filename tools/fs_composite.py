@@ -285,13 +285,24 @@ def main() -> int:
         "is what the held-out data actually paid. Cllr is the forensic summary "
         "(0 = perfect, 1 = useless); the ECE line is the count-weighted mean gap.\n"
     )
+    say(
+        "**Read the bounds, not the gaps, where a bin is empty on one side.** With "
+        f"{len(held_scores)} held-out marks against {len(u_scores):,} control pairs, a bin "
+        "holding no control hits cannot show an observed ratio above its smoothing "
+        "ceiling however good the evidence is, and a bin holding no marks cannot show one "
+        "below its floor. Those rows are marked `bound` and excluded from the ECE, "
+        "because scoring them as miscalibration would be this table telling the exact "
+        "kind of lie it exists to catch.\n"
+    )
     if held_scores and u_scores:
         cllr = 0.5 * (
             sum(math.log2(1 + 2**-s) for s in held_scores) / len(held_scores)
             + sum(math.log2(1 + 2**min(s, 60)) for s in u_scores) / len(u_scores)
         )
         say(f"Cllr = **{cllr:.3f}**\n")
-        say("| score bin | held-out m | u (control) | observed bits | claimed bits | gap |")
+        say(
+            "| score bin | held-out m | u (control) | observed bits | claimed bits | gap |"
+        )
         say("|---|---|---|---|---|---|")
         low = math.floor(min(held_scores[0], u_scores[0]) / 4) * 4
         high = math.ceil(max(held_scores[-1], u_scores[-1]))
@@ -307,6 +318,16 @@ def main() -> int:
             )
             claimed = edge + 2.0
             gap = observed - claimed
+            # A bin empty on either side reports a bound, not a measurement: the
+            # smoothing term, not the evidence, is what stops the ratio going further.
+            bound = not m_count or not u_count
+            if bound:
+                say(
+                    f"| {edge:+d}..{edge + 4:+d} | {m_count} | {u_count:,} | "
+                    f"{'≤' if not m_count else '≥'}{observed:+.1f} | {claimed:+.1f} | "
+                    f"*bound* |"
+                )
+                continue
             gaps.append((m_count + u_count, abs(gap)))
             flag = " ⚠" if abs(gap) > 2 and m_count + u_count >= 10 else ""
             say(
@@ -314,7 +335,10 @@ def main() -> int:
                 f"{observed:+.1f} | {claimed:+.1f} | {gap:+.1f}{flag} |"
             )
         weighted = sum(n * g for n, g in gaps) / (sum(n for n, _ in gaps) or 1)
-        say(f"\nECE (count-weighted mean |gap|) = **{weighted:.2f} bits**\n")
+        say(
+            f"\nECE over the {len(gaps)} resolved bins (count-weighted mean |gap|) = "
+            f"**{weighted:.2f} bits**\n"
+        )
     say(
         "*`offset_peak` note: the m-side measures it on the editor-marked span, the "
         "live scan on its own matched window -- a train/serve skew that flattens the "
