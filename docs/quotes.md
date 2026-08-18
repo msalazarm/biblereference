@@ -62,7 +62,11 @@ false-positive rate on pre-Christian Greek is refused whatever it recalls.
 > marks) while collecting half the candidates per control word**, and **itacised and
 > recovered buy exactly nothing** on editor marks, because that gold comes from critical
 > editions whose spelling is already normalised and the tiers exist for manuscript
-> spellings. All three stay opt-in until the concave control table lands. The consumer's
+> spellings. **Concave's control table has since landed and it earns its default outright
+> — false positives down 18.9% across the candidate gates with recall up on eight of
+> eleven and down on none** — but the flip is the consumer's to make, because the axis
+> changes meaning under gates they calibrated. All three remain opt-in today. The
+> consumer's
 > re-derived frontier over all 209 remains the planning number until they remeasure on
 > this build.
 
@@ -498,6 +502,23 @@ recall gain at unchanged FP semantics~~ — and the multi-chain output is what 4
 > the rare trade that costs nothing on either side, which makes this the first tier
 > likely to earn its default; the control gate table decides.
 >
+> **The control table, 3M words, 2026-08-18: it earns it.** Total false positives across
+> the eleven candidate gates fall **1,543 → 1,252 (−18.9%)** while recall rises on eight
+> gates and falls on none. The largest single move is `run>=3 bits>=20`: **1,012 → 767**
+> false positives (eight standard deviations on a Poisson count, so real) with recall
+> 249 → 252. The consumer's own sweep arm `chain>=8 bits>=40` goes 5 → 4 false positives
+> at recall 227 → 228. The one apparent regression, `chain>=6 bits>=35` at +4, sits
+> inside noise on a count of twenty.
+>
+> This is not the usual trade, and the reason is the redefinition above rather than any
+> widening: a link that cannot pay for its own slack is never taken, so junk links become
+> neither candidates nor chains. **The default is not flipped here** — that is the
+> consumer's call, because an axis quietly changing meaning under gates they calibrated
+> is exactly what this project refuses to do to them. Two things must follow a flip when
+> it comes: the gate union wants one re-derivation on the concave control file, and
+> `composite-grc.json` wants one rebuild against it, since its weights describe the
+> classic arm's axis distribution.
+>
 > Recorded for the discipline: a single probe showed one citation losing a chain link
 > under this tier and it was nearly written up as "concave shortens chains". The 400-mark
 > sweep says the opposite. One case is not a measurement.
@@ -842,7 +863,7 @@ corpus and the golden set before its default changes anything.
 | order | work | buys (from §2) | FP price | shipped |
 |---|---|---|---|---|
 | 1 | **0.1** RP Byzantine + Antoniades + Bezae-Latin fetched, indexed | 8 named variant cases, likely more unmeasured; Old Latin Acts | none — more text, same gates | ✅ closed 2026-08-18: `grcant` lands letter-verified against the upstream's own conversion; row complete |
-| 2 | **0.3 + 5.3** formal chaining: concave gaps, optimal DP, multi-chain | conflation clauses (≥7 named loci); interpolated-clause misses | control re-run; per-chain gates unchanged | ✅ concave opt-in (`--concave`) — **measured 2026-08-18: union 251→255 over 400 marks, no gate loses, and half the candidates per control word. `chain` means net-optimal length under it, so gates must be re-tuned. Control table pending; likeliest first default to move.** |
+| 2 | **0.3 + 5.3** formal chaining: concave gaps, optimal DP, multi-chain | conflation clauses (≥7 named loci); interpolated-clause misses | control re-run; per-chain gates unchanged | ✅ concave opt-in (`--concave`) — **fully priced 2026-08-18: recall union 251→255 with no gate losing, and false positives −18.9% across the candidate gates (1,543→1,252) on 3M control words. Earns its default on both sides; not flipped, because `chain` changes meaning under gates the consumer calibrated. Their call.** |
 | 3 | **0.2** itacised tier, flagged | unmeasured; the largest MS variant class | control re-run before default | ✅ opt-in (`--itacised`) + §4.4 recovery (`--recovered`) — **priced 2026-08-18: both buy exactly zero on editor-mark gold, which is drawn from critical editions whose spelling is already normalised. They stay opt-in for that reason, not for cost. Pricing them needs gold with manuscript spelling.** |
 | 4 | **10** formula FN detector + stratified recall + POD/PFA reporting | measurement, not recall — steers everything after | none | ✅ unmatched-formula ledger + POD/PFA in fs_composite |
 | 5 | **2** quotation families | 34 misfire verdicts; doxology addresses; family-precision | none — reporting change | ✅ `family` reported; parallel-family index built |
