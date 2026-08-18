@@ -315,6 +315,8 @@ ROUTES = {
     "POST /api/jobs?task=scan": "body is [{id, text}, ...]; scans them all across the pool",
     "GET  /api/jobs": "every job, without results",
     "GET  /api/jobs/<id>": "one job, with its result once done",
+    "DELETE /api/jobs/<id>": "abandon a job; queued work is cancelled, running work is "
+    "left to finish into a void, and the job stops counting as running",
 }
 
 
@@ -450,6 +452,10 @@ class Handler(BaseHTTPRequestHandler):
         self._route()
 
     def do_HEAD(self) -> None:
+        self._route()
+
+    def do_DELETE(self) -> None:
+        """Cancel a job. A stuck one should cost a request, not a restart."""
         self._route()
 
     def do_POST(self) -> None:
@@ -601,8 +607,13 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._json(200, {"jobs": JOBS.all()})
         elif path.startswith("/api/jobs/"):
-            job = JOBS.get(path.rsplit("/", 1)[-1])
-            self._json(200 if job else 404, job or {"error": "no such job"})
+            job_id = path.rsplit("/", 1)[-1]
+            if self.command == "DELETE":
+                job = JOBS.cancel(job_id)
+                self._json(200 if job else 404, job or {"error": "no such job"})
+            else:
+                job = JOBS.get(job_id)
+                self._json(200 if job else 404, job or {"error": "no such job"})
         else:
             self._json(404, {"error": f"no route {path!r}", "routes": sorted(ROUTES)})
 

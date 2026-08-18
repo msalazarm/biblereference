@@ -204,13 +204,21 @@ def job_scan(documents: list[dict[str, Any]], options: dict[str, Any]) -> dict[s
     else still arrives.
     """
     searcher = worker_searcher(options)
-    found: dict[str, Any] = {}
-    failed: dict[str, str] = {}
+    #: Keyed by ``(document id, shard part or None)`` -- see the note on `key` below.
+    found: dict[tuple[str, int | None], Any] = {}
+    failed: dict[tuple[str, int | None], str] = {}
     for document in documents:
         name = str(document.get("id"))
         part = document.get("__part")
         offset = int(document.get("__offset", 0))
-        key = name if part is None else f"{name}\x00{part}"
+        # A **tuple**, never a joined string. This key used to be `f"{name}\x00{part}"`,
+        # which meant a caller whose own document id contained that byte was parsed as a
+        # shard of a document that did not exist: its parts never completed, the merge
+        # waited for them for ever, and the job sat `running` with `done` frozen and
+        # nothing logged. The consumer lost an afternoon to it. A tuple cannot collide
+        # with any id whatever bytes it holds, which retires the whole class rather than
+        # moving it to a different separator.
+        key = (name, None if part is None else int(part))
         try:
             text = document["text"]
             if not isinstance(text, str):
@@ -303,17 +311,26 @@ def _assemble(
     found: dict[str, Any] = {}
     failed: dict[str, str] = {}
     pieces: dict[str, dict[int, list[Any]]] = {}
-    for key, matches in merged["found"].items():
-        if "\x00" in key:
-            name, _, part = key.partition("\x00")
-            pieces.setdefault(name, {})[int(part)] = matches
+    for (name, part), matches in merged["found"].items():
+        if part is None:
+            found[name] = matches
         else:
-            found[key] = matches
-    for key, error in merged["failed"].items():
-        name = key.partition("\x00")[0]
+            pieces.setdefault(name, {})[part] = matches
+    for (name, _part), error in merged["failed"].items():
         failed.setdefault(name, error)
     for name, by_part in pieces.items():
         if name in failed:
+            continue
+        # Completeness first, before a single shard is folded in. A document missing a
+        # shard is **failed**, never silently partial -- checked here rather than after
+        # assembly, because by then the partial answer has already been written and looks
+        # exactly like a whole one.
+        wanted = parts.get(name, 1)
+        if len(by_part) < wanted:
+            failed[name] = (
+                f"AssemblyError: {len(by_part)} of {wanted} shard(s) returned; the "
+                f"document is reported failed rather than partial"
+            )
             continue
         collected: list[Any] = []
         seen: set[tuple[str, tuple[int, int] | None]] = set()
@@ -343,6 +360,15 @@ def _assemble(
                 kept.append(match)
         kept.sort(key=lambda match: match.get("span") or [0, 0])
         found[name] = kept
+
+    # And a document that never returned any shard at all: absent from both maps is the
+    # one outcome a caller cannot detect for themselves, so it is named too.
+    for name, wanted in parts.items():
+        if name not in failed and name not in found:
+            failed[name] = (
+                f"AssemblyError: 0 of {wanted} shard(s) returned; the document is "
+                f"reported failed rather than missing"
+            )
     return {"found": found, "failed": failed}
 
 
@@ -377,6 +403,9 @@ class Jobs:
         self._lock = threading.Lock()
         self._ids = itertools.count(1)
         self._jobs: dict[str, dict[str, Any]] = {}
+        #: Live futures per job, so `cancel` has something to cancel. Dropped as soon as a
+        #: job settles -- holding a finished future keeps its result alive twice.
+        self._futures: dict[str, list[Future[Any]]] = {}
 
     def run(self, function: Callable[..., Any], *args: Any) -> Any:
         """Run one request's work in a worker and wait for it.
@@ -418,6 +447,7 @@ class Jobs:
             raise LookupError(f"unknown task {task!r}; try {', '.join(known)}")
         record = self._open(task, params)
         future: Future[Any] = self._pool.submit(TASKS[task], **params)
+        self._futures[record["id"]] = [future]
         future.add_done_callback(lambda done: self._finish(record["id"], done))
         return record
 
@@ -458,9 +488,8 @@ class Jobs:
 
         def documents_done() -> int:
             names_found: dict[str, int] = {}
-            failed_names = {key.partition("\x00")[0] for key in merged["failed"]}
-            for key in merged["found"]:
-                name = key.partition("\x00")[0]
+            failed_names = {name for name, _part in merged["failed"]}
+            for name, _part in merged["found"]:
                 names_found[name] = names_found.get(name, 0) + 1
             done = len(failed_names)
             for name, landed_parts in names_found.items():
@@ -494,9 +523,9 @@ class Jobs:
                 self._settle(record["id"], _assemble(merged, parts))
 
         for index, chunk in enumerate(chunks):
-            self._pool.submit(BATCH_TASKS[task], chunk, options).add_done_callback(
-                partial(landed, index)
-            )
+            chunk_future = self._pool.submit(BATCH_TASKS[task], chunk, options)
+            self._futures.setdefault(record["id"], []).append(chunk_future)
+            chunk_future.add_done_callback(partial(landed, index))
         return record
 
     def _settle(self, job_id: str, result: Any) -> None:
@@ -507,6 +536,7 @@ class Jobs:
             record["state"] = "done"
             record["result"] = result
             record["library"] = library_stamp()
+            self._futures.pop(job_id, None)
 
     def _finish(self, job_id: str, future: Future[Any]) -> None:
         with self._lock:
@@ -520,6 +550,33 @@ class Jobs:
             else:
                 record["state"] = "failed"
                 record["error"] = f"{type(error).__name__}: {error}"
+            self._futures.pop(job_id, None)
+
+    def cancel(self, job_id: str) -> dict[str, Any] | None:
+        """Abandon a job, so a stuck one costs a poll rather than a restart.
+
+        The consumer had three jobs sitting `running` on a shared server with no way to
+        clear them short of restarting it -- which on a box other people are querying is
+        not a small ask. Futures that have not started are cancelled outright; one already
+        executing is left to finish into a void, because killing a pool worker mid-scan
+        would take its whole chunk with it. Either way the job stops being the caller's
+        problem: it reads `cancelled`, it keeps no result, and `running` no longer counts
+        it.
+        """
+        with self._lock:
+            record = self._jobs.get(job_id)
+            if record is None:
+                return None
+            if record["state"] not in {"running", "queued"}:
+                return record
+            for future in self._futures.get(job_id, ()):
+                future.cancel()
+            self._futures.pop(job_id, None)
+            record["state"] = "cancelled"
+            record["finished"] = time.time()
+            record["seconds"] = round(record["finished"] - record["submitted"], 1)
+            record.pop("result", None)
+            return record
 
     def get(self, job_id: str) -> dict[str, Any] | None:
         with self._lock:
