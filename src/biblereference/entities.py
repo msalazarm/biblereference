@@ -187,7 +187,80 @@ CREATE INDEX entity_form_lookup ON entity_form (language, form);
 CREATE TABLE entity_verse (entity TEXT, vrs TEXT, book TEXT, chapter INTEGER, verse INTEGER);
 CREATE INDEX entity_verse_ref ON entity_verse (book, chapter, verse);
 CREATE INDEX entity_verse_entity ON entity_verse (entity);
+CREATE TABLE event (id TEXT PRIMARY KEY, title TEXT);
+CREATE TABLE event_verse (event TEXT, vrs TEXT, book TEXT, chapter INTEGER, verse INTEGER);
+CREATE INDEX event_verse_event ON event_verse (event);
+CREATE TABLE event_entity (event TEXT, entity TEXT);
+CREATE INDEX event_entity_entity ON event_entity (entity);
 """
+
+
+def _build_episodes(
+    db: sqlite3.Connection, archive: Path, verses: object
+) -> tuple[int, int, int, int]:
+    """Theographic's 449 narrative events into the index: the episode is the unit a
+    narrative allusion points at, and it spans chapters the way a chapter window cannot.
+
+    The crosswalk to TIPNR is by display name, and only where the name names exactly one
+    TIPNR individual -- twelve Josephs is precisely the ambiguity the individualised
+    index exists to keep, and a guessed link would spend that. The ambiguous are
+    counted, never guessed.
+    """
+    import csv
+
+    from .parallels import _greek_ref
+
+    label_to_entity: dict[str, str | None] = {}
+    for entity, label in db.execute("SELECT id, label FROM entity"):
+        key = str(label).casefold()
+        label_to_entity[key] = None if key in label_to_entity else str(entity)
+
+    lookup_to_name: dict[str, str] = {}
+    for filename, key in (("People.csv", "personLookup"), ("Places.csv", "placeLookup")):
+        with (archive / filename).open(encoding="utf-8-sig") as handle:
+            for row in csv.DictReader(handle):
+                lookup_to_name[str(row[key])] = str(row.get("displayTitle") or "")
+
+    events = refs = links = ambiguous = 0
+    with (archive / "Events.csv").open(encoding="utf-8-sig") as handle:
+        for row in csv.DictReader(handle):
+            title = str(row.get("title") or "").strip()
+            event_id = str(row.get("eventID") or "").strip()
+            if not title or not event_id:
+                continue
+            rows: list[tuple[str, str, str, int, int]] = []
+            for token in str(row.get("verses") or "").split(","):
+                ref = _greek_ref(verses, token.strip())  # type: ignore[arg-type]
+                if ref is None or not isinstance(ref.chapter, int):
+                    continue
+                rows.append((event_id, ref.vrs, ref.book, ref.chapter, ref.verse))
+            if not rows:
+                continue
+            db.execute("INSERT OR IGNORE INTO event (id, title) VALUES (?, ?)",
+                       (event_id, title))
+            db.executemany(
+                "INSERT INTO event_verse (event, vrs, book, chapter, verse) "
+                "VALUES (?, ?, ?, ?, ?)",
+                rows,
+            )
+            events += 1
+            refs += len(rows)
+            named = str(row.get("participants") or "") + "," + str(row.get("locations") or "")
+            for lookup in named.split(","):
+                name = lookup_to_name.get(lookup.strip(), "").casefold()
+                if not name:
+                    continue
+                entity = label_to_entity.get(name)
+                if entity is None:
+                    if name in label_to_entity:
+                        ambiguous += 1
+                    continue
+                db.execute(
+                    "INSERT INTO event_entity (event, entity) VALUES (?, ?)",
+                    (event_id, entity),
+                )
+                links += 1
+    return events, refs, links, ambiguous
 
 
 @dataclass(frozen=True, slots=True)
@@ -260,9 +333,23 @@ def build_entities(
         references += len(rows)
         if entities % 2000 == 0:
             report(f"  {entities:,} entities")
+    events = event_refs = event_links = ambiguous = 0
+    fetched = home.sources / THEOGRAPHIC.id
+    theographic = (
+        max(fetched.iterdir(), key=lambda path: path.name, default=None)
+        if fetched.is_dir()
+        else None
+    )
+    if theographic is not None:
+        events, event_refs, event_links, ambiguous = _build_episodes(db, theographic, verses)
+        report(f"  {events} events, {event_links} entity links, {ambiguous} ambiguous names")
     db.executemany(
         "INSERT INTO meta (key, value) VALUES (?, ?)",
         {
+            "events": str(events),
+            "event_refs": str(event_refs),
+            "event_links": str(event_links),
+            "crosswalk_ambiguous": str(ambiguous),
             "source": TIPNR.id,
             "built_at": datetime.now(UTC).isoformat(timespec="seconds"),
             "entities": str(entities),
@@ -352,6 +439,47 @@ class Entities:
                 if entity:
                     cluster.append((verse, entity))
         out.sort(key=lambda row: (-len(row[5]), row[4] - row[3]))
+        return out
+
+    def episodes(
+        self, entity_ids: set[str], least: int = 2
+    ) -> list[tuple[str, str, str, int, int, int, int, frozenset[str]]]:
+        """Events in which at least ``least`` of these entities participate, as
+        ``(title, vrs, book, c1, v1, c2, v2, entities)`` -- single-book span, because a
+        candidate passage that crosses books is not a passage. Most participants first."""
+        if self._db is None or len(entity_ids) < least:
+            return []
+        marks = ",".join("?" * len(entity_ids))
+        rows = self._db.execute(
+            f"SELECT e.event, ev.title, GROUP_CONCAT(DISTINCT e.entity) "
+            f"FROM event_entity e JOIN event ev ON ev.id = e.event "
+            f"WHERE e.entity IN ({marks}) GROUP BY e.event "
+            f"HAVING COUNT(DISTINCT e.entity) >= ?",
+            (*sorted(entity_ids), least),
+        ).fetchall()
+        out: list[tuple[str, str, str, int, int, int, int, frozenset[str]]] = []
+        for event_id, title, joined in rows:
+            span = self._db.execute(
+                "SELECT vrs, book, MIN(chapter), MAX(chapter) FROM event_verse "
+                "WHERE event = ? GROUP BY vrs, book ORDER BY COUNT(*) DESC LIMIT 1",
+                (event_id,),
+            ).fetchone()
+            if span is None:
+                continue
+            vrs, book, c1, c2 = str(span[0]), str(span[1]), int(span[2]), int(span[3])
+            v1 = int(self._db.execute(
+                "SELECT MIN(verse) FROM event_verse WHERE event=? AND book=? AND chapter=?",
+                (event_id, book, c1),
+            ).fetchone()[0])
+            v2 = int(self._db.execute(
+                "SELECT MAX(verse) FROM event_verse WHERE event=? AND book=? AND chapter=?",
+                (event_id, book, c2),
+            ).fetchone()[0])
+            out.append(
+                (str(title), vrs, book, c1, v1, c2, v2,
+                 frozenset(str(joined).split(",")))
+            )
+        out.sort(key=lambda row: -len(row[7]))
         return out
 
     @property

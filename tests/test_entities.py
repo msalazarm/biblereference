@@ -136,3 +136,94 @@ def test_zero_signal_is_silence_and_stays_that_way() -> None:
     prose with no entities and no rare lemmas answers nothing."""
     with greek(inflected=True) as rich:
         assert rich.allusions("ταῦτα μὲν οὖν οὕτως ἔχει κατὰ τὴν παράδοσιν τῶν ἀρχαίων") == []
+
+
+# -- the episode index (V6) -------------------------------------------------------------
+
+AMBIGUOUS_FIXTURE = FIXTURE + """$========== PERSON(s)
+Salem@Jdg.1.1=H9999\tA person confusingly named Salem\t\t\t\t\t\t#desc\tperson
+– Named\tSalem@Jdg.1.1\tH9999«H9999=שָׁלֵם\tSalem\thttps://x\tJdg.1.1
+"""
+
+
+def _theographic_archive(home: DataHome) -> Path:
+    archive = home.sources / "theographic" / "2026-08-17"
+    archive.mkdir(parents=True)
+    (archive / "People.csv").write_text(
+        "personLookup,status,displayTitle\n"
+        "abraham_1,ok,Abraham\n"
+        "melchizedek_1,ok,Melchizedek\n",
+        "utf-8",
+    )
+    (archive / "Places.csv").write_text(
+        "placeLookup,status,displayTitle\nsalem_1,ok,Salem\n", "utf-8"
+    )
+    (archive / "Events.csv").write_text(
+        "title,eventID,verses,participants,locations\n"
+        'Melchizedek blesses Abram,evt1,"Gen.14.17,Gen.14.18,Gen.14.19,Gen.14.20,'
+        'Gen.15.1","abraham_1,melchizedek_1",salem_1\n'
+        'Abraham alone,evt2,"Gen.22.1",abraham_1,\n'
+        'No verses at all,evt3,"not.a.ref",abraham_1,\n',
+        "utf-8",
+    )
+    return archive
+
+
+def test_the_episode_build_spans_chapters_and_counts_ambiguity(tmp_path: Path) -> None:
+    home = DataHome(tmp_path)
+    tipnr = home.sources / "tipnr" / "2026-08-17"
+    tipnr.mkdir(parents=True)
+    (tipnr / "tipnr.txt").write_text(AMBIGUOUS_FIXTURE, "utf-8")
+    _theographic_archive(home)
+    out = tmp_path / "entities.sqlite"
+    build_entities(home, out)
+
+    import sqlite3
+
+    db = sqlite3.connect(out)
+    meta = dict(db.execute("SELECT key, value FROM meta"))
+    assert meta["events"] == "2", "the unparseable-verses event is dropped"
+    assert meta["crosswalk_ambiguous"] == "1", "two TIPNR entities named Salem: counted"
+    linked = {row[0] for row in db.execute("SELECT entity FROM event_entity WHERE event='evt1'")}
+    assert linked == {"Abraham@Gen.11.26-1Pe=H0085", "Melchizedek@Gen.14.18-Heb=H4442"}, (
+        "the ambiguous Salem is never guessed"
+    )
+
+    index = Entities(out)
+    episodes = index.episodes({"Abraham@Gen.11.26-1Pe=H0085", "Melchizedek@Gen.14.18-Heb=H4442"})
+    assert len(episodes) == 1, "the one-participant event never meets least=2"
+    title, _vrs, book, c1, v1, c2, v2, names = episodes[0]
+    assert title == "Melchizedek blesses Abram"
+    assert (book, c1, v1, c2, v2) == ("GEN", 14, 17, 15, 1), (
+        "the episode span crosses the chapter line a co-mention window cannot"
+    )
+    assert names == frozenset({"Abraham@Gen.11.26-1Pe=H0085", "Melchizedek@Gen.14.18-Heb=H4442"})
+
+
+def test_a_build_without_the_theographic_archive_still_stands(tmp_path: Path) -> None:
+    home = DataHome(tmp_path)
+    tipnr = home.sources / "tipnr" / "2026-08-17"
+    tipnr.mkdir(parents=True)
+    (tipnr / "tipnr.txt").write_text(FIXTURE, "utf-8")
+    out = tmp_path / "entities.sqlite"
+    result = build_entities(home, out)
+    assert result.entities == 3
+    assert Entities(out).episodes({"a", "b"}) == []
+
+
+@real
+def test_the_real_index_holds_a_cross_chapter_episode() -> None:
+    index = Entities(ENTITIES)
+    import sqlite3
+
+    db = sqlite3.connect(ENTITIES)
+    if not db.execute("SELECT name FROM sqlite_master WHERE name='event'").fetchone():
+        pytest.skip("entities.sqlite predates the episode tables")
+    ids = {
+        str(row[0])
+        for row in db.execute("SELECT id FROM entity WHERE label IN ('Abraham', 'Lot')")
+    }
+    spans = {(e[0], e[2], e[3], e[5]) for e in index.episodes(ids)}
+    assert ("Sodom Destroyed", "GEN", 18, 19) in spans, (
+        "Genesis 18-19 is one story, and only the episode index can say so"
+    )

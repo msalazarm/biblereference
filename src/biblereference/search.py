@@ -2837,8 +2837,9 @@ class Searcher:
         Grades are :data:`ALLUSION_GRADES`, never the quotation grades, and never merged:
         ``reference`` where a citation formula stands before the gesture, ``allusion``
         otherwise. On these matches ``bits`` is the entity-plus-lemma surprisal and
-        ``matched_lemmas`` carries the entity labels beside the shared lemmas -- the
-        evidence itself, as everywhere.
+        ``matched_lemmas`` carries the entity labels -- the evidence itself, as
+        everywhere -- with the event title as the last entry when the winning candidate
+        is a Theographic episode rather than a chapter window.
         """
         if self._entity_index is None:
             from .entities import Entities
@@ -2908,16 +2909,29 @@ class Searcher:
             ids: set[str] = set()
             for _, _, _, entity_ids in cluster:
                 ids |= entity_ids
-            candidates = index.co_mentions(ids)
+            # Chapter-cluster candidates and episode candidates in one contest, on
+            # one shape: (vrs, book, c1, v1, c2, v2, entities, episode-title-or-None).
+            # An event spanning chapters is a passage a chapter window cannot be --
+            # Genesis 14 is one story -- and where both name the same span the episode
+            # version wins the key because it carries the title as evidence.
+            Shaped = tuple[str, str, int, int, int, int, frozenset[str], str | None]
+            merged: dict[tuple[str, str, int, int, int, int], Shaped] = {}
+            for vrs, book, chapter, first, last, names in index.co_mentions(ids)[: limit * 3]:
+                shaped: Shaped = (vrs, book, chapter, first, chapter, last, names, None)
+                merged[shaped[:6]] = shaped
+            for title, vrs, book, c1, v1, c2, v2, names in index.episodes(ids):
+                shaped = (vrs, book, c1, v1, c2, v2, names, title)
+                merged[shaped[:6]] = shaped
+            candidates = list(merged.values())
             if not candidates:
                 continue
             char_span = (cluster[0][1], cluster[-1][2])
             gesture = text[char_span[0] : char_span[1]]
-            scored: list[tuple[float, tuple[str, str, int, int, int, frozenset[str]]]] = []
-            for candidate in candidates[: limit * 3]:
+            scored: list[tuple[float, Shaped]] = []
+            for candidate in candidates:
                 entity_bits = sum(
                     math.log2(index.verse_count / max(index.verses_of(entity), 1))
-                    for entity in candidate[5]
+                    for entity in candidate[6]
                 )
                 lemma_bits = self._shared_lemma_bits(gesture, candidate)
                 scored.append((entity_bits + lemma_bits, candidate))
@@ -2927,7 +2941,7 @@ class Searcher:
             ties.sort(key=lambda pair: (pair[1][1] not in quoted_books, -pair[0]))
             winner_score, winner = ties[0]
             losers = [c for _, c in ties[1:]] + [c for score, c in scored[len(ties):][:3]]
-            vrs, book, chapter, first, last, names = winner
+            vrs, book, c1, v1, c2, v2, names, episode = winner
             grade = (
                 "reference"
                 if self._formula_before(words, cluster[0][0], "grc")
@@ -2936,8 +2950,8 @@ class Searcher:
             out.append(
                 Match(
                     VerseRange(
-                        VerseRef(book, chapter, first, vrs=vrs),
-                        VerseRef(book, chapter, last, vrs=vrs),
+                        VerseRef(book, c1, v1, vrs=vrs),
+                        VerseRef(book, c2, v2, vrs=vrs),
                     ),
                     (),
                     span=char_span,
@@ -2946,13 +2960,16 @@ class Searcher:
                     identified_at=self._identified,
                     grade=grade,
                     bits=winner_score,
-                    matched_lemmas=tuple(sorted(name.split("@")[0] for name in names)),
+                    # The evidence convention of ALLUSION_GRADES: entity labels, and for
+                    # an episode candidate the event's title as the last entry.
+                    matched_lemmas=tuple(sorted(name.split("@")[0] for name in names))
+                    + ((episode,) if episode else ()),
                     formula=self._formula_before(words, cluster[0][0], "grc"),
                     alternates=tuple(
                         VerseRange(
-                            VerseRef(b, c, v1, vrs=vr), VerseRef(b, c, v2, vrs=vr)
+                            VerseRef(b, ca, va, vrs=vr), VerseRef(b, cb, vb, vrs=vr)
                         )
-                        for vr, b, c, v1, v2, _ in losers[:4]
+                        for vr, b, ca, va, cb, vb, _, _ in losers[:4]
                     ),
                 )
             )
@@ -2960,12 +2977,14 @@ class Searcher:
         return out[:limit]
 
     def _shared_lemma_bits(
-        self, gesture: str, candidate: tuple[str, str, int, int, int, frozenset[str]]
+        self,
+        gesture: str,
+        candidate: tuple[str, str, int, int, int, int, frozenset[str], str | None],
     ) -> float:
         """Rare-lemma overlap between the gesture and the candidate passage's own text,
         in bits -- the (b) term of the design's retrieval, using the surprisal machinery
         that already exists. Zero where no lexicon serves the language."""
-        vrs, book, chapter, first, last, _ = candidate
+        vrs, book, c1, v1, c2, v2 = candidate[:6]
         language = next(
             (m.language for m in self._corpora.values() if m.versification == vrs), ""
         )
@@ -2976,9 +2995,11 @@ class Searcher:
             return 0.0
         marks = ",".join("?" * len(corpora))
         rows = self._connection.execute(
-            f"SELECT text FROM verse WHERE corpus IN ({marks}) AND book=? AND chapter=? "
-            f"AND verse BETWEEN ? AND ? LIMIT 12",
-            (*corpora, book, chapter, first, last),
+            f"SELECT text FROM verse WHERE corpus IN ({marks}) AND book=? "
+            f"AND (chapter > ? OR (chapter = ? AND verse >= ?)) "
+            f"AND (chapter < ? OR (chapter = ? AND verse <= ?)) "
+            f"ORDER BY chapter, verse LIMIT 12",
+            (*corpora, book, c1, c1, v1, c2, c2, v2),
         ).fetchall()
         if not rows:
             return 0.0
