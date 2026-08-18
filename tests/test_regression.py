@@ -242,7 +242,11 @@ ADDED: frozenset[str] = frozenset(
     # threshold-free, computed from the store's own tables, and like `formula` they
     # report evidence without acting on it.
     {"positional_candidate", "family", "itacised", "composite", "e_value",
-     "containment", "fragmentation", "verified_odds", "patristic_rate", "recovered"},
+     "containment", "fragmentation", "verified_odds", "patristic_rate", "recovered",
+     # The verification stage computed this from the first and reported only the summed
+     # odds, so a caller testing whether rare lemmas *line up* read None on every row and
+     # could measure only a number dominated by how much evidence there was.
+     "offset_peak"},
 )
 
 

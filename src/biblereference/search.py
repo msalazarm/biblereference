@@ -1636,6 +1636,13 @@ class Match:
     compete for it. Frequency alone cannot tell a formula from a much-quoted verse;
     beside :attr:`family` it can. Reported, never gated."""
     verified_odds: float | None = None
+    offset_peak: float | None = None
+    """The verification stage's arrangement statistic: what share of the rare-lemma pairs
+    between this match and its witness sit at one constant offset. Computed by `verify`
+    since that stage existed and, until now, thrown away with the rest of its result --
+    so a caller testing whether *arrangement* separates true matches from false ones read
+    ``None`` on every row and could only test `verified_odds`, which is dominated by how
+    much evidence there is rather than how it is laid out. Present only under ``verify``."""
     """The verification stage's summed log2 likelihood ratios -- the explicit second
     look of `verification.py`, under `Searcher(verify=True, composite=...)`. Under a v1
     artifact this equals :attr:`composite` by the only-calibrated-terms rule; it departs
@@ -1788,6 +1795,7 @@ class Match:
             "composite": None if self.composite is None else round(self.composite, 2),
             "e_value": None if self.e_value is None else round(self.e_value, 6),
             "verified_odds": None if self.verified_odds is None else round(self.verified_odds, 2),
+            "offset_peak": None if self.offset_peak is None else round(self.offset_peak, 4),
             "patristic_rate": (
                 None if self.patristic_rate is None else round(self.patristic_rate, 2)
             ),
@@ -3118,6 +3126,7 @@ class Searcher:
         out: list[Match] = []
         for match in matches:
             score, chance = self._weighed(match, windows)
+            odds, peak = self._verified(match)
             out.append(
                 replace(
                     match,
@@ -3125,7 +3134,8 @@ class Searcher:
                     family=self._family(match.passage),
                     composite=score,
                     e_value=chance,
-                    verified_odds=self._verified(match),
+                    verified_odds=odds,
+                    offset_peak=peak,
                     patristic_rate=(
                         self._patristic.peak_rate(match.quoted)
                         if self._patristic is not None and match.quoted
@@ -3135,29 +3145,36 @@ class Searcher:
             )
         return out
 
-    def _verified(self, match: Match) -> float | None:
-        """The verification stage's odds, where it was asked for and can honestly run.
+    def _verified(self, match: Match) -> tuple[float | None, float | None]:
+        """The verification stage's reported fields, where it was asked for and can
+        honestly run: ``(odds, offset_peak)`` -- the odds and the arrangement behind them.
+
+        Returning only the odds is what made the arrangement hypothesis untestable -- a
+        caller asking whether rare lemmas *line up* in true matches got `None` on every
+        row, and could only see a number dominated by how much evidence there was.
 
         Only on matches with a quoted span -- the second look re-reads the actual words,
         and a `search()` match carries none -- and only under `inflected`, for the same
         zero-axes reason as the composite.
         """
+        nothing: tuple[float | None, float | None] = (None, None)
         if not self._verify or not self._inflected or not match.quoted or not match.witnesses:
-            return None
+            return nothing
         language = self._language_of(match.witnesses[0])
         if not language or language not in LEMMA_LANGUAGES:
-            return None
+            return nothing
         from .verification import verify
 
         lexicon, weights = self._lemma_tools(language)
         assert self._composite is not None  # construction refused verify without it
-        return verify(
+        result = verify(
             match,
             language=language,
             lexicon=lexicon,
             weigh=weights.of(language),
             composite=self._composite,
-        ).odds
+        )
+        return (result.odds, result.offset_peak)
 
     def _weighed(self, match: Match, windows: float) -> tuple[float | None, float | None]:
         """The composite score and its E-value, where an artifact was configured.
