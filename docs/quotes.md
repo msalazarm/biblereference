@@ -51,6 +51,17 @@ and counts, and each class is bought separately, priced on the control corpus be
 ships.** The consumer's rule stands throughout: a change that materially raises the
 false-positive rate on pre-Christian Greek is refused whatever it recalls.
 
+> **Status, 2026-08-18.** Every row of the §12 roadmap is built, and §11's breadth ledger
+> is held: 75 editions in 8 languages, 1,638,043 verses. What each stratum ships is
+> annotated in its own section; what is *measured* is smaller than what is built, and the
+> distinction is the whole discipline. Measured so far: the composite calibrated on
+> 1,653,902 per-candidate control rows (§5.6, with two of this document's own claims
+> corrected there); the register scan's max-scan null (§7); spaced seeds refuted (§5.4);
+> the PPMI backoff's synonym separation (§8). Not yet measured, and therefore still
+> opt-in: the itacised, recovered and concave tiers, whose control pricing is the last
+> outstanding run. The consumer's re-derived frontier over all 209 remains the planning
+> number until they remeasure on this build.
+
 ## 2. The miss ledger
 
 Everything proposed below buys rows in this table and nothing else. Sources:

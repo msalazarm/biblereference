@@ -179,11 +179,18 @@ def show(label: str, tally: dict[str, int]) -> None:
     )
 
 
-def sweep(home: DataHome, found: list[Mark]) -> Iterator[tuple[str, dict[str, int]]]:
-    """Recall for each candidate gate, one gate at a time, so the union can be read off."""
+def sweep(
+    home: DataHome, found: list[Mark], **tiers: object
+) -> Iterator[tuple[str, dict[str, int]]]:
+    """Recall for each candidate gate, one gate at a time, so the union can be read off.
+
+    ``tiers`` switches on the opt-in reading tiers, so the recall half of a tier's price
+    is measured here and the false-positive half on the control corpus -- the two
+    together are what may move a default, and neither alone.
+    """
     for gate in CANDIDATES:
-        yield str(gate), run(home, found, inflected=True, gates=[gate])
-    yield "union of all", run(home, found, inflected=True, gates=CANDIDATES)
+        yield str(gate), run(home, found, inflected=True, gates=[gate], **tiers)
+    yield "union of all", run(home, found, inflected=True, gates=CANDIDATES, **tiers)
 
 
 def additive(home: DataHome, found: list[Mark]) -> tuple[int, int]:
@@ -631,8 +638,9 @@ def main() -> int:
     _, lost = additive(home, found)
     print(f"\nadditive: {lost} passage(s) found with the feature off and lost with it on")
 
-    print("\ninflected, by gate")
-    for label, tally in sweep(home, found):
+    tiers = {name.strip(): True for name in str(args.tiers).split(",") if name.strip()}
+    print("\ninflected, by gate" + (f" (tiers: {', '.join(sorted(tiers))})" if tiers else ""))
+    for label, tally in sweep(home, found, **tiers):
         show(label, tally)
     return 0
 
