@@ -279,11 +279,37 @@ def test_every_disjoint_chain_is_reported_not_only_the_winner() -> None:
 def test_a_conflated_sentence_yields_one_finding_per_source() -> None:
     """Polycarp's verbatim Matthew clause used to be the cluster's whole answer. The
     uncovered remainder is now graded too, so the Lukan material stands beside it as its
-    own finding, on its own axes, at a gate that admits its evidence."""
-    with greek(inflected=True, gates=(Gate(chain=5, bits=25.0),)) as rich:
+    own finding, on its own axes, at a gate that admits its evidence.
+
+    Pinned on the classic chain deliberately -- see the concave test below, which records
+    that this finding is *lost* under the concave arm at a chain-length gate."""
+    with greek(inflected=True, concave=False, gates=(Gate(chain=5, bits=25.0),)) as rich:
         found = {str(m.passage): m.grade for m in rich.scan(POLYCARP_2_3)}
     assert found.get("MAT 7:1-2") == "direct", "the verbatim clause, as before"
     assert "LUK 6:38" in found or "LUK 6:37-38" in found, "and the re-inflected one beside it"
+
+
+def test_the_concave_arm_costs_this_conflation_at_a_length_gate() -> None:
+    """The measured cost of the concave default, recorded rather than smoothed over.
+
+    Concave maximises *net bits after gap costs* where the classic arm maximises
+    *length*, so where a father weaves two sources together -- the Matthean clause
+    interrupting the Lukan one -- it declines to pay for the interruption and returns the
+    shorter, denser chain: 6 links at 37.5 bits becomes 4 links at 34.9. Almost the same
+    evidence, two fewer links, and a gate thresholding on `chain >= 5` therefore refuses
+    a finding it used to admit.
+
+    Across 600 editor marks the shrink is 13.2% of chains, almost always by one link and
+    a median of 0.2 bits -- harmless where a gate has margin, decisive here. This is what
+    "`chain` means something different under the tier" costs in practice, and any gate
+    with a chain-length arm wants re-deriving under it."""
+    with greek(inflected=True, concave=True, gates=(Gate(chain=5, bits=25.0),)) as rich:
+        found = {str(m.passage) for m in rich.scan(POLYCARP_2_3)}
+    assert "MAT 7:1-2" in found, "the verbatim clause is untouched"
+    assert not any(p.startswith("LUK 6:") for p in found), (
+        "and the conflated Lukan source is refused -- the cost, pinned so it cannot "
+        "change unnoticed"
+    )
 
 
 def test_the_defaults_admit_nothing_new_until_the_price_is_known() -> None:
