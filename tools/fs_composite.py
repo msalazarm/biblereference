@@ -28,6 +28,7 @@ import random
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from itertools import pairwise
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -110,6 +111,53 @@ def _gumbel_fit(exact_tail: Sequence[float]) -> tuple[float, float] | None:
     return (mu, beta)
 
 
+def calibration_knots(
+    held: Sequence[float], control: Sequence[float], width: float = 4.0
+) -> list[tuple[float, float]]:
+    """A monotone map from summed weight to the log-odds the data actually paid.
+
+    Binned observed log-odds, then pool-adjacent-violators to enforce monotonicity --
+    isotonic regression, the standard score recalibration. **Bins empty on either side
+    are dropped**, not fitted: their observed value is a smoothing bound rather than a
+    measurement, and fitting a bound is how a calibration invents evidence.
+
+    Monotonicity is the whole safety argument: it cannot change a ranking or move a
+    threshold's membership, so recalibrating repairs only the magnitude's claim.
+    """
+    if not held or not control:
+        return []
+    low = math.floor(min(held[0], control[0]) / width) * width
+    high = math.ceil(max(held[-1], control[-1]) / width) * width
+    points: list[tuple[float, float, float]] = []  # (centre, observed, weight)
+    edge = low
+    while edge < high:
+        m_count = sum(1 for value in held if edge <= value < edge + width)
+        u_count = sum(1 for value in control if edge <= value < edge + width)
+        if m_count and u_count:
+            observed = math.log2(
+                ((m_count + 0.5) / (len(held) + 1)) / ((u_count + 0.5) / (len(control) + 1))
+            )
+            points.append((edge + width / 2, observed, float(m_count + u_count)))
+        edge += width
+    if len(points) < 2:
+        return []
+
+    # Pool adjacent violators: merge any pair that decreases, weighted by counts.
+    pooled: list[list[float]] = [[at, value, weight] for at, value, weight in points]
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(pooled) - 1):
+            if pooled[i][1] > pooled[i + 1][1]:
+                total = pooled[i][2] + pooled[i + 1][2]
+                merged = (pooled[i][1] * pooled[i][2] + pooled[i + 1][1] * pooled[i + 1][2]) / total
+                pooled[i] = [pooled[i][0], merged, total]
+                pooled[i + 1] = [pooled[i + 1][0], merged, total]
+                changed = True
+                break
+    return [(at, value) for at, value, _ in pooled]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", type=int, default=1200, help="marks for m (0 = all)")
@@ -181,6 +229,7 @@ def main() -> int:
     # u rows are scored through their own column map -- by name, never by position.
     u_scores = sorted(score_rows(false_rows, fields, u_columns, weights))
     held_scores = sorted(score_rows(held_rows, fields, m_columns, weights))
+    raw_u = list(u_scores)
     windows = int(record["windows"]) or 1
     words = int(record["words"])
 
@@ -193,6 +242,32 @@ def main() -> int:
     lower_index = math.floor(args.miss_target * len(held_scores)) if held_scores else 0
     lower = held_scores[lower_index] if held_scores else upper
 
+    # The monotone recalibration, fitted on the raw scores and the same held-out split
+    # that priced the thresholds. Everything downstream then lives in calibrated space
+    # -- thresholds, the null tail, the Gumbel fit -- because a score and the null it is
+    # compared against must be the same quantity, and a monotone map moves no candidate
+    # across any line, so the operating points priced above survive verbatim.
+    knots = calibration_knots(held_scores, u_scores)
+
+    def calibrated(value: float) -> float:
+        if not knots:
+            return value
+        if value <= knots[0][0]:
+            return knots[0][1]
+        if value >= knots[-1][0]:
+            return knots[-1][1]
+        for (left, low_value), (right, high_value) in pairwise(knots):
+            if left <= value <= right:
+                if right == left:
+                    return high_value
+                return low_value + (high_value - low_value) * (value - left) / (right - left)
+        return knots[-1][1]
+
+    raw_upper, raw_lower = upper, lower
+    upper, lower = calibrated(upper), calibrated(lower)
+    u_scores = [calibrated(s) for s in u_scores]
+    held_scores = [calibrated(s) for s in held_scores]
+
     # The null tail: exact in the decision region, decimated below.
     tail = [s for s in u_scores if s >= _EXACT_ABOVE]
     tail = [s for i, s in enumerate(u_scores) if s < _EXACT_ABOVE and i % _DECIMATION == 0] + tail
@@ -201,6 +276,7 @@ def main() -> int:
 
     artifact = {
         "schema": SCHEMA,
+        "calibration": [list(knot) for knot in knots],
         "created": datetime.now(UTC).isoformat(timespec="seconds"),
         "language": "grc",
         "fold_version": FOLD_VERSION,
@@ -223,6 +299,8 @@ def main() -> int:
         "thresholds": {
             "upper": upper,
             "lower": lower,
+            "upper_raw": raw_upper,
+            "lower_raw": raw_lower,
             "fp_target": args.fp_target,
             "miss_target": args.miss_target,
         },
@@ -240,6 +318,11 @@ def main() -> int:
         print(f"artifact written to {args.weights}")
         loaded = Composite.load(args.weights)  # fail fast on our own output
         assert loaded.upper == upper
+        # The safety property, checked rather than claimed: the recalibration moves no
+        # control score across the accept line, which is what "monotone" has to mean.
+        assert sum(1 for s in u_scores if s >= upper) == sum(
+            1 for s in raw_u if loaded.calibrate(s) >= loaded.upper
+        ), "recalibration changed an operating point, which a monotone map cannot do"
 
     lines: list[str] = []
     say = lines.append

@@ -31,6 +31,7 @@ import warnings
 from bisect import bisect_left
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 from typing import Final
 
@@ -153,6 +154,18 @@ class Composite:
     """The gate the control evidence was collected through. The null is truncated below
     it -- E-values there are not supported by the data, and this is what says so."""
     fold_version: int
+    calibration: tuple[tuple[float, float], ...] = ()
+    """Knots of a monotone map from the summed weight to *observed* log-odds, fitted on
+    held-out gold against the control sample.
+
+    The summed weight is a good ranker whose magnitude lies: `run`, `chain` and `bits`
+    measure overlapping evidence, and a naive-Bayes sum over correlated fields
+    over-counts -- measured on the first real artifact, a claimed +30 paid +14.8. This is
+    the textbook remedy (Platt/isotonic score recalibration) rather than a restructuring
+    of the fields, and being **monotone** it is free: every ranking and every operating
+    point survives unchanged, and only the number's claim about itself is repaired.
+    Empty on an artifact built before this existed, and then :meth:`score` returns the
+    raw sum as it always did."""
     gumbel: tuple[float, float] | None = None
     """(mu, beta) of a Gumbel tail fit past the empirical maximum, or None where the fit
     failed or was not asked for. §5.1's fallback doctrine: the empirical percentile is
@@ -190,6 +203,9 @@ class Composite:
             tail_decimation=int(tail["decimation"]),
             collect_gate=str(raw["u"].get("collect_gate", "")),
             fold_version=int(raw["fold_version"]),
+            calibration=tuple(
+                (float(at), float(value)) for at, value in raw.get("calibration") or ()
+            ),
             gumbel=(float(fitted[0]), float(fitted[1])) if fitted else None,
         )
 
@@ -242,7 +258,28 @@ class Composite:
             if value is None:
                 continue
             total += self.weights[field][bin_of(self.bins[field], value)]
-        return total
+        return self.calibrate(total)
+
+    def calibrate(self, total: float) -> float:
+        """The summed weight mapped to the log-odds the held-out data actually paid.
+
+        Piecewise-linear between the fitted knots and flat past the ends -- extrapolating
+        a calibration is inventing evidence, and the ends are exactly where the sample ran
+        out. Identity where the artifact carries no map.
+        """
+        knots = self.calibration
+        if not knots:
+            return total
+        if total <= knots[0][0]:
+            return knots[0][1]
+        if total >= knots[-1][0]:
+            return knots[-1][1]
+        for (left, low), (right, high) in pairwise(knots):
+            if left <= total <= right:
+                if right == left:
+                    return high
+                return low + (high - low) * (total - left) / (right - left)
+        return knots[-1][1]
 
     def zone(self, score: float) -> str:
         """``accept`` | ``review`` | ``reject`` -- the three-zone rule."""

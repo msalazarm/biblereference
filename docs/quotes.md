@@ -556,17 +556,28 @@ this is calibrated; nothing ships on the theory alone.
 >   the prototype weights and is **wrong** against the real ones. Review is still a
 >   better answer than the flat refusal the gate gives it, and that is the three-zone
 >   rule earning its place — but it is not the claim that was made.
-> * **The composite ranks better than its magnitudes read.** Cllr is 0.287 and the
->   ordering is sound, but over the bins where both samples have counts the observed
->   log-ratio falls short of the claimed one, and the shortfall grows with score (+14
->   claimed pays +9.8; +30 claimed pays +14.8). The cause is the standard
->   Fellegi–Sunter caveat this section already cites: `run`, `chain` and `bits` measure
->   overlapping evidence, and a naive-Bayes sum over correlated fields over-counts.
->   **Read `composite` as an ordering and `e_value` as the calibrated quantity** — the
->   E-value counts the empirical control tail directly and is immune to the sum's
->   double-counting. Collapsing the lexical axes into one jointly-estimated field, which
->   this section proposes and the v1 artifact only half-does (lemma_run into chain), is
->   the fix; it is not yet built.
+> * **The composite ranked better than its magnitudes read — and that is now repaired.**
+>   The first artifact scored Cllr 0.287 with a shortfall that grew with score: +14
+>   claimed paid +9.8, +30 claimed paid +14.8, ECE 2.00 bits. The cause is the standard
+>   Fellegi–Sunter caveat this section already cites — `run`, `chain` and `bits` measure
+>   overlapping evidence, and a naive-Bayes sum over correlated fields over-counts. The
+>   remedy shipped is the textbook one: a **monotone recalibration** (isotonic, fitted on
+>   the held-out split against the control sample, stored as knots in the artifact and
+>   applied by `Composite.score`). Being monotone it is free — no ranking changes, and
+>   the thresholds are mapped through the same function so every operating point
+>   survives. Measured after: **ECE 0.66 bits, worst resolved gap 1.0, Cllr 0.255**, and
+>   a claimed +10 pays +10.0. The accept line reads +14.65 in calibrated bits where it
+>   read +29.81 raw; the same matches sit above it. Both refused citations keep their
+>   verdicts (Didache +14.7 accept, 1 Clement +12.6 review).
+>
+>   Two honest limits. The map is **flat past its end knots** — extrapolating a
+>   calibration invents evidence exactly where the sample ran out — so scores beyond the
+>   fitted range are reported at the ceiling rather than above it. And isotonic pooling
+>   creates flat segments, which can merge scores that were distinct, so a *tie* at a
+>   threshold can change membership even though no ordering does (held-out detection
+>   moved 36.8% → 36.6% for this reason, two marks). Collapsing the lexical axes into one
+>   jointly-estimated field remains the deeper fix and is still not built; recalibration
+>   repairs the symptom honestly and says so.
 > * **A bug worth recording.** The u-sample is collected through a gate
 >   (`chain>=2 bits>=10`), so bins below it hold m counts against *zero* u counts, and
 >   the smoothed ratio explodes: the first real artifact gave `chain<2` **+18.1** and

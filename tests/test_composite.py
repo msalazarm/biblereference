@@ -221,3 +221,54 @@ def test_evidence_below_the_collection_gate_is_unscored(tmp_path: Path) -> None:
     assert not loaded.supported(run=9, lemma_run=9, chain=9, bits=4.0), "bits floor too"
     assert loaded.supported(run=0, lemma_run=0, chain=2, bits=10.0), "on the gate is inside"
     assert loaded.score(0, 0, 2, 10.0) is not None
+
+
+# -- the monotone recalibration ---------------------------------------------------------
+
+
+def test_the_calibration_map_is_monotone_clamped_and_optional(tmp_path: Path) -> None:
+    """The summed weight ranks well and lies about its magnitude -- measured on the real
+    artifact, a claimed +30 paid +14.8. The remedy is a monotone map, and monotone is the
+    whole safety argument: it cannot reorder two matches, so it repairs the number's claim
+    about itself and nothing else. Past the end knots it is flat, because extrapolating a
+    calibration is inventing evidence exactly where the sample ran out."""
+    path = tmp_path / "c.json"
+    path.write_text(
+        json.dumps(artifact_dict(calibration=[[0.0, 0.0], [10.0, 5.0], [20.0, 6.0]])), "utf-8"
+    )
+    loaded = Composite.load(path)
+    assert loaded.calibrate(0.0) == 0.0
+    assert loaded.calibrate(10.0) == 5.0
+    assert loaded.calibrate(5.0) == pytest.approx(2.5), "piecewise linear between knots"
+    assert loaded.calibrate(15.0) == pytest.approx(5.5)
+    assert loaded.calibrate(-100.0) == 0.0, "flat below the first knot, never extrapolated"
+    assert loaded.calibrate(1e6) == 6.0, "flat above the last"
+    rungs = [loaded.calibrate(v) for v in range(-30, 60)]
+    assert rungs == sorted(rungs), "monotone: no pair of matches can swap order"
+
+    (tmp_path / "plain.json").write_text(json.dumps(artifact_dict()), "utf-8")
+    plain = Composite.load(tmp_path / "plain.json")
+    assert plain.calibration == ()
+    assert plain.calibrate(7.5) == 7.5, "no map: the raw sum, exactly as before"
+
+
+def test_the_isotonic_fit_drops_unresolved_bins_and_enforces_order() -> None:
+    """Bins empty on one side carry a smoothing bound rather than a measurement, and
+    fitting a bound is how a calibration invents evidence. What survives is pooled into
+    monotone order."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+    from fs_composite import calibration_knots
+
+    # Gold high, control low, with a deliberate inversion in the middle to be pooled.
+    held = [1.0] * 40 + [5.0] * 10 + [9.0] * 40
+    control = [1.0] * 400 + [5.0] * 40 + [9.0] * 4
+    knots = calibration_knots(held, control, width=4.0)
+    assert knots, "resolved bins produce a map"
+    assert [value for _, value in knots] == sorted(value for _, value in knots)
+    assert calibration_knots([], control) == [], "no gold, no map"
+    assert calibration_knots(held, []) == [], "no control, no map"
+    # A bin with gold but no control is a bound, so it must not become a knot.
+    lonely = calibration_knots([100.0] * 50, control, width=4.0)
+    assert all(at < 90 for at, _ in lonely), "the unresolved high bin is dropped"
