@@ -57,10 +57,14 @@ false-positive rate on pre-Christian Greek is refused whatever it recalls.
 > distinction is the whole discipline. Measured so far: the composite calibrated on
 > 1,653,902 per-candidate control rows (§5.6, with two of this document's own claims
 > corrected there); the register scan's max-scan null (§7); spaced seeds refuted (§5.4);
-> the PPMI backoff's synonym separation (§8). Not yet measured, and therefore still
-> opt-in: the itacised, recovered and concave tiers, whose control pricing is the last
-> outstanding run. The consumer's re-derived frontier over all 209 remains the planning
-> number until they remeasure on this build.
+> the PPMI backoff's synonym separation (§8); and the opt-in tiers, priced on both sides
+> for the first time — **concave gains recall at every gate (union 251→255 over 400
+> marks) while collecting half the candidates per control word**, and **itacised and
+> recovered buy exactly nothing** on editor marks, because that gold comes from critical
+> editions whose spelling is already normalised and the tiers exist for manuscript
+> spellings. All three stay opt-in until the concave control table lands. The consumer's
+> re-derived frontier over all 209 remains the planning number until they remeasure on
+> this build.
 
 ## 2. The miss ledger
 
@@ -476,8 +480,27 @@ diluted by the sentence. Feeds 4.3.
 
 **5.3 The chain grows up.** Replace the hard 8/2 gap bounds with minimap2's concave gap
 cost, run the optimal O(n log n) chaining DP instead of the current heuristic walk, and
-report near-optimal secondary chains (§3b). Same objective, actually maximised — a pure
-recall gain at unchanged FP semantics — and the multi-chain output is what 4.3 consumes.
+report near-optimal secondary chains (§3b). ~~Same objective, actually maximised — a pure
+recall gain at unchanged FP semantics~~ — and the multi-chain output is what 4.3 consumes.
+
+> **Measured 2026-08-18, and the struck clause was wrong twice over.** The objective is
+> *not* the same: the concave arm maximises **net bits after gap costs** where the classic
+> arm maximises **length**, so a link that cannot pay for its own slack is not taken. The
+> FP semantics are therefore *not* unchanged either — the tier collects **half** the
+> candidates per word of control prose (0.278 against 0.551, same seeded text order). What
+> survives is the recall claim, and it survives well: over 400 editor marks the union goes
+> **251 → 255** and no candidate gate loses a single mark (`chain>=6/35` 236→237,
+> `run>=3/20` 249→252, `run>=4/15` 232→235, partials 30→33).
+>
+> Two consequences. First, `chain` **means a different thing** under this tier, so any
+> gate calibrated on classic chains is mis-set under it — a union tuned on the walls
+> cannot simply be pointed at concave output. Second, more gold from fewer candidates is
+> the rare trade that costs nothing on either side, which makes this the first tier
+> likely to earn its default; the control gate table decides.
+>
+> Recorded for the discipline: a single probe showed one citation losing a chain link
+> under this tier and it was nearly written up as "concave shortens chains". The 400-mark
+> sweep says the opposite. One case is not a measurement.
 
 **5.4 Priced experiments and compute controls.** *(Spaced seeds: measured 2026-08-17 and
 closed negative — every candidate at weights 4–6 ran 11–24 points behind its contiguous
@@ -800,8 +823,8 @@ corpus and the golden set before its default changes anything.
 | order | work | buys (from §2) | FP price | shipped |
 |---|---|---|---|---|
 | 1 | **0.1** RP Byzantine + Antoniades + Bezae-Latin fetched, indexed | 8 named variant cases, likely more unmeasured; Old Latin Acts | none — more text, same gates | ✅ closed 2026-08-18: `grcant` lands letter-verified against the upstream's own conversion; row complete |
-| 2 | **0.3 + 5.3** formal chaining: concave gaps, optimal DP, multi-chain | conflation clauses (≥7 named loci); interpolated-clause misses | control re-run; per-chain gates unchanged | ✅ concave costs opt-in (`--concave`); pricing in the at-scale run |
-| 3 | **0.2** itacised tier, flagged | unmeasured; the largest MS variant class | control re-run before default | ✅ opt-in (`--itacised`), flagged on matches; §4.4 recovery tier (`--recovered`) beside it |
+| 2 | **0.3 + 5.3** formal chaining: concave gaps, optimal DP, multi-chain | conflation clauses (≥7 named loci); interpolated-clause misses | control re-run; per-chain gates unchanged | ✅ concave opt-in (`--concave`) — **measured 2026-08-18: union 251→255 over 400 marks, no gate loses, and half the candidates per control word. `chain` means net-optimal length under it, so gates must be re-tuned. Control table pending; likeliest first default to move.** |
+| 3 | **0.2** itacised tier, flagged | unmeasured; the largest MS variant class | control re-run before default | ✅ opt-in (`--itacised`) + §4.4 recovery (`--recovered`) — **priced 2026-08-18: both buy exactly zero on editor-mark gold, which is drawn from critical editions whose spelling is already normalised. They stay opt-in for that reason, not for cost. Pricing them needs gold with manuscript spelling.** |
 | 4 | **10** formula FN detector + stratified recall + POD/PFA reporting | measurement, not recall — steers everything after | none | ✅ unmatched-formula ledger + POD/PFA in fs_composite |
 | 5 | **2** quotation families | 34 misfire verdicts; doxology addresses; family-precision | none — reporting change | ✅ `family` reported; parallel-family index built |
 | 6 | **1** E-values + containment; spaced-seed experiment priced | defensible thresholds; conflation scoring; maybe a new axis | is itself the pricing tool | ✅ `e_value`/`containment`/`fragmentation`; spaced seeds measured **negative** (11–24 pts behind contiguous) and closed |
