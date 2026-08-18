@@ -267,6 +267,8 @@ def cmd_search(args: argparse.Namespace) -> int:
             composite=args.composite,
             seed_mask=args.seed_mask,
             recovered=args.recovered,
+            ppmi=args.ppmi,
+            verify=args.verify,
             gates=_gates(args),
         ) as searcher:
             matches = searcher.search(text, limit=args.limit)
@@ -342,6 +344,21 @@ def _inflected_options(parser: argparse.ArgumentParser) -> None:
         "it are flagged `recovered`. Opt-in until the control corpus prices it",
     )
     parser.add_argument(
+        "--ppmi",
+        action="store_true",
+        help="PPMI soft-cosine backoff for the allusion pass: a synonym pair the lemma "
+        "match misses may reorder near-tied candidates, never by more than the tie "
+        "window and never touching the reported bits. Needs the artifact "
+        "tools/ppmi_vectors.py builds",
+    )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="the verification stage: a second look at each candidate, reporting "
+        "`verified_odds`, the calibrated decision statistic under a v2 artifact. "
+        "Requires --composite",
+    )
+    parser.add_argument(
         "--seed-mask",
         action="store_true",
         help="liturgical furniture may not seed: windows that are mostly doxology/grace "
@@ -410,6 +427,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
             composite=args.composite,
             seed_mask=args.seed_mask,
             recovered=args.recovered,
+            ppmi=args.ppmi,
+            verify=args.verify,
             gates=_gates(args),
         ) as searcher:
             if args.debts:

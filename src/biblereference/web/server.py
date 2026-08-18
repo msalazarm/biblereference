@@ -102,6 +102,12 @@ _OTHER: Final = {
     "itacised",
     "seed_mask",
     "recovered",
+    "ppmi",
+    # The verification stage: a second look per candidate, whose odds are the calibrated
+    # decision statistic under a v2 artifact. It needs the composite the server was
+    # started with, so a caller asking for it without one gets the constructor's refusal
+    # rather than a silent None on every match.
+    "verify",
     # `debts` is the scan endpoint's own, not a `Searcher` option -- allowed here so the
     # validator passes it, read in `api_scan` rather than folded into the options.
     "debts",
@@ -217,6 +223,10 @@ def search_options(
         options["seed_mask"] = _flag("seed_mask", params["seed_mask"][0])
     if params.get("recovered"):
         options["recovered"] = _flag("recovered", params["recovered"][0])
+    if params.get("ppmi"):
+        options["ppmi"] = _flag("ppmi", params["ppmi"][0])
+    if params.get("verify"):
+        options["verify"] = _flag("verify", params["verify"][0])
     if params.get("gate"):
         # Repeatable, and a union: a match passes if any gate admits it. Spelled
         # `run:lemma_run:chain:bits`, as the command line spells it.
