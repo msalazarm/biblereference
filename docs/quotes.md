@@ -62,11 +62,11 @@ false-positive rate on pre-Christian Greek is refused whatever it recalls.
 > marks) while collecting half the candidates per control word**, and **itacised and
 > recovered buy exactly nothing** on editor marks, because that gold comes from critical
 > editions whose spelling is already normalised and the tiers exist for manuscript
-> spellings. **Concave's control table has since landed and it earns its default outright
-> — false positives down 18.9% across the candidate gates with recall up on eight of
-> eleven and down on none** — but the flip is the consumer's to make, because the axis
-> changes meaning under gates they calibrated. All three remain opt-in today. The
-> consumer's
+> spellings. **Concave was flipped on and flipped back the same day**: it costs the
+> conflation class §5.3 named it to buy and empties `alternates` on a real rivalry, and
+> its control-side gain was measured across a library rebuild, so that figure is
+> retracted pending a like-for-like re-run. Both projects have agreed it should be
+> **swept, not defaulted**. All three tiers remain opt-in today. The consumer's
 > re-derived frontier over all 209 remains the planning number until they remeasure on
 > this build.
 
