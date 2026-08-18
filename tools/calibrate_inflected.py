@@ -276,10 +276,19 @@ def control_text(cap: int) -> tuple[list[str], int]:
 _W: dict[str, object] = {}
 
 
-def _worker_init() -> None:
+def _worker_init(tiers: dict[str, bool] | None = None) -> None:
+    """Per-process state. ``tiers`` switches on the opt-in reading tiers being priced --
+    a tier can only *add* readings, so the difference it makes to the control table is
+    its false-positive price, measured the same per-candidate way as everything else."""
     home = DataHome()
     _W["searcher"] = Searcher(
-        home, languages=["grc"], inflected=True, min_query=3, gates=[COLLECT], **GREEK
+        home,
+        languages=["grc"],
+        inflected=True,
+        min_query=3,
+        gates=[COLLECT],
+        **(tiers or {}),  # type: ignore[arg-type]
+        **GREEK,
     )
     _W["lexicon"] = Lexicon(home)
     _W["weigh"] = LemmaWeights(home).of("grc")
@@ -522,7 +531,12 @@ def cmd_control(args: argparse.Namespace) -> int:
     last_write = time.monotonic()
     if remaining:
         context = multiprocessing.get_context("spawn")
-        with context.Pool(args.workers, initializer=_worker_init) as pool:
+        tiers = {
+            name.strip(): True for name in str(args.tiers).split(",") if name.strip()
+        }
+        with context.Pool(
+            args.workers, initializer=_worker_init, initargs=(tiers,)
+        ) as pool:
             # Ordered imap: `done_texts` stays a contiguous prefix, which is the whole
             # resume invariant. chunksize amortises the pickle traffic.
             for rows, seen, length, cut in pool.imap(_evidence_one, remaining, chunksize=4):
@@ -590,6 +604,14 @@ def main() -> int:
         "--resume",
         action="store_true",
         help="continue an incomplete --save checkpoint instead of refusing it",
+    )
+    parser.add_argument(
+        "--tiers",
+        default="",
+        metavar="NAMES",
+        help="comma-separated opt-in tiers to switch on for this run (itacised, "
+        "recovered, concave, seed_mask): the control table then prices them, because a "
+        "tier can only add readings and the difference in false positives is its price",
     )
     args = parser.parse_args()
     if args.control:
