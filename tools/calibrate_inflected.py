@@ -216,6 +216,23 @@ CONTROL_ERAS = {"classical", "pre-christian", "pre-septuagint"}
 #: one pass gathers the evidence for all of them and the sweep costs one scan, not twenty.
 COLLECT = Gate(chain=2, bits=10.0)
 
+#: What each evidence row records, in order. The four axes come off the *match itself* --
+#: recomputing them here measured `bits` by the pre-Magnesians span-sum while every live
+#: gate uses distinct chain lemmas, and a null calibrated on a statistic no live match
+#: carries prices nothing. `offset_peak` and `formula` are the verification stage's
+#: terms, finally given m/u tables to be calibrated from.
+ROW_FIELDS = ("run", "lemma_run", "chain", "bits", "offset_peak", "formula")
+
+#: Collection limit that makes `search()` provably pre-arbitration. Graded candidates
+#: are bounded by `_PASSAGES` (12) per language and exact ones likewise, so with one
+#: language 32 can never truncate -- and the consumer's arbitration finding was exactly
+#: that a floor-collected survivor set is not a superset of any narrow gate's live
+#: output: `_grade` refuses gate-failers *before* the `limit` contest, so the wide
+#: floor's rivals crowd out what a narrow gate would have returned alone. Collecting
+#: every candidate makes the null per-candidate, and every live emission at every gate
+#: is then a subset: the residual error is conservative, never anti-.
+COLLECT_LIMIT = 32
+
 
 def control_text(cap: int) -> tuple[list[str], int]:
     """Greek by authors who cannot be quoting the New Testament, up to ``cap`` words."""
@@ -229,7 +246,11 @@ def control_text(cap: int) -> tuple[list[str], int]:
     witnesses = [
         wid
         for wid, work, _ in db.execute(
-            "SELECT id, work, words FROM witness WHERE language = 'grc' AND words > 0"
+            # ORDER BY, so the deterministic shuffle below has a deterministic input:
+            # without it the ordering rides on rowid order, which a VACUUM may change,
+            # and `--resume`'s contiguous-prefix invariant rides on this list.
+            "SELECT id, work, words FROM witness WHERE language = 'grc' AND words > 0 "
+            "ORDER BY id"
         )
         if eras.get((work or "").split(".")[0]) in CONTROL_ERAS
     ]
@@ -238,7 +259,9 @@ def control_text(cap: int) -> tuple[list[str], int]:
     words = 0
     for wid in witnesses:
         for (text,) in db.execute(
-            "SELECT text FROM passage WHERE witness = ? AND text IS NOT NULL", (wid,)
+            "SELECT text FROM passage WHERE witness = ? AND text IS NOT NULL "
+            "ORDER BY ordinal",
+            (wid,),
         ):
             out.append(str(text))
             words += len(str(text).split())
@@ -247,49 +270,117 @@ def control_text(cap: int) -> tuple[list[str], int]:
     return out, words
 
 
+#: Per-process state for the evidence workers, built once by `_worker_init` -- the same
+#: spawn-safe pattern as `web/jobs.worker_searcher`: a spawned child inherits nothing but
+#: the environment, so each builds its own searcher against the (read-only) library.
+_W: dict[str, object] = {}
+
+
+def _worker_init() -> None:
+    home = DataHome()
+    _W["searcher"] = Searcher(
+        home, languages=["grc"], inflected=True, min_query=3, gates=[COLLECT], **GREEK
+    )
+    _W["lexicon"] = Lexicon(home)
+    _W["weigh"] = LemmaWeights(home).of("grc")
+
+
+def _evidence_one(
+    text: str, window: int = 12, stride: int = 6
+) -> tuple[list[tuple], int, int, int]:
+    """One control text's evidence rows: ``(rows, windows, words, truncated)``.
+
+    Each row is `ROW_FIELDS`: the match's OWN four axes (the recomputation this replaces
+    measured `bits` by the pre-Magnesians span-sum -- a statistic no live match carries),
+    plus the verification stage's two terms: the offset-histogram peak against the
+    match's own best witness, and whether a citation formula stood within reach before
+    the window -- measurable in control prose, where verbs of saying are ordinary Greek.
+
+    Collected at `COLLECT_LIMIT`, which is pre-arbitration by construction; `truncated`
+    counts windows where the limit filled, and any nonzero count means the bound needs
+    raising -- it is reported, never swallowed.
+    """
+    from biblereference.formulae import REACH, preceding
+    from biblereference.verification import offset_histogram
+
+    searcher = _W["searcher"]
+    lexicon = _W["lexicon"]
+    weigh = _W["weigh"]
+    rows: list[tuple] = []
+    tokens = text.split()
+    windows = truncated = 0
+    for start in range(0, max(1, len(tokens) - window + 1), stride):
+        windows += 1
+        chunk = " ".join(tokens[start : start + window])
+        before = " ".join(tokens[max(0, start - REACH) : start])
+        announced = bool(before) and (
+            preceding(before + " ", len(before) + 1, "grc") is not None
+        )
+        matches = searcher.search(chunk, limit=COLLECT_LIMIT)  # type: ignore[attr-defined]
+        if len(matches) == COLLECT_LIMIT:
+            truncated += 1
+        mine = None
+        for match in matches:
+            if match.grade == "direct" or not match.witnesses:
+                continue
+            if mine is None:
+                mine = lemma_readings(_tokens(chunk, "grc"), "grc", lexicon)  # type: ignore[arg-type]
+            theirs = lemma_readings(
+                _tokens(match.witnesses[0].text, "grc"), "grc", lexicon  # type: ignore[arg-type]
+            )
+            peak, _ = offset_histogram(mine, theirs, weigh)  # type: ignore[arg-type]
+            rows.append(
+                (
+                    match.run,
+                    match.lemma_run,
+                    match.chain,
+                    match.bits,
+                    peak,
+                    1.0 if announced else 0.0,
+                )
+            )
+    return rows, windows, len(tokens), truncated
+
+
 def evidence(
     home: DataHome, texts: list[str], window: int = 12, stride: int = 6
 ) -> tuple[list[tuple], int]:
-    """Every graded match the permissive gate finds, with all four axes measured.
-
-    One pass, because the axes are properties of a match rather than of a gate: collecting
-    them once lets twenty candidate gates be scored offline instead of twenty scans.
-
-    :returns: The matches, and how many windows were scanned -- the denominator PFA needs.
-        A false-positive rate without its number of opportunities is not a probability,
-        and the CFAR convention this report borrows from is nothing without one.
-    """
-    lexicon, weights = Lexicon(home), LemmaWeights(home)
-    weigh = weights.of("grc")
-    verses = sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)
-    searcher = Searcher(
-        home, languages=["grc"], inflected=True, min_query=3, gates=[COLLECT], **GREEK
-    )
+    """Sequential wrapper over `_evidence_one`, kept for callers that want one pass in
+    one process. `cmd_control` uses the pool instead."""
+    _worker_init()
     found: list[tuple] = []
     windows = 0
-    with searcher:
-        for text in texts:
-            tokens = text.split()
-            for start in range(0, max(1, len(tokens) - window + 1), stride):
-                windows += 1
-                chunk = " ".join(tokens[start : start + window])
-                for match in searcher.search(chunk, limit=3):
-                    if match.grade == "direct":
-                        continue
-                    row = verses.execute(
-                        "SELECT text FROM verse WHERE corpus = ? AND book = ? "
-                        "AND chapter = ? AND verse = ?",
-                        (
-                            match.witnesses[0].corpus,
-                            match.passage.book,
-                            match.passage.start.chapter,
-                            match.passage.start.verse,
-                        ),
-                    ).fetchone()
-                    if not row:
-                        continue
-                    found.append(axes(chunk, str(row[0]), lexicon, weigh))
+    for text in texts:
+        rows, seen, _, _ = _evidence_one(text, window, stride)
+        found.extend(rows)
+        windows += seen
     return found, windows
+
+
+def full_row(
+    text: str, verse: str, lexicon: Lexicon, weigh: object, announced: bool
+) -> tuple[int, int, int, float, float, float]:
+    """A `ROW_FIELDS` row for one text against one verse -- the m-side's collector.
+
+    `bits` by the live `_grade` formula (distinct chain lemmas), NOT the span-sum
+    `axes()` still computes for old-file comparability: a null and a gold sample must
+    measure the statistic the live gates actually read, or they calibrate nothing.
+    """
+    from biblereference.verification import offset_histogram
+
+    query, spelled = _tokens(text, "grc"), _tokens(verse, "grc")
+    mine = lemma_readings(query, "grc", lexicon)
+    theirs = lemma_readings(spelled, "grc", lexicon)
+    chained = lemma_chain(mine, theirs, weigh)  # type: ignore[arg-type]
+    peak, _ = offset_histogram(mine, theirs, weigh)  # type: ignore[arg-type]
+    return (
+        longest_run(query, spelled),
+        lemma_run(mine, theirs, weigh).length,  # type: ignore[arg-type]
+        chained.length,
+        sum(weigh(lemma) for lemma in set(chained.lemmas)),  # type: ignore[operator]
+        peak,
+        1.0 if announced else 0.0,
+    )
 
 
 def axes(text: str, verse: str, lexicon: Lexicon, weigh: object) -> tuple[int, int, int, float]:
@@ -323,40 +414,158 @@ CANDIDATES = [
 ]
 
 
+#: The four-axis order old files used before rows carried a `fields` key.
+DEFAULT_ROW_FIELDS_STR = ["run", "lemma_run", "chain", "bits"]
+
+
+def _axis_columns(fields: list[str]) -> tuple[int, int, int, int]:
+    """Where the four gate axes sit in a row, by name -- `Gate.admits` takes exactly
+    four arguments, and a six-wide row splatted into it is the transposition bug the
+    named-fields convention exists to prevent."""
+    return (
+        fields.index("run"),
+        fields.index("lemma_run"),
+        fields.index("chain"),
+        fields.index("bits"),
+    )
+
+
+def _checkpoint(
+    saved: Path,
+    *,
+    words: int,
+    windows: int,
+    rows: list[tuple],
+    done: int,
+    cap: int,
+    complete: bool,
+) -> None:
+    """Atomic: write beside, then replace. A crash mid-write leaves the last good file."""
+    import json
+    import os
+
+    payload = json.dumps(
+        {
+            "words": words,
+            "windows": windows,
+            "axes": rows,
+            "fields": list(ROW_FIELDS),
+            "done_texts": done,
+            "cap": cap,
+            "complete": complete,
+        }
+    )
+    scratch = saved.with_suffix(saved.suffix + ".tmp")
+    scratch.write_text(payload, "utf-8")
+    os.replace(scratch, saved)
+
+
 def cmd_control(args: argparse.Namespace) -> int:
     import json
+    import multiprocessing
+    import time
 
-    home = DataHome()
     saved = Path(args.save) if args.save else None
+    found: list[tuple] = []
+    words = windows = done = truncated = 0
+
     if saved and saved.exists():
-        # The collected evidence is the expensive half of this measurement, and it is
-        # also the u-side input the Fellegi-Sunter calibration will want: axes measured
-        # over text where every match is false by construction. Re-reading it makes the
-        # gate table below reproducible without a rescan, and hands the same file on.
         record = json.loads(saved.read_text("utf-8"))
-        words, windows = int(record["words"]), int(record["windows"])
-        found = [tuple(row) for row in record["axes"]]
-        print(f"control (from {saved}): {words:,} words\n")
-    else:
-        texts, words = control_text(args.control)
-        print(f"control: {words:,} words of classical / pre-christian / pre-septuagint Greek\n")
-        found, windows = evidence(home, texts)
-        if saved:
-            saved.write_text(
-                json.dumps({"words": words, "windows": windows, "axes": found}),
-                "utf-8",
+        complete = bool(record.get("complete", True))
+        fields = list(record.get("fields", DEFAULT_ROW_FIELDS_STR))
+        if complete and not args.resume:
+            # The collected evidence is the expensive half; re-reading makes the gate
+            # table reproducible without a rescan and hands the same file to the
+            # composite build.
+            words, windows = int(record["words"]), int(record["windows"])
+            found = [tuple(row) for row in record["axes"]]
+            print(f"control (from {saved}): {words:,} words\n")
+            _gate_table(found, fields, words, windows)
+            return 0
+        if not complete and not args.resume:
+            print(
+                f"{saved} is an incomplete checkpoint ({record.get('done_texts', 0)} "
+                f"texts in). Pass --resume to continue it, or delete it to start over.",
+                file=sys.stderr,
             )
-            print(f"evidence written to {saved}\n")
-    print(f"collected at {COLLECT}: {len(found):,} graded matches, all of them false")
+            return 2
+        # Resuming: the partial must have been cut from the same cloth.
+        if int(record.get("cap", -1)) != args.control:
+            print(
+                f"checkpoint cap {record.get('cap')} != --control {args.control}; "
+                f"a resumed run must ask for the same corpus",
+                file=sys.stderr,
+            )
+            return 2
+        if fields != list(ROW_FIELDS):
+            print(
+                f"checkpoint fields {fields} != current {list(ROW_FIELDS)}; rows from "
+                f"two schemas cannot be mixed -- start over",
+                file=sys.stderr,
+            )
+            return 2
+        words = int(record["words"])
+        windows = int(record["windows"])
+        found = [tuple(row) for row in record["axes"]]
+        done = int(record.get("done_texts", 0))
+        print(f"resuming {saved} at text {done:,} ({words:,} words in)\n")
+
+    texts, capped_words = control_text(args.control)
+    if done >= len(texts):
+        print("checkpoint already covers every text; finishing")
+    print(
+        f"control: {capped_words:,} words of classical / pre-christian / pre-septuagint "
+        f"Greek, {len(texts):,} texts, {args.workers} worker(s)\n"
+    )
+
+    remaining = texts[done:]
+    last_write = time.monotonic()
+    if remaining:
+        context = multiprocessing.get_context("spawn")
+        with context.Pool(args.workers, initializer=_worker_init) as pool:
+            # Ordered imap: `done_texts` stays a contiguous prefix, which is the whole
+            # resume invariant. chunksize amortises the pickle traffic.
+            for rows, seen, length, cut in pool.imap(_evidence_one, remaining, chunksize=4):
+                found.extend(rows)
+                windows += seen
+                words += length
+                truncated += cut
+                done += 1
+                if saved and (done % 25 == 0 or time.monotonic() - last_write > 60):
+                    _checkpoint(
+                        saved, words=words, windows=windows, rows=found, done=done,
+                        cap=args.control, complete=False,
+                    )
+                    last_write = time.monotonic()
+                if done % 200 == 0:
+                    print(f"  {done:,}/{len(texts):,} texts, {len(found):,} rows", flush=True)
+    if saved:
+        _checkpoint(
+            saved, words=words, windows=windows, rows=found, done=done,
+            cap=args.control, complete=True,
+        )
+        print(f"evidence written to {saved}\n")
+    if truncated:
+        print(
+            f"WARNING: {truncated} window(s) filled the {COLLECT_LIMIT}-match collection "
+            f"limit -- the per-candidate bound needs raising",
+            file=sys.stderr,
+        )
+    _gate_table(found, list(ROW_FIELDS), words, windows)
+    return 0
+
+
+def _gate_table(found: list[tuple], fields: list[str], words: int, windows: int) -> None:
+    print(f"collected at {COLLECT}: {len(found):,} candidate matches, all of them false")
     print(f"over {windows:,} windows -- the opportunities PFA is a probability of\n")
     print(f"{'gate':34} {'false positives':>15} {'per 1,000 words':>16} {'PFA':>10}")
+    columns = _axis_columns(fields)
     for gate in CANDIDATES:
-        n = sum(1 for row in found if gate.admits(*row))
+        n = sum(1 for row in found if gate.admits(*(row[c] for c in columns)))
         print(
-            f"  {gate!s:32} {n:>15,} {n / words * 1000:>16.4f} "
+            f"  {gate!s:32} {n:>15,} {n / (words or 1) * 1000:>16.4f} "
             f"{n / (windows or 1):>10.6f}"
         )
-    return 0
 
 
 def main() -> int:
@@ -371,6 +580,17 @@ def main() -> int:
         help="instead, measure false positives over this many words of pre-Christian Greek",
     )
     parser.add_argument("--save", metavar="PATH", help="write/read the collected evidence")
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=max(1, (__import__("os").cpu_count() or 2) - 2),
+        help="processes for the control collection (default: all cores but two)",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="continue an incomplete --save checkpoint instead of refusing it",
+    )
     args = parser.parse_args()
     if args.control:
         return cmd_control(args)

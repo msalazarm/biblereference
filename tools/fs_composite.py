@@ -33,7 +33,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from calibrate_inflected import COLLECT, MARKS, axes, marks
+from calibrate_inflected import COLLECT, MARKS, ROW_FIELDS, full_row, marks
 
 from biblereference.composite import (
     BINS,
@@ -56,7 +56,10 @@ _DECIMATION = 50
 
 
 def true_axes(home: DataHome, sample: int) -> list[tuple]:
-    """The m-sample: every editor-marked quotation's axes against its named verse."""
+    """The m-sample: every editor-marked quotation's `ROW_FIELDS` row against its named
+    verse. `formula` reuses `mark.announced` -- `marks()` already judged it with the
+    recorded-offset-plus-fallback logic, and re-deriving it here would be a second
+    opinion pretending to be the first."""
     import sqlite3
 
     lexicon = Lexicon(home)
@@ -71,7 +74,7 @@ def true_axes(home: DataHome, sample: int) -> list[tuple]:
             (corpus, mark.book, mark.chapter, mark.verse),
         ).fetchone()
         if row:
-            out.append(axes(mark.quoted, str(row[0]), lexicon, weigh))
+            out.append(full_row(mark.quoted, str(row[0]), lexicon, weigh, mark.announced))
     return out
 
 
@@ -155,14 +158,14 @@ def main() -> int:
 
     home = DataHome()
     all_true = true_axes(home, args.sample)
-    m_fields = DEFAULT_ROW_FIELDS
+    m_fields = ROW_FIELDS
     m_columns = {name: index for index, name in enumerate(m_fields)}
 
     # Which fields the artifact carries: the collapsed v1 core, plus any §5.6 field both
     # samples measured. A field only one side holds cannot have an honest m/u ratio.
     fields = [
         f
-        for f in ("run", "chain", "bits", "formula", "rivalry")
+        for f in ("run", "chain", "bits", "offset_peak", "formula", "rivalry")
         if f in u_columns and f in m_columns
     ]
 
@@ -174,7 +177,7 @@ def main() -> int:
     held_rows = [all_true[i] for i in order[:held_count]]
     train_rows = [all_true[i] for i in order[held_count:]]
 
-    weights = field_weights(train_rows, false_rows, fields, m_columns)
+    weights = field_weights(train_rows, false_rows, fields, m_columns, u_columns)
     # u rows are scored through their own column map -- by name, never by position.
     u_scores = sorted(score_rows(false_rows, fields, u_columns, weights))
     held_scores = sorted(score_rows(held_rows, fields, m_columns, weights))

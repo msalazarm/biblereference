@@ -85,25 +85,28 @@ def field_weights(
     false_rows: Sequence[Sequence[float]],
     fields: Sequence[str],
     columns: Mapping[str, int],
+    false_columns: Mapping[str, int] | None = None,
 ) -> dict[str, list[float]]:
     """log₂(m/u) per field bin, Laplace-smoothed so an empty bin is a strong signal
     rather than an infinite one.
 
     ``columns`` maps each field to its position in the rows -- by name, never by a
     hard-coded index, because a transposed column here would be a calibrated-looking lie
-    in every score downstream.
+    in every score downstream. The two samples may lay their rows out differently -- an
+    old four-field u-file against six-field m rows -- so the false side may bring its
+    own map; omitted, it shares the true side's.
     """
+    theirs = columns if false_columns is None else false_columns
     out: dict[str, list[float]] = {}
     for field in fields:
         edges = BINS[field]
-        column = columns[field]
         size = len(edges) + 1
         m_counts = [0] * size
         u_counts = [0] * size
         for row in true_rows:
-            m_counts[bin_of(edges, row[column])] += 1
+            m_counts[bin_of(edges, row[columns[field]])] += 1
         for row in false_rows:
-            u_counts[bin_of(edges, row[column])] += 1
+            u_counts[bin_of(edges, row[theirs[field]])] += 1
         out[field] = [
             math.log2(
                 ((m_counts[i] + 0.5) / (len(true_rows) + size / 2))
