@@ -570,6 +570,11 @@ this is calibrated; nothing ships on the theory alone.
 >   read +29.81 raw; the same matches sit above it. Both refused citations keep their
 >   verdicts (Didache +14.7 accept, 1 Clement +12.6 review).
 >
+>   The artifact schema goes to **2** for this: a reader without the map computes a raw
+>   sum and would compare it against a threshold recorded in calibrated bits, mis-zoning
+>   every match in silence, so schema 1 is refused with that reason spelled out rather
+>   than half-read.
+>
 >   Two honest limits. The map is **flat past its end knots** — extrapolating a
 >   calibration invents evidence exactly where the sample ran out — so scores beyond the
 >   fitted range are reported at the ceiling rather than above it. And isotonic pooling
@@ -839,7 +844,7 @@ corpus and the golden set before its default changes anything.
 | 4 | **10** formula FN detector + stratified recall + POD/PFA reporting | measurement, not recall — steers everything after | none | ✅ unmatched-formula ledger + POD/PFA in fs_composite |
 | 5 | **2** quotation families | 34 misfire verdicts; doxology addresses; family-precision | none — reporting change | ✅ `family` reported; parallel-family index built |
 | 6 | **1** E-values + containment; spaced-seed experiment priced | defensible thresholds; conflation scoring; maybe a new axis | is itself the pricing tool | ✅ `e_value`/`containment`/`fragmentation`; spaced seeds measured **negative** (11–24 pts behind contiguous) and closed |
-| 6b | **5.6** Fellegi–Sunter composite (binning + counting over held data) | one calibrated weight over all axes; the three-zone rule | u measured exactly on the control corpus | ✅ artifact schema + loader + `Match.composite`; the 3M per-candidate u-file is cooking and re-prices it |
+| 6b | **5.6** Fellegi–Sunter composite (binning + counting over held data) | one calibrated weight over all axes; the three-zone rule | u measured exactly on the control corpus | ✅ **calibrated 2026-08-18** on 1.65M per-candidate control rows: accept +14.65 at zero control false links, ECE 0.66 bits after monotone recalibration (schema 2). Two of this section's own claims corrected there |
 | 6c | **5.5** sequential verification stage + offset-histogram statistic | the FP control the gates approximate | its own odds bar, priced end to end | ✅ `verified_odds` (opt-in `verify=`), offset histogram; v2 fields collect in the new u-file |
 | 7 | **6b** per-verse profiles (MSA over editions + family) | edition-variant dilution, structurally; free "which reading" output | none — attested readings only | ✅ profiles.sqlite (30,723 profiles); ROM 8:1 Byzantine chains 7 vs 0 |
 | 8 | **R** register scanning, instrumentation-first | span bounds; the only visibility into zero-overlap spans | strict: control-priced, default never until then | ✅ ledger v1 + MC max-scan null artifact + rolling Delta; default stays never |

@@ -41,7 +41,13 @@ __all__ = ["BINS", "Composite", "bin_of", "field_weights"]
 
 #: The artifact schema this module writes and reads. The major number breaks loading;
 #: growth that old readers can ignore does not bump it.
-SCHEMA: Final = "biblereference-composite/1"
+#:
+#: **2** because the recalibration is not growth an old reader can ignore: it changes
+#: what ``thresholds.upper`` *means*. A reader without :attr:`Composite.calibration`
+#: computes a raw summed weight and would compare it against a threshold recorded in
+#: calibrated bits -- silently mis-zoning every match. Refusing to load is the only
+#: honest behaviour there, and the major number is how this file says so.
+SCHEMA: Final = "biblereference-composite/2"
 
 #: Bin edges per field, half-open on the right, last bin unbounded. The decision region
 #: -- where the gates argue -- sits in single-unit bins; the tails are broad enough for
@@ -178,8 +184,14 @@ class Composite:
         schema = str(raw.get("schema", ""))
         if not schema.startswith("biblereference-composite/"):
             raise ValueError(f"not a composite artifact: schema {schema!r} in {path}")
-        if schema.split("/")[1].split(".")[0] != SCHEMA.split("/")[1]:
-            raise ValueError(f"composite artifact schema {schema!r} is not readable here")
+        major = schema.split("/")[1].split(".")[0]
+        if major != SCHEMA.split("/")[1]:
+            raise ValueError(
+                f"composite artifact schema {schema!r} is not readable here (this "
+                f"library reads {SCHEMA!r}). Schema 1 recorded thresholds in raw summed "
+                f"weight; schema 2 records them in calibrated bits, and reading one as "
+                f"the other mis-zones every match. Rebuild with tools/fs_composite.py."
+            )
         if int(raw["fold_version"]) != FOLD_VERSION:
             warnings.warn(
                 f"composite artifact was calibrated on fold {raw['fold_version']} and this "

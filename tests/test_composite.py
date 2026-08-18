@@ -272,3 +272,15 @@ def test_the_isotonic_fit_drops_unresolved_bins_and_enforces_order() -> None:
     # A bin with gold but no control is a bound, so it must not become a knot.
     lonely = calibration_knots([100.0] * 50, control, width=4.0)
     assert all(at < 90 for at, _ in lonely), "the unresolved high bin is dropped"
+
+
+def test_a_schema_1_artifact_is_refused_with_its_reason(tmp_path: Path) -> None:
+    """Schema 1 recorded thresholds in raw summed weight; schema 2 records them in
+    calibrated bits. A reader that took one for the other would mis-zone every match
+    silently, which is exactly what a major version exists to prevent."""
+    stale = artifact_dict()
+    stale["schema"] = "biblereference-composite/1"
+    path = tmp_path / "v1.json"
+    path.write_text(json.dumps(stale), "utf-8")
+    with pytest.raises(ValueError, match="mis-zones every match"):
+        Composite.load(path)
