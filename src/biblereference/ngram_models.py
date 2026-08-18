@@ -96,6 +96,18 @@ class NgramModel:
             return 0.0
         return self.count(gram, order) / total * 1_000_000
 
+    def top_grams(self, order: int, limit: int) -> list[tuple[str, int]]:
+        """The most frequent grams at this order, count-descending, ties broken by the
+        gram itself so two runs enumerate byte-identically."""
+        return [
+            (str(gram), int(count))
+            for gram, count in self._db.execute(
+                'SELECT fold, count FROM ngram WHERE author = ? AND "order" = ? '
+                "ORDER BY count DESC, fold LIMIT ?",
+                (self.author, order, limit),
+            )
+        ]
+
     def grams(self, text: str) -> list[str]:
         """The text as the model's own token stream: folded whole, split on space --
         exactly the convention the builders use, so a span a caller holds can be looked

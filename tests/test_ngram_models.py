@@ -121,3 +121,99 @@ def test_the_consumers_own_measurement_reproduces_through_the_reader() -> None:
     assert doxology > 10.0
     assert citation < 3.0
     assert doxology / max(citation, 0.1) > 5.0
+
+
+# -- Stratum R completion (V8): rolling Delta and the max-scan null ---------------------
+
+
+def test_top_grams_enumerate_deterministically(tmp_path: Path) -> None:
+    model = NgramModel(
+        build_model(tmp_path / "m.sqlite3", {(1, "και"): 50, (1, "δε"): 50, (1, "ο"): 90})
+    )
+    assert model.top_grams(1, 2) == [("ο", 90), ("δε", 50)], "count desc, ties by gram"
+
+
+def _delta_pair(tmp_path: Path) -> tuple[NgramModel, NgramModel]:
+    scripture = NgramModel(
+        build_model(
+            tmp_path / "s.sqlite3",
+            {(1, "και"): 100, (1, "δε"): 100},
+            tokens={n: 200 for n in range(1, 6)},
+        )
+    )
+    father = NgramModel(
+        build_model(
+            tmp_path / "f.sqlite3",
+            {(1, "και"): 100, (1, "δε"): 100, (1, "μεν"): 400},
+            tokens={n: 2_000 for n in range(1, 6)},
+        )
+    )
+    return scripture, father
+
+
+def test_delta_markers_come_from_shared_vocabulary(tmp_path: Path) -> None:
+    from biblereference.register import delta_markers
+
+    scripture, father = _delta_pair(tmp_path)
+    markers = delta_markers(scripture, father, limit=10)
+    assert "μεν" not in markers.words, "a gram scripture never saw cannot be a marker"
+    assert set(markers.words) == {"και", "δε"}
+    at = markers.words.index("και")
+    assert markers.scripture_rate[at] == pytest.approx(0.5)
+    assert markers.father_rate[at] == pytest.approx(0.05)
+
+
+def test_the_rolling_delta_signs_toward_the_nearer_profile(tmp_path: Path) -> None:
+    from biblereference.register import _rolling_delta, delta_markers
+
+    scripture, father = _delta_pair(tmp_path)
+    markers = delta_markers(scripture, father, limit=10)
+    scriptural = ["και", "δε"] * 6
+    fatherly = [f"π{i}" for i in range(11)] + ["και"]
+    assert _rolling_delta(scriptural, markers) > 0, "scripture-rate function words"
+    assert _rolling_delta(fatherly, markers) < 0, "father-rate function words"
+
+
+def test_spans_carry_the_delta_at_the_peak_window_only_when_asked(tmp_path: Path) -> None:
+    from biblereference.register import delta_markers
+
+    scripture_grams = {(3, f"σ{i} σ{i+1} σ{i+2}"): 20 for i in range(12)}
+    scripture_grams.update({(1, "και"): 100, (1, "δε"): 100})
+    scripture = NgramModel(build_model(tmp_path / "s.sqlite3", scripture_grams,
+                                       tokens={n: 1_000 for n in range(1, 6)}))
+    father = NgramModel(build_model(tmp_path / "f.sqlite3", {(1, "και"): 10, (1, "δε"): 10},
+                                    tokens={n: 100_000 for n in range(1, 6)}))
+    text = " ".join(f"π{i}" for i in range(24)) + " " + " ".join(f"σ{i}" for i in range(14))
+    bare = register_spans(text, scripture, father)
+    assert bare and all(s.delta is None for s in bare)
+    assert bare[0].to_dict()["delta"] is None
+    markers = delta_markers(scripture, father, limit=10)
+    opined = register_spans(text, scripture, father, markers=markers)
+    assert [s.at for s in opined] == [s.at for s in bare], "the second opinion moves nothing"
+    assert all(s.delta is not None for s in opined)
+
+
+def test_the_null_loader_rounds_documents_up_and_refuses_drift(tmp_path: Path) -> None:
+    import json
+
+    from biblereference.register import RegisterNull
+
+    artifact = {
+        "schema": "biblereference-register-null/1",
+        "fold_version": FOLD_VERSION,
+        "window": 12, "stride": 6, "order": 3, "seed": 0, "replicates": 400,
+        "bands": {"500": {"0.95": 30.0}, "2000": {"0.95": 38.0}},
+    }
+    path = tmp_path / "null.json"
+    path.write_text(json.dumps(artifact), "utf-8")
+    null = RegisterNull.load(path)
+    assert null.threshold(400, 0.95) == 30.0
+    assert null.threshold(501, 0.95) == 38.0, "rounding up is the conservative direction"
+    assert null.threshold(99_999, 0.95) == 38.0, "beyond the longest band: documented under-coverage"
+    assert null.exceeds(38.5, 2_000) and not null.exceeds(37.5, 2_000)
+    with pytest.raises(KeyError):
+        null.threshold(500, 0.5)
+    artifact["fold_version"] = FOLD_VERSION - 1
+    path.write_text(json.dumps(artifact), "utf-8")
+    with pytest.raises(ValueError, match="folds at"):
+        RegisterNull.load(path)
