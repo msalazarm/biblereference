@@ -494,3 +494,9 @@ def iter_anchors(path: Path) -> Iterator[tuple[str, str, int, int]]:
             "SELECT vrs, book, chapter, verse FROM profile ORDER BY book, chapter, verse"
         ):
             yield (str(vrs), str(book), int(chapter), int(verse))
+
+
+if __name__ == "__main__":  # pragma: no cover - the doctor's rebuild command
+    from .store import DataHome
+
+    build_profiles(DataHome(), report=print)

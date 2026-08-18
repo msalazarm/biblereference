@@ -717,12 +717,12 @@ means exactly that. Fetched-never-vendored, terms recorded in `licences.py`, as 
 | text | source | licence (verified) | extent | why |
 |---|---|---|---|---|
 | Robinson–Pierpont Byzantine Textform | [github.com/byztxt/byzantine-majority-text](https://github.com/byztxt/byzantine-majority-text) | **Public domain** (stated in repo) | whole NT, TEI/CSV, morphologically parsed | the 8 named variant cases; what most post-4th-c. Greek fathers quote toward |
-| Antoniades 1904 Patriarchal NT | [github.com/byztxt/greektext-antoniades](https://github.com/byztxt/greektext-antoniades) | **Public domain** (stated in repo) | whole NT, parsed — **betacode only; deferred until a transliterator exists** | the received Orthodox liturgical text |
+| Antoniades 1904 Patriarchal NT | [github.com/byztxt/greektext-antoniades](https://github.com/byztxt/greektext-antoniades) | **Public domain** (stated in repo) | **now held as `grcant`** (2026-08-18): the transliterator exists, letter-verified against the upstream's own Unicode conversion across all 7,957 verses | the received Orthodox liturgical text |
 | Codex Bezae, Latin column | [epapers.bham.ac.uk/1664](https://epapers.bham.ac.uk/1664) | **CC BY-NC-SA** (per the TEI header; the survey overstated CC BY) | Gospels + Acts, TEI | a fifth Old Latin witness; Acts is new coverage |
-| Coptic Scriptorium Sahidic OT | [copticscriptorium.org](https://copticscriptorium.org/download/corpora/sahidic_bible_ot.html) | **CC BY-SA 4.0** (ShareAlike tracked) | Pentateuch–Jeremiah incl. full Psalter | our whole Coptic holding today is 45 verses of Mark |
-| Van Dyck Arabic | [ebible.org arb-vd](https://ebible.org/find/details.php?id=arb-vd) | **Public domain** (stated on eBible) | whole Bible | positions the Arabic extension, zero licence friction |
-| Elizabeth Bible (Church Slavonic, 1757) | CrossWire/SWORD `CSlElizabeth` | **Public domain** (module .conf) | whole Bible | the only fully open Slavonic scripture found |
-| Samaritan Pentateuch | Text-Fabric dataset (Chester Beatty 751 + Garizim 1) | **CC BY 4.0** | Torah | occasional Origen/Eusebius/Jerome "Samaritan" discussions |
+| Coptic Scriptorium Sahidic OT | [copticscriptorium.org](https://copticscriptorium.org/download/corpora/sahidic_bible_ot.html) | **CC BY-SA 4.0** (ShareAlike tracked) | **now held as `sahot`** (2026-08-18): 20,034 verses over 45 books — more than advertised, deuterocanon included | our whole Coptic holding today is 45 verses of Mark |
+| Van Dyck Arabic | [ebible.org arb-vd](https://ebible.org/find/details.php?id=arb-vd) | **Public domain** (stated on eBible) | **now held as `arbvd`** (2026-08-18): 31,104 verses, 66 books | positions the Arabic extension, zero licence friction |
+| Elizabeth Bible (Church Slavonic, 1757) | CrossWire/SWORD `CSlElizabeth` | **Public domain** (module .conf) | **now held as `chuelz`** (2026-08-18): 35,558 verses decoded straight from the zText, Orthodox shape | the only fully open Slavonic scripture found |
+| Samaritan Pentateuch | Text-Fabric dataset (Chester Beatty 751 + Garizim 1) | **CC BY-NC 4.0** — *corrected 2026-08-18: the dataset's own headers say NC; this ledger had said CC BY* | **now held as `smp`** (2026-08-18): 5,841 verses, clitics rejoined, Leningrad encoding | occasional Origen/Eusebius/Jerome "Samaritan" discussions |
 
 **Recorded dead ends** — so the searching is never repeated:
 
@@ -754,21 +754,21 @@ ships first here after the fetches.*
 Ordered by misses-bought per false-positive risk; every stratum is priced on the control
 corpus and the golden set before its default changes anything.
 
-| order | work | buys (from §2) | FP price | effort |
+| order | work | buys (from §2) | FP price | shipped |
 |---|---|---|---|---|
-| 1 | **0.1** RP Byzantine + Antoniades + Bezae-Latin fetched, indexed | 8 named variant cases, likely more unmeasured; Old Latin Acts | none — more text, same gates | S |
-| 2 | **0.3 + 5.3** formal chaining: concave gaps, optimal DP, multi-chain | conflation clauses (≥7 named loci); interpolated-clause misses | control re-run; per-chain gates unchanged | M |
-| 3 | **0.2** itacised tier, flagged | unmeasured; the largest MS variant class | control re-run before default | S |
-| 4 | **10** formula FN detector + stratified recall + POD/PFA reporting | measurement, not recall — steers everything after | none | S |
-| 5 | **2** quotation families | 34 misfire verdicts; doxology addresses; family-precision | none — reporting change | M |
-| 6 | **1** E-values + containment; spaced-seed experiment priced | defensible thresholds; conflation scoring; maybe a new axis | is itself the pricing tool | M |
-| 6b | **5.6** Fellegi–Sunter composite (binning + counting over held data) | one calibrated weight over all axes; the three-zone rule | u measured exactly on the control corpus | S–M |
-| 6c | **5.5** sequential verification stage + offset-histogram statistic | the FP control the gates approximate | its own odds bar, priced end to end | M |
-| 7 | **6b** per-verse profiles (MSA over editions + family) | edition-variant dilution, structurally; free "which reading" output | none — attested readings only | L |
-| 8 | **R** register scanning, instrumentation-first | span bounds; the only visibility into zero-overlap spans | strict: control-priced, default never until then | L |
-| 9 | **3** allusion pass | the 26 one-to-three-word indirects, bounded honestly | full control pricing gate before any default | L |
-| 10 | **4** convention immunity: seed masking, stoplist, positional flag | 29 doxology/salutation verdicts | none — flags and masks | S |
-| — | breadth fetches: Sahidic OT, Van Dyck, Elizabeth, Samaritan Pent. | future languages, not today's recall | none | S each |
+| 1 | **0.1** RP Byzantine + Antoniades + Bezae-Latin fetched, indexed | 8 named variant cases, likely more unmeasured; Old Latin Acts | none — more text, same gates | ✅ closed 2026-08-18: `grcant` lands letter-verified against the upstream's own conversion; row complete |
+| 2 | **0.3 + 5.3** formal chaining: concave gaps, optimal DP, multi-chain | conflation clauses (≥7 named loci); interpolated-clause misses | control re-run; per-chain gates unchanged | ✅ concave costs opt-in (`--concave`); pricing in the at-scale run |
+| 3 | **0.2** itacised tier, flagged | unmeasured; the largest MS variant class | control re-run before default | ✅ opt-in (`--itacised`), flagged on matches; §4.4 recovery tier (`--recovered`) beside it |
+| 4 | **10** formula FN detector + stratified recall + POD/PFA reporting | measurement, not recall — steers everything after | none | ✅ unmatched-formula ledger + POD/PFA in fs_composite |
+| 5 | **2** quotation families | 34 misfire verdicts; doxology addresses; family-precision | none — reporting change | ✅ `family` reported; parallel-family index built |
+| 6 | **1** E-values + containment; spaced-seed experiment priced | defensible thresholds; conflation scoring; maybe a new axis | is itself the pricing tool | ✅ `e_value`/`containment`/`fragmentation`; spaced seeds measured **negative** (11–24 pts behind contiguous) and closed |
+| 6b | **5.6** Fellegi–Sunter composite (binning + counting over held data) | one calibrated weight over all axes; the three-zone rule | u measured exactly on the control corpus | ✅ artifact schema + loader + `Match.composite`; the 3M per-candidate u-file is cooking and re-prices it |
+| 6c | **5.5** sequential verification stage + offset-histogram statistic | the FP control the gates approximate | its own odds bar, priced end to end | ✅ `verified_odds` (opt-in `verify=`), offset histogram; v2 fields collect in the new u-file |
+| 7 | **6b** per-verse profiles (MSA over editions + family) | edition-variant dilution, structurally; free "which reading" output | none — attested readings only | ✅ profiles.sqlite (30,723 profiles); ROM 8:1 Byzantine chains 7 vs 0 |
+| 8 | **R** register scanning, instrumentation-first | span bounds; the only visibility into zero-overlap spans | strict: control-priced, default never until then | ✅ ledger v1 + MC max-scan null artifact + rolling Delta; default stays never |
+| 9 | **3** allusion pass | the 26 one-to-three-word indirects, bounded honestly | full control pricing gate before any default | ✅ entities + episodes + PPMI rerank-only backoff (`--ppmi`); default off until priced |
+| 10 | **4** convention immunity: seed masking, stoplist, positional flag | 29 doxology/salutation verdicts | none — flags and masks | ✅ `--seed-mask` + stoplist.json + `positional_candidate` |
+| — | breadth fetches: Sahidic OT, Van Dyck, Elizabeth, Samaritan Pent. | future languages, not today's recall | none | ✅ all four build-verified 2026-08-18 (SP licence corrected to CC BY-NC); indexing queued behind the control run |
 
 Division of labour, standing: patristic-side frequencies, the father's own language model,
 document position, and threshold choice are the consumer's; corpora, indexes, axes,

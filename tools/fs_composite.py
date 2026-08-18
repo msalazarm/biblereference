@@ -278,10 +278,54 @@ def main() -> int:
         false_hits = sum(1 for s in u_scores if s >= threshold)
         say(f"| {threshold:+d} | {100 * pod:5.1f}% | {false_hits / windows:.6f} |")
     say("")
+    say("## Calibration reliability\n")
+    say(
+        "Does a reported weight behave like its magnitude? A composite of +10 bits "
+        "*claims* the evidence is 2^10 more likely under m than u; the observed column "
+        "is what the held-out data actually paid. Cllr is the forensic summary "
+        "(0 = perfect, 1 = useless); the ECE line is the count-weighted mean gap.\n"
+    )
+    if held_scores and u_scores:
+        cllr = 0.5 * (
+            sum(math.log2(1 + 2**-s) for s in held_scores) / len(held_scores)
+            + sum(math.log2(1 + 2**min(s, 60)) for s in u_scores) / len(u_scores)
+        )
+        say(f"Cllr = **{cllr:.3f}**\n")
+        say("| score bin | held-out m | u (control) | observed bits | claimed bits | gap |")
+        say("|---|---|---|---|---|---|")
+        low = math.floor(min(held_scores[0], u_scores[0]) / 4) * 4
+        high = math.ceil(max(held_scores[-1], u_scores[-1]))
+        gaps: list[tuple[int, float]] = []
+        for edge in range(low, high, 4):
+            m_count = sum(1 for s in held_scores if edge <= s < edge + 4)
+            u_count = sum(1 for s in u_scores if edge <= s < edge + 4)
+            if not m_count and not u_count:
+                continue
+            observed = math.log2(
+                ((m_count + 0.5) / (len(held_scores) + 1))
+                / ((u_count + 0.5) / (len(u_scores) + 1))
+            )
+            claimed = edge + 2.0
+            gap = observed - claimed
+            gaps.append((m_count + u_count, abs(gap)))
+            flag = " ⚠" if abs(gap) > 2 and m_count + u_count >= 10 else ""
+            say(
+                f"| {edge:+d}..{edge + 4:+d} | {m_count} | {u_count:,} | "
+                f"{observed:+.1f} | {claimed:+.1f} | {gap:+.1f}{flag} |"
+            )
+        weighted = sum(n * g for n, g in gaps) / (sum(n for n, _ in gaps) or 1)
+        say(f"\nECE (count-weighted mean |gap|) = **{weighted:.2f} bits**\n")
+    say(
+        "*`offset_peak` note: the m-side measures it on the editor-marked span, the "
+        "live scan on its own matched window -- a train/serve skew that flattens the "
+        "field's weight rather than inflating it; stated so nobody reads the weight "
+        "as an upper bound.*\n"
+    )
     say(
         "*The artifact is the interface: `Searcher(composite=...)` reports `composite` "
         "and `e_value` on every graded match, and nothing here changes what any gate "
-        "admits.*"
+        "admits. Under a v2 artifact the calibrated decision statistic is "
+        "`verified_odds` -- the composite plus the verification stage's terms.*"
     )
     text = "\n".join(lines)
     if args.report:

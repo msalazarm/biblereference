@@ -485,3 +485,9 @@ class Entities:
     @property
     def verse_count(self) -> int:
         return self._verse_count if self._db is not None else 0
+
+
+if __name__ == "__main__":  # pragma: no cover - the doctor's rebuild command
+    from .store import DataHome
+
+    build_entities(DataHome(), report=print)

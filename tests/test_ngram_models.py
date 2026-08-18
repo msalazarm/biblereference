@@ -209,7 +209,9 @@ def test_the_null_loader_rounds_documents_up_and_refuses_drift(tmp_path: Path) -
     null = RegisterNull.load(path)
     assert null.threshold(400, 0.95) == 30.0
     assert null.threshold(501, 0.95) == 38.0, "rounding up is the conservative direction"
-    assert null.threshold(99_999, 0.95) == 38.0, "beyond the longest band: documented under-coverage"
+    assert null.threshold(99_999, 0.95) == 38.0, (
+        "beyond the longest band: documented under-coverage"
+    )
     assert null.exceeds(38.5, 2_000) and not null.exceeds(37.5, 2_000)
     with pytest.raises(KeyError):
         null.threshold(500, 0.5)

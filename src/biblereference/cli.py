@@ -888,6 +888,43 @@ _DERIVED: Final = (
     ("parallel families", "parallel_family", "biblereference parallels", ""),
 )
 
+#: The layers that live in their own files beside the corpus database -- writable while
+#: a consumer's sweep freezes the corpus, and each rebuildable by the command written
+#: here. ``(label, filename under db/, count query or None for artifacts, command)``.
+_STANDALONE: Final = (
+    ("entity index", "entities.sqlite", "SELECT COUNT(*) FROM entity_verse",
+     "python -m biblereference.entities"),
+    ("verse profiles", "profiles.sqlite", "SELECT COUNT(*) FROM profile",
+     "python -m biblereference.profiles"),
+    ("scripture n-grams", "ngrams-scripture-grc.sqlite3", "SELECT COUNT(*) FROM ngram",
+     "python tools/scripture_ngrams.py"),
+    ("ppmi vectors", "ppmi-grc.sqlite3", "SELECT COUNT(*) FROM vector",
+     "python tools/ppmi_vectors.py --save ..."),
+    ("register null", "register-null-grc.json", None,
+     "python tools/register_null.py --father ... --save ..."),
+    ("composite calibration", "composite-grc.json", None,
+     "python tools/fs_composite.py --control-evidence ... --weights ..."),
+)
+
+
+def _standalone_state(home: DataHome) -> list[tuple[str, int, str]]:
+    """Each standalone layer with its rows (JSON artifacts count 1 when present)."""
+    out: list[tuple[str, int, str]] = []
+    for label, filename, query, command in _STANDALONE:
+        path = home.root / "db" / filename
+        count = 0
+        if path.exists():
+            if query is None:
+                count = -1
+            else:
+                try:
+                    with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as db:
+                        count = int(db.execute(query).fetchone()[0])
+                except sqlite3.OperationalError:
+                    count = 0
+        out.append((label, count, command))
+    return out
+
 
 def _derived_state(home: DataHome) -> list[tuple[str, int, str, str]]:
     """Each derived layer with the rows it holds. Absent tables count zero, not raise:
@@ -912,6 +949,14 @@ def _say_derived(home: DataHome) -> None:
             _say(f"  {label:18} {count:>10,} rows" + (f"  ({note})" if note else ""))
         else:
             _say(f"  {label:18} {'absent':>10}   build it with `{command}`")
+    _say("\nstandalone layers (their own files under db/):")
+    for label, count, command in _standalone_state(home):
+        if count < 0:
+            _say(f"  {label:22} {'present':>10}")
+        elif count:
+            _say(f"  {label:22} {count:>10,} rows")
+        else:
+            _say(f"  {label:22} {'absent':>10}   build it with `{command}`")
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
