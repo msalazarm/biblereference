@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import itertools
 import multiprocessing
+import re
 import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import Future, ProcessPoolExecutor
+from functools import partial
 from typing import Any, Final
 
 from .library import library_stamp
@@ -206,13 +208,25 @@ def job_scan(documents: list[dict[str, Any]], options: dict[str, Any]) -> dict[s
     failed: dict[str, str] = {}
     for document in documents:
         name = str(document.get("id"))
+        part = document.get("__part")
+        offset = int(document.get("__offset", 0))
+        key = name if part is None else f"{name}\x00{part}"
         try:
             text = document["text"]
             if not isinstance(text, str):
                 raise TypeError(f"text must be a string, not {type(text).__name__}")
-            found[name] = [m.to_dict() for m in searcher.scan(text)] if text.strip() else []
+            matches = [m.to_dict() for m in searcher.scan(text)] if text.strip() else []
+            if offset:
+                # A shard's spans are shard-relative; the caller holds the whole
+                # document, so they are rebased before anyone can point at the wrong
+                # words.
+                for match in matches:
+                    if match.get("span"):
+                        a, b = match["span"]
+                        match["span"] = [a + offset, b + offset]
+            found[key] = matches
         except Exception as exc:
-            failed[name] = f"{type(exc).__name__}: {exc}"
+            failed[key] = f"{type(exc).__name__}: {exc}"
     return {"found": found, "failed": failed}
 
 
@@ -230,6 +244,106 @@ BATCH_TASKS: Final[dict[str, Callable[..., Any]]] = {"scan": job_scan}
 #: below already handles that -- but the ceiling on how long a reader waits when a request
 #: lands while a sweep is running. See :meth:`Jobs.submit_batch`.
 _CHUNK_CEILING: Final = 12
+
+#: A document longer than this many whitespace tokens is sharded into overlapping
+#: segments before chunking, because the unit of parallelism is the document: the
+#: consumer measured a 7,859-passage witness submitted as one text holding one worker
+#: for hours while twenty-nine sat idle. The overlap is generous against any observed
+#: match span, so a quotation straddling a cut is found whole in at least one shard and
+#: the duplicate is dropped at the seam.
+_SHARD_TOKENS: Final = 5_000
+_SHARD_OVERLAP: Final = 200
+
+_TOKEN_SPAN_RE: Final = re.compile(r"\S+")
+
+
+def _sharded(work: list[Any]) -> tuple[list[Any], dict[str, int]]:
+    """The work list with oversized documents split, and how many parts each id has.
+
+    Items produced here carry ``__part``/``__offset``; unsharded documents pass through
+    untouched, so the common case costs nothing and pays nothing.
+    """
+    items: list[Any] = []
+    parts: dict[str, int] = {}
+    for document in work:
+        text = document.get("text") if isinstance(document, dict) else None
+        name = str(document.get("id")) if isinstance(document, dict) else ""
+        if not isinstance(text, str):
+            items.append(document)
+            continue
+        spans = [m.span() for m in _TOKEN_SPAN_RE.finditer(text)]
+        if len(spans) <= _SHARD_TOKENS:
+            items.append(document)
+            continue
+        step = _SHARD_TOKENS - _SHARD_OVERLAP
+        count = 0
+        for start in range(0, len(spans), step):
+            end = min(start + _SHARD_TOKENS, len(spans))
+            a, b = spans[start][0], spans[end - 1][1]
+            items.append(
+                {"id": name, "text": text[a:b], "__part": count, "__offset": a}
+            )
+            count += 1
+            if end >= len(spans):
+                break
+        parts[name] = count
+    return items, parts
+
+
+def _assemble(
+    merged: dict[str, Any], parts: dict[str, int]
+) -> dict[str, Any]:
+    """Shard results folded back under their documents' own ids.
+
+    Duplicates at the seams -- the same passage found by both sides of an overlap --
+    are dropped by exact (passage, span), then a same-passage match wholly inside
+    another's span goes too. A document with any failed part fails whole: a silently
+    partial answer is the one thing worse than no answer.
+    """
+    found: dict[str, Any] = {}
+    failed: dict[str, str] = {}
+    pieces: dict[str, dict[int, list[Any]]] = {}
+    for key, matches in merged["found"].items():
+        if "\x00" in key:
+            name, _, part = key.partition("\x00")
+            pieces.setdefault(name, {})[int(part)] = matches
+        else:
+            found[key] = matches
+    for key, error in merged["failed"].items():
+        name = key.partition("\x00")[0]
+        failed.setdefault(name, error)
+    for name, by_part in pieces.items():
+        if name in failed:
+            continue
+        collected: list[Any] = []
+        seen: set[tuple[str, tuple[int, int] | None]] = set()
+        for part in sorted(by_part):
+            for match in by_part[part]:
+                span = tuple(match["span"]) if match.get("span") else None
+                key2 = (str(match.get("passage")), span)
+                if key2 in seen:
+                    continue
+                seen.add(key2)
+                collected.append(match)
+        # A seam can also yield the same passage with a truncated span: keep the
+        # larger claim, drop the one it contains.
+        kept: list[Any] = []
+        for match in collected:
+            span = match.get("span")
+            contained = span is not None and any(
+                other.get("passage") == match.get("passage")
+                and other.get("span") is not None
+                and other is not match
+                and other["span"][0] <= span[0]
+                and span[1] <= other["span"][1]
+                and (other["span"][0], other["span"][1]) != (span[0], span[1])
+                for other in collected
+            )
+            if not contained:
+                kept.append(match)
+        kept.sort(key=lambda match: match.get("span") or [0, 0])
+        found[name] = kept
+    return {"found": found, "failed": failed}
 
 
 class Jobs:
@@ -326,17 +440,37 @@ class Jobs:
             self._settle(record["id"], {"found": {}, "failed": {}})
             return record
 
+        # Oversized documents are sharded first: the unit of parallelism is the item,
+        # and a witness submitted as one enormous text held one worker for hours while
+        # the rest of the machine idled. Progress stays denominated in the caller's own
+        # documents -- a part completing is not news; a document completing is.
+        items, parts = _sharded(work)
+
         # Bounded above by `_CHUNK_CEILING` as well as by the worker count. The share-based
         # size alone is what a sweep of forty thousand documents wants -- fewer, fatter
         # futures -- but a fat chunk is also how long an interactive request waits when it
         # arrives mid-sweep, since a worker finishes its chunk before taking anything else.
         # A dozen documents is a few seconds; the whole sweep would be hours.
-        size = max(1, min(_CHUNK_CEILING, len(work) // (self._workers * 4) or 1))
-        chunks = [work[i : i + size] for i in range(0, len(work), size)]
+        size = max(1, min(_CHUNK_CEILING, len(items) // (self._workers * 4) or 1))
+        chunks = [items[i : i + size] for i in range(0, len(items), size)]
         remaining = {"chunks": len(chunks)}
         merged: dict[str, Any] = {"found": {}, "failed": {}}
 
-        def landed(future: Future[Any]) -> None:
+        def documents_done() -> int:
+            names_found: dict[str, int] = {}
+            failed_names = {key.partition("\x00")[0] for key in merged["failed"]}
+            for key in merged["found"]:
+                name = key.partition("\x00")[0]
+                names_found[name] = names_found.get(name, 0) + 1
+            done = len(failed_names)
+            for name, landed_parts in names_found.items():
+                if name in failed_names:
+                    continue
+                if landed_parts >= parts.get(name, 1):
+                    done += 1
+            return done
+
+        def landed(index: int, future: Future[Any]) -> None:
             with self._lock:
                 job = self._jobs[record["id"]]
                 try:
@@ -344,17 +478,25 @@ class Jobs:
                     merged["found"].update(piece["found"])
                     merged["failed"].update(piece["failed"])
                 except Exception as exc:
-                    merged["failed"][f"<chunk {remaining['chunks']}>"] = (
-                        f"{type(exc).__name__}: {exc}"
-                    )
-                job["done"] = len(merged["found"]) + len(merged["failed"])
+                    # The whole chunk died: every document in it failed, by its own
+                    # name -- one anonymous "<chunk N>" entry undercounted the failures
+                    # and its label was the countdown value at failure time, which two
+                    # runs of the same corpus need not agree on.
+                    for item in chunks[index]:
+                        name = str(item.get("id")) if isinstance(item, dict) else str(item)
+                        merged["failed"].setdefault(
+                            name, f"{type(exc).__name__}: {exc}"
+                        )
+                job["done"] = documents_done()
                 remaining["chunks"] -= 1
-                done = remaining["chunks"] == 0
-            if done:
-                self._settle(record["id"], merged)
+                finished = remaining["chunks"] == 0
+            if finished:
+                self._settle(record["id"], _assemble(merged, parts))
 
-        for chunk in chunks:
-            self._pool.submit(BATCH_TASKS[task], chunk, options).add_done_callback(landed)
+        for index, chunk in enumerate(chunks):
+            self._pool.submit(BATCH_TASKS[task], chunk, options).add_done_callback(
+                partial(landed, index)
+            )
         return record
 
     def _settle(self, job_id: str, result: Any) -> None:
