@@ -510,9 +510,24 @@ recall gain at unchanged FP semantics~~ — and the multi-chain output is what 4
 > at recall 227 → 228. The one apparent regression, `chain>=6 bits>=35` at +4, sits
 > inside noise on a count of twenty.
 >
-> This is not the usual trade, and the reason is the redefinition above rather than any
-> widening: a link that cannot pay for its own slack is never taken, so junk links become
-> neither candidates nor chains. **The default is not flipped here** — that is the
+> **The mechanism, finally stated correctly (2026-08-18, after the consumer's windowed
+> table).** Calling this a tightening was half of it. The concave arm's caps are 24 text-
+> side and 6 verse-side against the classic walls' 8 and 2 — **three times further on both
+> axes** — with the cost function replacing the wall. So it neither loosens nor tightens:
+> it *reallocates*. Evidence that was dense but unreachable becomes reachable; evidence
+> that was reachable but weak is refused. Didache 14.3 conflates Malachi 1:11 and 1:14
+> across a skip no 8/2 wall can cross: classic finds **nothing**, concave finds MAL 1:11 at
+> chain 13 and 48 bits. That is this section's original promise working as written, and it
+> was invisible for as long as we only looked for what got worse — including the 28 chains
+> in our own table that got *longer*, which we reported as an aside and read as noise.
+>
+> The consumer's Boyce table both ways, their instrument, current index, shipped gate:
+> classic 77/209 with 3 errors, concave 76/209 with 1. One citation net, two false
+> positives gone — and a redistribution the net hides entirely: 1 Clement −2, Polycarp −2,
+> **Didache +3**. A reallocating switch does not produce a clean frontier, so it must be
+> swept per work and per grade rather than chosen.
+>
+> **The default is not flipped here** — that is the
 > consumer's call, because an axis quietly changing meaning under gates they calibrated
 > is exactly what this project refuses to do to them. Two things must follow a flip when
 > it comes: the gate union wants one re-derivation on the concave control file, and
