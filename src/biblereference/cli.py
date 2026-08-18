@@ -367,6 +367,33 @@ def cmd_parallels(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_entities(args: argparse.Namespace) -> int:
+    """Fetch and build the proper-noun and episode index. See :mod:`biblereference.entities`.
+
+    Its two sources are indexes rather than scripture, so they are deliberately absent
+    from the corpus registry `fetch --source` resolves against -- both carry a `build`
+    that refuses, because a proper-noun list is not a corpus. That left them with no
+    command at all and the entity index unbuildable from a clean checkout without hand-
+    written Python, which is the derivable-from-zero promise broken in a quiet way. This
+    is the same shape as `parallels`, for the same reason.
+    """
+    from .entities import THEOGRAPHIC, TIPNR, build_entities
+    from .fetch import fetch_source
+
+    home = _home(args)
+    for source in (TIPNR, THEOGRAPHIC):
+        _say(f"{source.label}")
+        _say(f"  terms: {source.license}")
+        fetch_source(source, home, report=_say, force=args.force)
+    result = build_entities(home, report=_say)
+    _say(
+        f"\n{result.entities:,} entities, {result.forms:,} surface forms, "
+        f"{result.references:,} references indexed"
+        + (f"; {result.unconvertible:,} unconvertible" if result.unconvertible else "")
+    )
+    return 0
+
+
 def cmd_scan(args: argparse.Namespace) -> int:
     """Find every quotation in a document, one JSONL record each."""
     home = _home(args)
@@ -1458,6 +1485,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="download again even if already archived"
     )
     parallels.set_defaults(func=cmd_parallels)
+
+    entities = subparsers.add_parser(
+        "entities",
+        help="fetch and build the proper-noun and narrative-episode index",
+        description="Downloads TIPNR (Tyndale's individualised proper nouns, CC BY) and "
+        "Theographic's people/places/events tables (CC BY-SA), and builds "
+        "`entities.sqlite`: every biblical proper noun with everywhere it stands, kept "
+        "per *individual* rather than per name, plus the narrative events that span "
+        "chapters. What the allusion pass runs on.",
+    )
+    entities.add_argument(
+        "--force", action="store_true", help="download again even if already archived"
+    )
+    entities.set_defaults(func=cmd_entities)
 
     passage = subparsers.add_parser(
         "passage",

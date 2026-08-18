@@ -227,3 +227,16 @@ def test_the_real_index_holds_a_cross_chapter_episode() -> None:
     assert ("Sodom Destroyed", "GEN", 18, 19) in spans, (
         "Genesis 18-19 is one story, and only the episode index can say so"
     )
+
+
+def test_the_index_has_a_command_of_its_own() -> None:
+    """The gap another reader found: TIPNR and Theographic are indexes, not scripture, so
+    they are absent from the registry `fetch --source` resolves against and both carry a
+    `build` that refuses. Correct -- and it left the entity index with no CLI route at
+    all, so a clean checkout could not build it without hand-written Python. That is the
+    derivable-from-zero promise broken quietly, which is the worst way."""
+    from biblereference.cli import build_parser
+
+    parsed = build_parser().parse_args(["entities"])
+    assert parsed.func.__name__ == "cmd_entities"
+    assert parsed.force is False
