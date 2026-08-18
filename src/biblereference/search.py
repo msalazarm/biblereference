@@ -1878,6 +1878,7 @@ class Searcher:
         patristic_model: str | Path | None = None,
         seed_mask: bool = False,
         recovered: bool = False,
+        ppmi: bool = False,
         min_grade: str | None = None,
         gates: Sequence[Gate] | None = None,
         min_lemma_run: int | None = None,
@@ -1977,6 +1978,20 @@ class Searcher:
         self._composite = (
             Composite.load(composite) if isinstance(composite, (str, Path)) else composite
         )
+        #: PPMI soft-cosine backoff for the allusion pass (see `ppmi.py`). Opt-in, and
+        #: asking for it without the artifact is an error at construction -- a backoff
+        #: that silently scores zero everywhere would look like a measurement.
+        self._ppmi = None
+        if ppmi:
+            from .ppmi import PpmiVectors
+
+            vectors = PpmiVectors(home.root / "db" / "ppmi-grc.sqlite3")
+            if not vectors.held:
+                raise ValueError(
+                    "ppmi=True needs the vector artifact; build it with "
+                    "tools/ppmi_vectors.py"
+                )
+            self._ppmi = vectors
         #: The explicit second look per candidate (see `verification.py`). Opt-in -- it
         #: costs a lexicon pass per match -- and meaningless without the artifact that
         #: holds its likelihood tables, which is why asking for one without the other is
@@ -2927,20 +2942,27 @@ class Searcher:
                 continue
             char_span = (cluster[0][1], cluster[-1][2])
             gesture = text[char_span[0] : char_span[1]]
-            scored: list[tuple[float, Shaped]] = []
+            # Rank may carry the PPMI backoff -- capped at the tie window, so it can
+            # reorder near-equals and nothing else -- while the score a match reports
+            # as `bits` stays the raw entity-plus-lemma evidence.
+            scored: list[tuple[float, float, Shaped]] = []
             for candidate in candidates:
                 entity_bits = sum(
                     math.log2(index.verse_count / max(index.verses_of(entity), 1))
                     for entity in candidate[6]
                 )
-                lemma_bits = self._shared_lemma_bits(gesture, candidate)
-                scored.append((entity_bits + lemma_bits, candidate))
-            scored.sort(key=lambda pair: -pair[0])
-            best_score = scored[0][0]
-            ties = [pair for pair in scored if best_score - pair[0] <= _TIE_BITS]
-            ties.sort(key=lambda pair: (pair[1][1] not in quoted_books, -pair[0]))
-            winner_score, winner = ties[0]
-            losers = [c for _, c in ties[1:]] + [c for score, c in scored[len(ties):][:3]]
+                lemma_bits, mine, theirs = self._lemma_evidence(gesture, candidate)
+                score = entity_bits + lemma_bits
+                rank = score
+                if self._ppmi is not None:
+                    rank += _TIE_BITS * self._soft_backoff(mine, theirs)
+                scored.append((rank, score, candidate))
+            scored.sort(key=lambda row: -row[0])
+            best_rank = scored[0][0]
+            ties = [row for row in scored if best_rank - row[0] <= _TIE_BITS]
+            ties.sort(key=lambda row: (row[2][1] not in quoted_books, -row[0]))
+            _, winner_score, winner = ties[0]
+            losers = [c for _, _, c in ties[1:]] + [c for _, _, c in scored[len(ties):][:3]]
             vrs, book, c1, v1, c2, v2, names, episode = winner
             grade = (
                 "reference"
@@ -2976,23 +2998,25 @@ class Searcher:
         out.sort(key=lambda m: -m.bits)
         return out[:limit]
 
-    def _shared_lemma_bits(
+    def _lemma_evidence(
         self,
         gesture: str,
         candidate: tuple[str, str, int, int, int, int, frozenset[str], str | None],
-    ) -> float:
+    ) -> tuple[float, frozenset[str], frozenset[str]]:
         """Rare-lemma overlap between the gesture and the candidate passage's own text,
-        in bits -- the (b) term of the design's retrieval, using the surprisal machinery
-        that already exists. Zero where no lexicon serves the language."""
+        in bits, plus both sides' lemma sets for the PPMI backoff -- the (b) and (c)
+        terms of the design's retrieval share one read. Zero and empty where no lexicon
+        serves the language."""
+        nothing = (0.0, frozenset[str](), frozenset[str]())
         vrs, book, c1, v1, c2, v2 = candidate[:6]
         language = next(
             (m.language for m in self._corpora.values() if m.versification == vrs), ""
         )
         if language not in LEMMA_LANGUAGES:
-            return 0.0
+            return nothing
         corpora = [c for c, m in self._corpora.items() if m.versification == vrs]
         if not corpora:
-            return 0.0
+            return nothing
         marks = ",".join("?" * len(corpora))
         rows = self._connection.execute(
             f"SELECT text FROM verse WHERE corpus IN ({marks}) AND book=? "
@@ -3002,14 +3026,33 @@ class Searcher:
             (*corpora, book, c1, c1, v1, c2, c2, v2),
         ).fetchall()
         if not rows:
-            return 0.0
+            return nothing
         lexicon, weights = self._lemma_tools(language)
         weigh = weights.of(language)
         mine = lemma_readings(_tokens(gesture, language), language, lexicon)
         theirs = lemma_readings(
             _tokens(" ".join(str(r[0]) for r in rows), language), language, lexicon
         )
-        return sum(weigh(lemma) for lemma in set(shared_lemmas(mine, theirs)))
+        bits = sum(weigh(lemma) for lemma in set(shared_lemmas(mine, theirs)))
+        flat_mine = frozenset().union(*mine) if mine else frozenset[str]()
+        flat_theirs = frozenset().union(*theirs) if theirs else frozenset[str]()
+        return (bits, flat_mine, flat_theirs)
+
+    def _soft_backoff(self, mine: frozenset[str], theirs: frozenset[str]) -> float:
+        """The strongest soft pairing between an unshared gesture lemma and the
+        candidate's text, as cosine in [0, 1]: one good synonym pair -- the father's
+        σκάφος for the verse's πλοῖον -- is the signal, and a sum over pairs would
+        reward length instead. Exact overlaps are excluded; they are already priced
+        in bits."""
+        assert self._ppmi is not None
+        unshared = mine - theirs
+        others = theirs - mine
+        if not unshared or not others:
+            return 0.0
+        return max(
+            (self._ppmi.similarity(ours, other) for ours in unshared for other in others),
+            default=0.0,
+        )
 
     def _book_end(self, vrs: str, book: str) -> tuple[int, int]:
         """The last verse this numbering gives the book, from the verses actually held."""
@@ -3125,7 +3168,17 @@ class Searcher:
         """
         if self._composite is None or not self._inflected:
             return (None, None)
-        score = self._composite.score(match.run, match.lemma_run, match.chain, match.bits)
+        # `formula` is offered only where the match can honestly know it: a scan match
+        # (`quoted` filled) saw its own announcement context; a bare search() match saw
+        # a caller's string with no context at all, and None is what "not offered"
+        # means to a v2 artifact. A v1 artifact ignores the keyword either way.
+        score = self._composite.score(
+            match.run,
+            match.lemma_run,
+            match.chain,
+            match.bits,
+            formula=bool(match.formula) if match.quoted else None,
+        )
         return (score, self._composite.e_value(score, windows))
 
     def _sweep(
