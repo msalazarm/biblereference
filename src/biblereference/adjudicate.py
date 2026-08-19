@@ -130,6 +130,12 @@ WITNESSES: Mapping[str, Sequence[tuple[str, str]]] = {
     "lxx": (("brenton", "en"), ("rahlfs", "grc"), ("swete", "grc")),
     "vul": (("dra", "en"), ("latvuc", "la")),
     "nvl": (("novavulgata", "la"),),
+    # The Elizabeth Bible, and the second registry it has to be named in. `build_work`
+    # asks COVERAGE_WITNESSES which verses a same-language witness can reach, but `_task`
+    # asks *this* map for the text itself -- so adding rso to the first alone sent every
+    # Slavonic verse to "unreachable" and the run reported a clean 46,757-verse gap phase
+    # containing none of them. Uniformly absent, no error: the day's third instance.
+    "rso": (("chuelz", "chu"),),
 }
 
 #: Corpora that follow the numbering of the system they speak for, as a matter of textual
