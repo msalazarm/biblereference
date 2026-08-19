@@ -260,6 +260,20 @@ def control_text(cap: int) -> tuple[list[str], int]:
         wid: work
         for wid, work in db.execute("SELECT id, work FROM witness WHERE language = 'grc'")
     }
+    #: Textgroup id -> the person, where two catalogues file one author twice. The cap
+    #: below counts per *person*, not per id, because it cannot otherwise see them: the
+    #: consumer capped a Latin control at 6% per id and Cicero still held 9.8%, as
+    #: `phi0474` in Perseus and `cc12311` in Corpus Corporum. Greek here happens to be
+    #: safe -- 256 of its 259 control textgroups are TLG, one catalogue, so no author is
+    #: filed twice -- but Latin mixes phi, tlg, stoa and cc, and the same cap would be
+    #: just as blind. Sourced from the consumer's own registry rather than re-derived.
+    people: dict[str, str] = {}
+    for name in ("authors.merged.json", "authors.merged-manual.json"):
+        path = Path.home() / "churchfathers/src/churchfathers/data" / name
+        if path.exists():
+            for key, entry in json.loads(path.read_text("utf-8")).items():
+                if isinstance(entry, dict) and entry.get("canonical"):
+                    people[key] = str(entry["canonical"])
     witnesses = [
         wid
         for wid, work, _ in db.execute(
@@ -284,7 +298,8 @@ def control_text(cap: int) -> tuple[list[str], int]:
     out: list[str] = []
     words = 0
     for wid in witnesses:
-        author = str(by_witness.get(wid, "")).split(".")[0]
+        group = str(by_witness.get(wid, "")).split(".")[0]
+        author = people.get(group, group)
         if spent.get(author, 0) >= share:
             continue
         for (text,) in db.execute(
