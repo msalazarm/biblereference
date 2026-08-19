@@ -77,6 +77,17 @@ LANGUAGES: Final[Mapping[str, str]] = {
     "syriac": "syc",
     "cop": "cop",
     "coptic": "cop",
+    # Added with the corpora that speak them. A corpus whose language is not here is in
+    # the index and searchable in aggregate but cannot be *asked for*: `--language chu`
+    # was refused by an error that listed `chu` among what the machine held, which is the
+    # kind of contradiction only a missing registry entry produces.
+    "chu": "chu",
+    "cu": "chu",
+    "slavonic": "chu",
+    "church-slavonic": "chu",
+    "ar": "ar",
+    "ara": "ar",
+    "arabic": "ar",
 }
 
 #: The old private name, kept because this module's own parser uses it.

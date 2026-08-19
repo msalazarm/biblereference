@@ -53,6 +53,17 @@ PIVOT: Final = "org"
 #: ``rsc`` and ``rso`` (Russian Synodal, Catholic and Orthodox) are vendored and can be
 #: passed to :meth:`Versification.load`, but they carry unresolved conflicts of their own
 #: in the Psalms and are not needed for a Hebrew/Greek/Latin/English workflow.
+#: **`rso` is missing from this list and the Elizabeth Bible needs it.** 35,558 Slavonic
+#: verses are stored in Synodal numbering, so every conversion touching them raises
+#: `UnknownVersificationError` and the corpus is unreachable through its own references.
+#: It cannot simply be added: loading it produces **67 ghosts**, all of them
+#: `rso: DAN 3:24-90 -> DAG 3:24-90`, the Prayer of Azariah and Song of the Three that
+#: the Synodal folds into Daniel 3 and `org` carries as the standalone `S3Y`. That is the
+#: identical fault `data/corrections.json` records under `_dag_note` for `eng`, and the
+#: fix is the same shape -- but S3Y runs to 67 verses in one edition and 68 in another, and
+#: the `eng` correction was made by mirroring `lxx` ranges that were independently
+#: verified. Guessing it would put a wrong verse behind a right-looking reference, which
+#: is the one thing this data may not do. Priced and named rather than half-done.
 DEFAULT_SYSTEMS: Final = ("org", "eng", "lxx", "vul", "nvl")
 
 #: Everything available, including the systems not loaded by default.
