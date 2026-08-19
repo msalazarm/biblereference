@@ -241,6 +241,12 @@ ROW_FIELDS = ("run", "lemma_run", "chain", "bits", "offset_peak", "formula")
 COLLECT_LIMIT = 32
 
 
+#: The most of a control corpus any one author may supply. Six per cent of 3M words is
+#: 180,000 -- ample for the longest classical author held -- and it keeps a single
+#: subject matter from setting the false-positive rate for everybody.
+_AUTHOR_SHARE = 0.06
+
+
 def control_text(cap: int) -> tuple[list[str], int]:
     """Greek by authors who cannot be quoting the New Testament, up to ``cap`` words."""
     import json
@@ -250,6 +256,10 @@ def control_text(cap: int) -> tuple[list[str], int]:
     )
     eras = {key: value.get("era") for key, value in dating.items() if isinstance(value, dict)}
     db = sqlite3.connect(f"file:{MARKS}?mode=ro", uri=True)
+    by_witness = {
+        wid: work
+        for wid, work in db.execute("SELECT id, work FROM witness WHERE language = 'grc'")
+    }
     witnesses = [
         wid
         for wid, work, _ in db.execute(
@@ -262,18 +272,34 @@ def control_text(cap: int) -> tuple[list[str], int]:
         if eras.get((work or "").split(".")[0]) in CONTROL_ERAS
     ]
     random.Random(11).shuffle(witnesses)
+    # No author may dominate the control. The consumer found their own control corpus was
+    # a single author -- Aristotle -- and measured him at 4.9x the corpus-wide
+    # false-positive rate, because a negative control is not neutral for being pagan: it
+    # has topics, and *De generatione animalium* collides with Romans 1 on θῆλυ and ἄρρεν
+    # the way no historian does. Shuffling witnesses (above) avoids their ordering fault
+    # but not the concentration one: at a 400k cap this sampler still drew 19.7% Aristotle
+    # and 51% from three authors. The cap makes the corpus a corpus.
+    share = max(1, int(cap * _AUTHOR_SHARE))
+    spent: dict[str, int] = {}
     out: list[str] = []
     words = 0
     for wid in witnesses:
+        author = str(by_witness.get(wid, "")).split(".")[0]
+        if spent.get(author, 0) >= share:
+            continue
         for (text,) in db.execute(
             "SELECT text FROM passage WHERE witness = ? AND text IS NOT NULL "
             "ORDER BY ordinal",
             (wid,),
         ):
+            length = len(str(text).split())
             out.append(str(text))
-            words += len(str(text).split())
+            words += length
+            spent[author] = spent.get(author, 0) + length
             if words >= cap:
                 return out, words
+            if spent[author] >= share:
+                break
     return out, words
 
 
