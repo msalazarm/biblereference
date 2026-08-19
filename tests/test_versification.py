@@ -384,7 +384,7 @@ def test_every_verse_survives_a_round_trip_through_the_pivot(vrs: Versification)
 def test_loading_validates_the_corrections_still_apply(vrs: Versification) -> None:
     """Loading raises if a documented correction no longer matches upstream, which is how
     a refresh of the vendored data announces that a fix can be dropped."""
-    assert vrs.system_names == ("org", "eng", "lxx", "vul", "nvl")
+    assert vrs.system_names == ("org", "eng", "lxx", "vul", "nvl", "rso")
 
 
 # --------------------------------------------------------------------------------------

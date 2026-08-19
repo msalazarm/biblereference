@@ -64,7 +64,7 @@ PIVOT: Final = "org"
 #: the `eng` correction was made by mirroring `lxx` ranges that were independently
 #: verified. Guessing it would put a wrong verse behind a right-looking reference, which
 #: is the one thing this data may not do. Priced and named rather than half-done.
-DEFAULT_SYSTEMS: Final = ("org", "eng", "lxx", "vul", "nvl")
+DEFAULT_SYSTEMS: Final = ("org", "eng", "lxx", "vul", "nvl", "rso")
 
 #: Everything available, including the systems not loaded by default.
 AVAILABLE_SYSTEMS: Final = ("org", "eng", "lxx", "vul", "nvl", "rsc", "rso")

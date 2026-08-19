@@ -61,10 +61,10 @@ def test_every_reason_written_in_the_file_is_reachable() -> None:
     indexed = {correction.reason for correction in corrections().all()}
 
     assert written == indexed, f"unreachable: {sorted(written - indexed)}"
-    # 200 written, 195 distinct: five entries share their prose with a sibling, which is
+    # 202 written, 197 distinct: five entries share their prose with a sibling, which is
     # what a fix explained once and applied twice looks like.
-    assert len(occurrences) == 200, "the count moved; add or remove the reason deliberately"
-    assert len(written) == 195
+    assert len(occurrences) == 202, "the count moved; add or remove the reason deliberately"
+    assert len(written) == 197
 
 
 def test_every_correction_names_a_system_the_library_knows() -> None:

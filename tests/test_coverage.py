@@ -276,11 +276,18 @@ def test_the_round_trip_holds_where_a_cover_is_recorded(vrs: Versification) -> N
     with two names is not a lost verse: English Greek Daniel 1:1 comes home as Daniel 1:1,
     which is the same words under the name English Bibles print.
 
-    This does not pass everywhere and is not asserted to. 2,855 verses still fail it, and
-    they are the honest work queue for this data -- Greek 2 Esdras and Esther, which are
-    differently built books rather than differently numbered ones; the psalm
+    This does not pass everywhere and is not asserted to. It was 2,855 verses across five
+    systems, and they are the honest work queue for this data -- Greek 2 Esdras and Esther,
+    which are differently built books rather than differently numbered ones; the psalm
     superscriptions; and the Greek reorderings of Exodus and Jeremiah. What is asserted is
     that covering is *better* than the exact map here and that the recorded covers hold.
+
+    `rso` joined the default systems with the Elizabeth Bible and brought **2,154** more,
+    which is why the ceiling moved. They fall in the same class rather than a new one, and
+    overwhelmingly in one book: SIR 1,185, then 1ES 193, 3MA 180, ESG 167, WIS 166, TOB 71,
+    DAN 59. Sirach's Greek and Slavonic verse divisions genuinely differ -- it is the
+    canonical example of a differently *built* book -- so these are lossy correspondences
+    to be worked, not invented verses. Ghosts, which are the fault that matters, are zero.
     """
     from biblereference.refs import VerseRef
     from biblereference.versification import DEFAULT_SYSTEMS, PIVOT, VersificationError
@@ -315,7 +322,7 @@ def test_the_round_trip_holds_where_a_cover_is_recorded(vrs: Versification) -> N
                 failures[covering] += not start <= home
 
     assert failures[True] < failures[False], "covering must improve the round trip"
-    assert failures[True] < 3000, f"round-trip failures climbed to {failures[True]}"
+    assert failures[True] < 5500, f"round-trip failures climbed to {failures[True]}"
 
     # And the recorded covers themselves hold, which is the part that is claimed.
     for ref, target in (
