@@ -133,10 +133,16 @@ def main() -> int:
         say(f"report rebuilt: {REPORT}")
         return 0
 
-    say(f"servers alive: {len(judge.available())} of {len(SERVERS)}")
-    if not judge.available():
+    # Narrowed to the servers that answered, not merely reported. `Judge` round-robins
+    # over whatever list it holds, so leaving the dead ones in sends three of every four
+    # requests to a closed port -- which never showed while all four were up, and stopped
+    # the first Slavonic run dead when only one was.
+    alive = judge.available()
+    say(f"servers alive: {len(alive)} of {len(SERVERS)}")
+    if not alive:
         say("no model server answering; nothing to do")
         return 1
+    judge = Judge(alive, timeout=60.0)
 
     # -- calibration, which is the only reason to believe anything that follows ----------
     say("calibrating against mappings whose answer is known...")

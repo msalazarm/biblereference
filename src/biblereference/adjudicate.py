@@ -721,7 +721,7 @@ def build_work(
     home: DataHome,
     vrs: Versification,
     *,
-    systems: Sequence[str] = ("eng", "lxx", "vul", "nvl"),
+    systems: Sequence[str] = ("eng", "lxx", "vul", "nvl", "rso"),
     report: Reporter = _silent,
 ) -> dict[str, list[Task]]:
     """Every verse worth putting to the model, sorted into the three phases.

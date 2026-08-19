@@ -602,6 +602,11 @@ COVERAGE_WITNESSES: Final[dict[str, tuple[tuple[str, str], ...]]] = {
     "lxx": (("brenton", "en"), ("rahlfs", "grc"), ("swete", "grc")),
     "vul": (("dra", "en"), ("latvuc", "la")),
     "nvl": (("novavulgata", "la"),),
+    # One Slavonic Bible in one system, so this witnesses nothing by itself -- the
+    # same-language rule needs two. It is here because the *judge* reads across languages
+    # and needs somewhere to fetch the Slavonic text from; the deterministic audit will
+    # go on reporting every rso verse unwitnessed, correctly.
+    "rso": (("chuelz", "chu"),),
 }
 
 
