@@ -264,6 +264,17 @@ CALIBRATION: Sequence[tuple[str, str, str, str] | tuple[str, str, str, str, str]
     ("vul", "MAT 17:14", "MAT 17:15", "MAT 17:13", "en-syc"),
     ("vul", "JON 2:1", "JON 2:1", "JON 2:2", "en-syc"),
     ("vul", "REV 20:8", "REV 20:9", "REV 20:7", "en-syc"),
+    # Church Slavonic, and the same lesson a third time: `admits` refuses a pair nobody
+    # measured, so without these every one of the 33,470 Slavonic verses is skipped and
+    # the run reports a clean phase containing none of them. Each right-hand answer was
+    # read against the text before it was written here -- PSA 22:1 is the Septuagint psalm
+    # offset, where the Slavonic "Господь пасет мя" stands against the Hebrew "יְהוָה רֹעִי",
+    # and the two New Testament rows are the pair the Greek witness answers.
+    ("rso", "GEN 1:1", "GEN 1:1", "GEN 1:2", "chu-hbo"),
+    ("rso", "PSA 22:1", "PSA 23:1", "PSA 23:2", "chu-hbo"),
+    ("rso", "ISA 53:5", "ISA 53:5", "ISA 53:6", "chu-hbo"),
+    ("rso", "JHN 3:16", "JHN 3:16", "JHN 3:17", "chu-grc"),
+    ("rso", "MAT 17:14", "MAT 17:14", "MAT 17:15", "chu-grc"),
     ("nvl", "GEN 1:1", "GEN 1:1", "GEN 1:2", "la-syc"),
     ("nvl", "ISA 53:5", "ISA 53:5", "ISA 53:6", "la-syc"),
     ("nvl", "JHN 3:16", "JHN 3:16", "JHN 3:17", "la-syc"),
