@@ -50,20 +50,18 @@ __all__ = [
 PIVOT: Final = "org"
 
 #: Systems loaded by default: the pivot, plus the ones this library's corpora use.
-#: ``rsc`` and ``rso`` (Russian Synodal, Catholic and Orthodox) are vendored and can be
-#: passed to :meth:`Versification.load`, but they carry unresolved conflicts of their own
-#: in the Psalms and are not needed for a Hebrew/Greek/Latin/English workflow.
-#: **`rso` is missing from this list and the Elizabeth Bible needs it.** 35,558 Slavonic
-#: verses are stored in Synodal numbering, so every conversion touching them raises
-#: `UnknownVersificationError` and the corpus is unreachable through its own references.
-#: It cannot simply be added: loading it produces **67 ghosts**, all of them
-#: `rso: DAN 3:24-90 -> DAG 3:24-90`, the Prayer of Azariah and Song of the Three that
-#: the Synodal folds into Daniel 3 and `org` carries as the standalone `S3Y`. That is the
-#: identical fault `data/corrections.json` records under `_dag_note` for `eng`, and the
-#: fix is the same shape -- but S3Y runs to 67 verses in one edition and 68 in another, and
-#: the `eng` correction was made by mirroring `lxx` ranges that were independently
-#: verified. Guessing it would put a wrong verse behind a right-looking reference, which
-#: is the one thing this data may not do. Priced and named rather than half-done.
+#: ``rsc`` (Russian Synodal, Catholic) is vendored and can be passed to
+#: :meth:`Versification.load`, but no corpus here uses it.
+#:
+#: ``rso`` joined when the Elizabeth Bible did. Its 35,558 Slavonic verses are stored in
+#: Synodal numbering, and until it loaded by default every conversion touching them raised
+#: `UnknownVersificationError` -- a corpus unreachable through its own references. Adding
+#: it took one correction: rso sent the Prayer of Azariah and the Song of the Three to
+#: ``DAG 3:24-90``, Greek Daniel, a book ``org`` does not carry, so all 67 verses landed
+#: on references that cannot exist. The correspondence was never wrong -- the Elizabeth
+#: Bible follows Theodotion verse for verse, checked against ``rahlfs-alt`` -- only its
+#: target book, and ``data/corrections.json`` now routes the block to org's standalone
+#: ``S3Y``, exactly as that file already does for ``eng``.
 DEFAULT_SYSTEMS: Final = ("org", "eng", "lxx", "vul", "nvl", "rso")
 
 #: Everything available, including the systems not loaded by default.
