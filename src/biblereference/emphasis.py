@@ -339,9 +339,7 @@ _ADSCRIPT_AFTER: Final = frozenset("ωη")
 #: Discovered over the scripture corpora. A Diorisis-only word with a genuine final iota would
 #: still misfold, which reaches the PPMI soft backoff and nothing that gates a match; regenerate
 #: with ``tools/genuine_iota.py`` when a corpus is added.
-_GENUINE_IOTA: Final = frozenset(
-    {"πρωι", "ελωι", "νηι", "θεκωι", "αχωι", "ρηι"}
-)
+_GENUINE_IOTA: Final = frozenset({"πρωι", "ελωι", "νηι", "θεκωι", "αχωι", "ρηι"})
 
 
 def _greek_word(word: str) -> str:

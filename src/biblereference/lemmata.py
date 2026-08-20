@@ -210,9 +210,7 @@ def lexicon_folds(home: DataHome) -> dict[str, int | None]:
         try:
             held = {
                 str(language)
-                for (language,) in connection.execute(
-                    "SELECT DISTINCT language FROM lemma_form"
-                )
+                for (language,) in connection.execute("SELECT DISTINCT language FROM lemma_form")
             }
         except sqlite3.OperationalError:
             return {}

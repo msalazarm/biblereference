@@ -62,9 +62,7 @@ def main() -> int:
     vocabulary: collections.Counter[str] = collections.Counter()
     fires: collections.Counter[str] = collections.Counter()
     marked: collections.Counter[str] = collections.Counter()
-    for (text,) in db.execute(
-        f"SELECT text FROM verse WHERE corpus IN ({holes})", greek
-    ):
+    for (text,) in db.execute(f"SELECT text FROM verse WHERE corpus IN ({holes})", greek):
         for word in _WORD.findall(text):
             bare = _bare(word)
             vocabulary[bare] += 1
@@ -88,8 +86,7 @@ def main() -> int:
             verdict = "unmarked -- read it in context"
             unlisted.append(bare)
         print(
-            f"{bare:<12}{count:>8}{marked[bare]:>8}{shortened:>12}"
-            f"{(collides or ''):>10}  {verdict}"
+            f"{bare:<12}{count:>8}{marked[bare]:>8}{shortened:>12}{(collides or ''):>10}  {verdict}"
         )
     print(f"\n{len(_GENUINE_IOTA)} listed; {len(unlisted)} want a decision")
     return 1 if unlisted else 0
