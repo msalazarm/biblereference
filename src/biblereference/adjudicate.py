@@ -35,6 +35,7 @@ import time
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from contextlib import closing
 from dataclasses import dataclass, field
 
 from .audit import _Texts, faithful_chapters
@@ -166,6 +167,63 @@ PRIMARY: frozenset[str] = frozenset(
 FALLBACK_FOR_ORG: frozenset[str] = frozenset({"web", "webc", "kjv", "asv", "brenton"})
 
 
+def _disputed_chapters(home: DataHome) -> dict[str, frozenset[tuple[str, int]]]:
+    """Chapters where a system's own witnesses disagree about which verses exist.
+
+    :func:`~biblereference.audit.faithful_chapters` asks whether a corpus holds the number
+    of verses its system declares, and that question has a blind spot its docstring names
+    two instances of -- a verse *swap* leaves counts identical, and a psalm title numbered
+    1 instead of 0 does too. Here is a third, and it is the expensive one.
+
+    **A witness that silently renumbers over a gap has the declared count and passes. One
+    that leaves the gap open has the wrong count and is excluded.** Greek Exodus omits the
+    oil of 25:6: `rahlfs` and `brenton` leave verse 6 absent and hold 39, `swete` numbers
+    straight through and holds 40. lxx declares 40, so `swete` alone was judged faithful --
+    and `swete` is off by one from the gap to the end of the chapter. Read against `ojb`,
+    `rahlfs` 25:7 is *onyx stones* and so is org's, while `swete` 25:7 is org's 25:8.
+
+    That one chapter produced 24 contradictions against a mapping with nothing wrong with
+    it. Across `lxx` it is 88 chapters and **34 of 49 contradictions, 69% of them**.
+
+    So when two witnesses for one system disagree about which verse numbers a chapter has,
+    the honest answer is that neither can be trusted there. Counting cannot say which is
+    right, and picking the one whose total matches the declaration picks the one that hid
+    the disagreement. The chapter is withheld from every witness of that system and
+    reported, in the same spirit as the blind chapters the judge's control probe cannot
+    discriminate: an exclusion stated, not a number quietly built on sand.
+    """
+    disputed: dict[str, set[tuple[str, int]]] = {}
+    with closing(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)) as db:
+        numbering: dict[str, dict[tuple[str, int], set[int]]] = {}
+        for pairs in WITNESSES.values():
+            for corpus, _ in pairs:
+                if corpus in numbering:
+                    continue
+                rows = db.execute(
+                    "SELECT book, chapter, verse FROM verse WHERE corpus = ?", (corpus,)
+                )
+                held: dict[tuple[str, int], set[int]] = {}
+                for book, chapter, verse in rows:
+                    held.setdefault((str(book), int(chapter)), set()).add(int(verse))
+                numbering[corpus] = held
+        for system, pairs in WITNESSES.items():
+            corpora = [corpus for corpus, _ in pairs if numbering.get(corpus)]
+            if len(corpora) < 2:
+                continue  # nothing to disagree with; the test cannot run
+            seen: set[tuple[str, int]] = set()
+            for corpus in corpora:
+                seen |= set(numbering[corpus])
+            for key in seen:
+                shapes = {
+                    frozenset(numbering[corpus][key])
+                    for corpus in corpora
+                    if key in numbering[corpus]
+                }
+                if len(shapes) > 1:
+                    disputed.setdefault(system, set()).add(key)
+    return {system: frozenset(keys) for system, keys in disputed.items()}
+
+
 class Witnesses:
     """Which corpora may be trusted to speak for a system, chapter by chapter.
 
@@ -181,6 +239,14 @@ class Witnesses:
             for system, pairs in WITNESSES.items()
             for corpus, _ in pairs
         }
+        self._disputed = _disputed_chapters(home)
+        for (_corpus, system), chapters in self._faithful.items():
+            chapters -= self._disputed.get(system, frozenset())
+
+    @property
+    def disputed(self) -> Mapping[str, frozenset[tuple[str, int]]]:
+        """Chapters withheld because this system's own witnesses disagree about them."""
+        return self._disputed
 
     def for_chapter(
         self, system: str, book: str, chapter: int, *, language: str | None = None

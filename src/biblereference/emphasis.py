@@ -23,7 +23,7 @@ from functools import lru_cache
 from itertools import pairwise
 from typing import Final
 
-from .tags import Emphasis
+from .tags import LANGUAGES, Emphasis
 
 __all__ = ["FOLD_VERSION", "SpanNotFoundError", "apply_spans", "fold"]
 
@@ -418,8 +418,33 @@ def fold(text: str, language: str | None = None, *, orthographic: bool = False) 
     quotation with a verse re-folds the verse from scratch. Safe because the answer depends
     on nothing but the three arguments: verse text does not change under a running process,
     and where it changes on disk the store is rebuilt and the process with it.
+
+    :raises ValueError: for a language this library does not know. It used to ignore one.
+        ``fold("Jesus", "lat")`` returned *jesus* unfolded -- no *j* to *i*, no error, just
+        the answer for a language nobody named -- because the branch below tests
+        ``language == "la"`` against a raw string. Every other language here is a
+        three-letter code and Latin is two, so ``lat`` is the first thing a reader types;
+        it cost the consumer twenty minutes, and it looked exactly like a fix not working.
+        :data:`~biblereference.tags.LANGUAGES` already knew ``lat``, ``latin``, ``greek``
+        and the rest, and is now what decides. ``None`` still means no language-specific
+        folding, which is a different thing from a language that was not understood.
     """
-    return _folded(text, language, orthographic)
+    return _folded(text, _language(language), orthographic)
+
+
+def _language(language: str | None) -> str | None:
+    """A language name resolved to the code the folding rules are written against."""
+    if language is None:
+        return None
+    code = LANGUAGES.get(language.strip().lower())
+    if code is None:
+        raise ValueError(
+            f"fold does not know the language {language!r}. Known: "
+            f"{', '.join(sorted(set(LANGUAGES.values())))} "
+            f"(aliases: {', '.join(sorted(LANGUAGES))}). Pass None for no language-specific "
+            f"folding, which is not the same as a language this library cannot name."
+        )
+    return code
 
 
 #: Entries, not bytes. A verse is a few hundred characters and a folded copy about as much,

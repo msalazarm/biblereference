@@ -366,6 +366,31 @@ def test_the_fold_version_moves_when_the_fold_does() -> None:
     assert fold("μαγεῖαι", "grc") != fold("μαγείᾳ", "grc")
 
 
+def test_a_language_this_library_cannot_name_is_refused_rather_than_ignored() -> None:
+    """`fold("Jesus", "lat")` returned *jesus* -- unfolded, no error, and indistinguishable
+    from the Latin rule not working. The branch tested `language == "la"` against a raw
+    string, so every name but the exact code fell through to no folding at all.
+
+    It is the failure this project keeps meeting: an unknown input answered with a plausible
+    value instead of a refusal. It cost the consumer twenty minutes, and it was the first
+    thing they typed -- every other language here is a three-letter code and Latin is two.
+
+    `tags.LANGUAGES` already knew the aliases; nothing needed inventing, only consulting.
+    """
+    assert fold("Jesus vobis", "lat") == fold("Jesus vobis", "la") == "iesus uobis"
+    assert fold("Jesus vobis", "latin") == "iesus uobis"
+    assert fold("Jesus vobis", "Latin ") == "iesus uobis", "trimmed and case-folded"
+    assert fold("ᾧ", "greek") == fold("ᾧ", "grc") == "ω"
+
+    # None is not a language this library cannot name; it is the absence of a claim, and it
+    # still means no language-specific folding.
+    assert fold("Jesus", None) == "jesus"
+
+    for unknown in ("nonsense", "grk", "lateen", ""):
+        with pytest.raises(ValueError, match="does not know the language"):
+            fold("Jesus", unknown)
+
+
 def test_every_spelling_of_an_elision_folds_the_same_way() -> None:
     """Five characters for one mark, and folding kept all but the combining one -- so
     `μετ᾽` and `μετ̓`, the same word digitised by two projects, folded to different

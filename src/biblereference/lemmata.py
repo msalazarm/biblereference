@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from .emphasis import fold
+from .emphasis import _language, fold
 from .licences import LICENCES, Licence
 from .sources import BuiltCorpus, RemoteFile, Source
 from .store import DataHome, open_store
@@ -227,6 +227,7 @@ class Lexicon:
             yield db
 
     def holds(self, language: str) -> bool:
+        language = _language(language) or language
         if self._held is None:
             try:
                 with self._read() as db:
@@ -239,7 +240,13 @@ class Lexicon:
         return self._held.get(language, 0) > 0
 
     def require(self, language: str) -> None:
-        """Raise unless this language can be matched by lemma, saying what to run."""
+        """Raise unless this language can be matched by lemma, saying what to run.
+
+        The name is resolved first. `require("lat")` used to report *no lat lexicon is
+        built* -- true of the string, false of the fact, since the Latin lexicon is built
+        and is called `la`. An error that names the wrong cause costs more than no error.
+        """
+        language = _language(language) or language
         if not self.holds(language):
             raise LexiconUnavailable(
                 f"no {language} lexicon is built, so inflected matching cannot be done in it. "
@@ -257,6 +264,7 @@ class Lexicon:
 
     def of(self, forms: Sequence[str], language: str) -> dict[str, frozenset[str]]:
         """The same for many spellings at once, which is how a scan should ask."""
+        language = _language(language) or language
         known = self._known.setdefault(language, {})
         missing = sorted({form for form in forms if form not in known})
         if missing:
