@@ -344,7 +344,7 @@ def test_the_fold_version_moves_when_the_fold_does() -> None:
     """
     from biblereference.emphasis import FOLD_VERSION
 
-    assert FOLD_VERSION == 3
+    assert FOLD_VERSION == 4
     assert fold("Ἰησοῦς Χριστός, ᾧ ἡ δόξα", "grc") == "ιησουσ χριστοσ, ω η δοξα"
     assert fold("Jesu naVe", "la") == "iesu naue"
     assert fold("הָעַלְמָ֗ה אַל־תִּפְגְּעִי", "he") == "העלמה אל תפגעי"
@@ -418,3 +418,30 @@ def test_the_elision_rule_is_greek_only() -> None:
     other language must answer exactly as it did at version 1."""
     assert fold("don't") == "don't"
     assert fold("Lord’s", "en") == "lord’s"
+
+
+def test_a_full_vowel_iota_is_not_an_adscript() -> None:
+    """The adscript rule folds `τωι` to `τω` because a dative is written three ways. Some
+    words end in `-ωι` because the iota is a vowel of its own, and folding those is a
+    corruption -- twice over for `νηι` and `θεκωι`, whose shortened forms are words the
+    corpora already use, so the fold merged two different words into one key.
+
+    Every firing of the rule across the 2,509,521 Greek word tokens in the library was one
+    of these six; the genuine adscripts it exists for (`παντηι`, `λαθρηι`) live in the
+    Diorisis lemma vocabulary, and those must keep folding.
+    """
+    for genuine in ("πρωι", "ελωι", "νηι", "θεκωι", "αχωι", "ρηι"):
+        assert fold(genuine, "grc") == genuine
+
+    # Marked or unmarked, a word folds the same way: only 172 of the 660 tokens carry the
+    # diaeresis, and a rule that fired on the marked spelling alone would put the index and
+    # the query on different sides of the same word.
+    assert fold("πρωΐ", "grc") == fold("πρωι", "grc") == "πρωι"
+    assert fold("ἐλωΐ", "grc") == fold("ελωι", "grc") == "ελωι"
+    assert fold("νηὶ", "grc") == fold("νηί", "grc") == "νηι"
+
+    # ...and the rule still does its job where the iota really is an adscript.
+    assert fold("τωι", "grc") == "τω"
+    assert fold("λογωι", "grc") == "λογω"
+    assert fold("παντηι", "grc") == "παντη"
+    assert fold("λαθρηι", "grc") == "λαθρη"

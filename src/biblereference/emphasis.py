@@ -39,7 +39,7 @@ __all__ = ["FOLD_VERSION", "SpanNotFoundError", "apply_spans", "fold"]
 #: 3 -- Greek gains two scribal conventions (:data:`_GREEK_CONVENTIONS`) and sixteen more
 #: *nomina sacra*, both priced against real manuscript variation rather than guessed. Greek
 #: folds change; every other language answers exactly as it did at version 1.
-FOLD_VERSION: Final = 3
+FOLD_VERSION: Final = 4
 
 _MARKERS: Final[dict[str, str]] = {"bold": "**", "italic": "*"}
 
@@ -317,6 +317,32 @@ _GREEK_CONVENTIONS: Final = {"ουτωσ": "ουτω"}
 #: The vowels an adscript iota may follow. Alpha is absent on purpose -- see above.
 _ADSCRIPT_AFTER: Final = frozenset("ωη")
 
+#: Words ending ``-ωι``/``-ηι`` where the iota is a **full vowel, not an adscript**, and the
+#: rule above must not fire. Discovered rather than guessed: Greek marks a separate iota with
+#: a diaeresis, so every ``-ωι``/``-ηι`` type in the Greek corpora was counted against the
+#: spellings that carry one on the final iota. πρωι (166 marked of 635) and ελωι (6 of 14)
+#: came back marked; the other four were read in context and every one is a genuine iota:
+#:
+#: * ``νηι`` -- ἐν τῇ νηὶ τῶν παίδων αὐτοῦ (1KI 9:27), the dative of ναῦς.
+#: * ``θεκωι``, ``αχωι``, ``ρηι`` -- transliterated Hebrew: *the Tekoite* beside Ἀναθωθι,
+#:   *the Ahohite* beside Ἀσωθι, and *Rei* beside Σεμεϊ, which marks its own final iota.
+#:
+#: **Listed, not detected from the diaeresis at fold time.** Only 172 of the 660 tokens carry
+#: the mark, so trusting it would fold πρωῐ one way and πρωι another -- a rule firing on some
+#: occurrences of a word and not others, which the docstring above explains is worse than one
+#: that never fires. The list fires consistently whatever the edition prints.
+#:
+#: Two of the six were not merely corrupted but **merged into a different word**: νηι folds
+#: onto an existing νη (11 tokens) and θεκωι onto θεκω (5). That is the harm this set exists
+#: to stop; the rest is a nonword key nothing else claims.
+#:
+#: Discovered over the scripture corpora. A Diorisis-only word with a genuine final iota would
+#: still misfold, which reaches the PPMI soft backoff and nothing that gates a match; regenerate
+#: with ``tools/genuine_iota.py`` when a corpus is added.
+_GENUINE_IOTA: Final = frozenset(
+    {"πρωι", "ελωι", "νηι", "θεκωι", "αχωι", "ρηι"}
+)
+
 
 def _greek_word(word: str) -> str:
     """One Greek word with its contractions expanded and its conventions folded away.
@@ -340,7 +366,12 @@ def _greek_word(word: str) -> str:
     # them -- silently failed to expand. Found by a canary written for the new rules.
     head = _NOMINA_SACRA.get(head, head)
     head = _GREEK_CONVENTIONS.get(head, head)
-    if len(head) >= 3 and head.endswith("ι") and head[-2] in _ADSCRIPT_AFTER:
+    if (
+        len(head) >= 3
+        and head.endswith("ι")
+        and head[-2] in _ADSCRIPT_AFTER
+        and head not in _GENUINE_IOTA
+    ):
         head = head[:-1]
     return head + tail
 
