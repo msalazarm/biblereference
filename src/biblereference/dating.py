@@ -64,6 +64,13 @@ TRANSLATED: Final[dict[str, int | None]] = {
     # wording is older than the Vulgate's and nothing can be anachronistic to it.
     "oldlatin-a": None,
     "oldlatin-b": None,
+    # The other two of Bianchini's four. Their verse divisions are this library's rather
+    # than the edition's, but the wording is the manuscript's and is what dating is about.
+    # Brixianus is the latest of the four and the most Vulgate-like -- it is a witness to
+    # the revised tradition Jerome worked from, not to an untouched Old Latin -- but it is
+    # still pre-Jerome and nothing can be anachronistic to it.
+    "oldlatin-f": None,
+    "oldlatin-ff2": None,
     "bezae-lat": None,  # Codex Bezae's Latin column: a third pre-Vulgate witness, with Acts
     "latvuc": 405,  # Jerome's Vulgate; the Clementine of 1592 is an edition of it
     "novavulgata": 1979,  # a new Latin translation, not an edition of Jerome

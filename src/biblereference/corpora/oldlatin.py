@@ -6,19 +6,51 @@ Vercelli, which is why searching the catalogue for *Biblia* or *Vulgata* never f
 Codex Vercellensis is 4th-century and usually called the oldest surviving Old Latin gospel
 manuscript. This library held no pre-Vulgate Latin at all.
 
-**Two of the four are imported and two are not**, and the reason is not fastidiousness:
+**What is actually printed under each of the four names is not the same kind of thing**, and
+the difference decides how each is imported:
 
-    Vercellensis   verse numbers, CAPUT divisions      3,463 verses
-    Veronensis     verse numbers, CAPUT divisions      3,420 verses
-    Corbeiensis    continuous prose, no numbers        —
-    Brixianus      continuous prose, no numbers        —
+    Vercellensis   verse numbers, CAPUT divisions              3,580 verses
+    Veronensis     verse numbers, CAPUT divisions              3,427 verses
+    Brixianus      continuous prose, no numbers, four gospels  58,207 words
+    Corbeiensis    continuous prose for MATTHEW only           16,602 words
+                   a collation of variant readings for the other three
 
-Corbeiensis and Brixianus are printed as unbroken paragraphs — *"Liber generationis Jesu
-Christi, filii David, filii Abraham. Abraham genuit Isaac…"* — with no verse numbers and no
-chapter heads anywhere in them. Giving them verses would mean aligning them against the
-Vulgate and numbering them by where the Vulgate's verses fall, which is not reading a
-versification but inventing one and attributing it to a manuscript. They are left out, and
-:data:`SKIPPED` says so rather than letting their absence look like an oversight.
+**Corbeiensis is only a gospel text in Matthew.** Under `CODEX CORBEIENSIS` in Mark, Luke and
+John, Bianchini prints not the manuscript but his apparatus to it: 759 numbered fragments
+averaging twelve words, given only where ff2 diverges, and 7% of them are notes *about* the
+manuscript rather than readings *from* it —
+
+    13. Omittit et quadraginta noctibus.
+    27. Neman + Syrus
+
+*Omittit* — "it omits". Importing those as verses would put editorial Latin in the corpus
+where scripture belongs, and would do it invisibly, since a fragment of a real clause beside
+a real verse number is indistinguishable from a short reading. Only Matthew is taken, and
+:data:`SKIPPED` records the other three with the reason.
+
+**The verse divisions of the two unnumbered manuscripts are ours, not Bianchini's.** He set
+them as unbroken paragraphs, so they are aligned against the Clementine and cut where its
+verses fall, by ``tools/derive_oldlatin.py``, which writes the cut points to a data file so
+the import itself does no guessing and the guess can be read in version control. That is the
+thing this module previously refused to do, and the refusal was right in one respect: it is
+inventing a versification and attributing it to a manuscript. What makes it publishable is
+that the invention is measured, declared in the corpus label, and confined — the alternative
+was holding no pre-Vulgate Latin for these two at all.
+
+**How well the derivation works, measured against held-out truth.** Scoring derived
+boundaries by similarity to the Vulgate scores the objective the derivation maximised; it
+returns a median 0.86 and 0.0% drift, which look excellent and mean nothing. The honest test
+throws away Bianchini's numbers on Vercellensis and Veronensis, re-derives them the same way,
+and asks how often the boundary lands back where the editor put it:
+
+    Veronensis     68.9-76.6% exact     92.1-96.8% within two words
+    Vercellensis   61.1-65.5% exact     87.8-93.7% within two words
+
+So roughly a third of boundaries are off, and almost all of those by a word or two at the
+seam rather than by a verse. Brixianus and Corbeiensis-Matthew match the Clementine on
+83.2-84.7% of its word stream against Veronensis' 52.8-79.7%, so the alignment is working on
+easier material than either validation case — except Brixianus Mark at 65.2%, which sits
+mid-pack and is the weakest of the five.
 
 **The holes are kept.** Both manuscripts are mutilated and Migne set the damage rather than
 conjecturing through it, as runs of spaced dots — 5,615 of them. Vercellensis loses Matthew
@@ -43,8 +75,12 @@ Old Latin against a revised Vulgate — which is the reason to want it.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
 from typing import Final
 
@@ -55,7 +91,7 @@ from ..refs import VerseRef
 from ..sources import BuiltCorpus, RemoteFile, Source
 from .tei import GAP, flatten
 
-__all__ = ["SKIPPED", "SOURCE", "build"]
+__all__ = ["DERIVED", "SKIPPED", "SOURCE", "build", "read_continuous"]
 
 #: Corpus Corporum work 343 is the *work*; the file hangs off the text nested inside it.
 #: Asking for the work answers "this XML file doesn't exist", which is the two-step this
@@ -70,17 +106,33 @@ CORPORA: Final[Mapping[str, tuple[str, str]]] = {
     "Veronensis": ("oldlatin-b", "Old Latin Gospels — Codex Veronensis (b), 5th c."),
 }
 
+#: The manuscripts Bianchini printed without verse numbers, and the gospels of each that are
+#: continuous text rather than apparatus. Their divisions come from
+#: :data:`_BOUNDS`; see the module docstring for what that costs.
+DERIVED: Final[Mapping[str, tuple[str, str, tuple[str, ...]]]] = {
+    "Brixianus": (
+        "oldlatin-f",
+        "Old Latin Gospels — Codex Brixianus (f), 6th c. [verse divisions derived, not printed]",
+        ("MAT", "MRK", "LUK", "JHN"),
+    ),
+    "Corbeiensis": (
+        "oldlatin-ff2",
+        "Old Latin Gospels — Codex Corbeiensis (ff2), 5th c., Matthew only "
+        "[verse divisions derived, not printed]",
+        ("MAT",),
+    ),
+}
+
 #: Recorded rather than dropped silently, the way ``swete._SKIPPED`` is. An absence with no
 #: reason beside it is indistinguishable from a bug.
 SKIPPED: Final[Mapping[str, str]] = {
-    "Corbeiensis": (
-        "Printed as continuous prose with no verse numbers and no chapter heads. Numbering "
-        "it would mean aligning against the Vulgate and calling the result the manuscript's "
-        "own versification."
-    ),
-    "Brixianus": (
-        "The same: 94 unbroken paragraphs, no verse numbers, no chapter heads. Its readings "
-        "are legible and its verse divisions do not exist to be read."
+    "Corbeiensis Mark, Luke and John": (
+        "Not the manuscript but Bianchini's apparatus to it: 759 numbered fragments "
+        "averaging twelve words, printed only where ff2 diverges, of which 7% are notes "
+        "about the manuscript rather than readings from it -- 'Omittit et quadraginta "
+        "noctibus', 'it omits and forty nights'. Importing them would file editorial Latin "
+        "as scripture, and a fragment of a real clause beside a real verse number gives "
+        "nothing away. Matthew, which is continuous text, is imported."
     ),
 }
 
@@ -199,6 +251,109 @@ def read(path: Path) -> Iterator[tuple[str, VerseRef, str]]:
                 yield (codex, VerseRef(book, chapter, number), body)
 
 
+def read_continuous(path: Path) -> dict[tuple[str, str], list[str]]:
+    """``(manuscript, book) -> word stream`` for the manuscripts printed without numbers.
+
+    The same apparatus rule the numbered read uses, and for a sharper reason: the
+    Vindobonensis collation follows Corbeiensis in both Luke and Mark, so without the reset
+    it is read *as* Corbeiensis and adds 759 paragraphs of variant readings to a manuscript
+    that has none there.
+    """
+    root = etree.parse(str(path)).getroot()
+    book = codex = ""
+    out: dict[tuple[str, str], list[str]] = {}
+    for element in root.iter():
+        if not isinstance(element.tag, str):
+            continue
+        name = element.tag.split("}")[-1]
+        if name == "head":
+            text = flatten(element)
+            if _APPARATUS.search(text):
+                codex = ""
+                continue
+            for word, code in _GOSPEL.items():
+                if word in text.upper():
+                    book = code
+            found = _CODEX.search(text)
+            if found:
+                codex = found.group(1).title()
+            continue
+        if name == "p" and book and codex:
+            out.setdefault((codex, book), []).extend(flatten(element).split())
+    return out
+
+
+@dataclass(frozen=True, slots=True)
+class _Bound:
+    """Where one gospel's verses begin in one manuscript's word stream."""
+
+    digest: str
+    cuts: dict[str, int]
+
+
+@dataclass(frozen=True, slots=True)
+class _Bounds:
+    """``tools/derive_oldlatin.py``'s output, read back."""
+
+    by_codex: dict[str, dict[str, _Bound]]
+    recovery: dict[str, dict[str, float]]
+    """The held-out test: how often re-deriving Bianchini's own numbering reproduces it."""
+
+
+def _bounds() -> _Bounds:
+    """The derived cut points, or empty if they were never generated."""
+    source = files("biblereference.data").joinpath("oldlatin_bounds.json")
+    if not source.is_file():
+        return _Bounds({}, {})
+    raw = json.loads(source.read_text(encoding="utf-8"))
+    return _Bounds(
+        by_codex={
+            codex: {
+                book: _Bound(str(entry["digest"]), {k: int(v) for k, v in entry["cuts"].items()})
+                for book, entry in books.items()
+            }
+            for codex, books in raw.get("bounds", {}).items()
+        },
+        recovery={
+            name: {key: float(value) for key, value in score.items()}
+            for name, score in raw.get("recovery", {}).items()
+        },
+    )
+
+
+def _derived_verses(
+    stream: list[str], book: str, record: _Bound
+) -> tuple[list[tuple[VerseRef, str]], str]:
+    """Cut a word stream at the recorded offsets.
+
+    The digest is checked rather than trusted. The offsets were measured against one exact
+    reading of the XML, and a change to the parser that shifts the stream by a single word
+    would otherwise move every verse in the manuscript silently -- which is the failure this
+    whole module is written against.
+    """
+    digest = hashlib.sha256(" ".join(stream).encode()).hexdigest()[:16]
+    if digest != record.digest:
+        raise ValueError(
+            f"oldlatin_bounds.json was measured on a different reading of {book}: "
+            f"expected {record.digest}, parsed {digest}. Re-run tools/derive_oldlatin.py."
+        )
+    cuts = sorted(
+        ((int(ref.split(":")[0]), int(ref.split(":")[1])), start)
+        for ref, start in record.cuts.items()
+    )
+    verses = []
+    for index, ((chapter, verse), start) in enumerate(cuts):
+        end = cuts[index + 1][1] if index + 1 < len(cuts) else len(stream)
+        text = " ".join(stream[start:end]).strip()
+        if text:
+            verses.append((VerseRef(book, chapter, verse), text))
+    # Whatever precedes the first verse the Clementine has. Returned rather than dropped:
+    # Corbeiensis opens Matthew with sixty-one words of genealogy from Adam that the
+    # Vulgate has no verse for, and a reading this divergent going missing without a word
+    # is the failure this module exists to avoid.
+    return verses, " ".join(stream[: cuts[0][1]]).strip() if cuts else ""
+
+
 def build(archive: Path) -> Iterator[BuiltCorpus]:
     path = archive / f"cc-{_TEXT}.xml"
     if not path.exists():
@@ -259,6 +414,80 @@ def build(archive: Path) -> Iterator[BuiltCorpus]:
                         f"{', '.join(beyond[codex])}."
                     ]
                     if beyond.get(codex)
+                    else []
+                ),
+            ],
+            licence=get("site-terms-nc"),
+        )
+
+    record = _bounds()
+    if not record.by_codex:
+        return
+    streams = read_continuous(path)
+    recovery = record.recovery
+    for codex, (corpus, label, books) in DERIVED.items():
+        stored = record.by_codex.get(codex)
+        if not stored:
+            continue
+        cut: list[tuple[VerseRef, str]] = []
+        prologues: list[str] = []
+        for book in books:
+            stream = streams.get((codex, book))
+            if stream and book in stored:
+                verses, prologue = _derived_verses(stream, book, stored[book])
+                cut.extend(verses)
+                if prologue:
+                    prologues.append(f"{book}: {prologue}")
+        if not cut:
+            continue
+        yield BuiltCorpus(
+            id=corpus,
+            label=label,
+            language="la",
+            # Not a claim that the manuscript follows `vul`: it has no divisions of its own,
+            # and `vul` is where the ones it has been given came from. Declaring anything
+            # else would imply a numbering somebody printed.
+            versification="vul",
+            verses=cut,
+            notes=[
+                f"{len(cut):,} verses across {len(books)} gospel(s). Migne's collation, "
+                f"under an old and wrong attribution to Eusebius of Vercelli.",
+                "THE VERSE DIVISIONS ARE DERIVED, NOT PRINTED. Bianchini set this manuscript "
+                "as continuous prose with no verse numbers and no chapter heads. The text is "
+                "his; the places it is cut are this library's, obtained by aligning it "
+                "against the Clementine and cutting where the Clementine's verses fall "
+                "(tools/derive_oldlatin.py). A reference into this corpus locates a reading; "
+                "it does not quote a numbering anyone ever printed.",
+                "Measured against held-out truth rather than against itself: re-deriving the "
+                "two manuscripts that DO carry Bianchini's numbers puts the boundary exactly "
+                "where he put it "
+                + (
+                    f"{min(s['exact'] for s in recovery.values()):.0f}-"
+                    f"{max(s['exact'] for s in recovery.values()):.0f}% of the time, and "
+                    f"within two words "
+                    f"{min(s['within_2_words'] for s in recovery.values()):.0f}-"
+                    f"{max(s['within_2_words'] for s in recovery.values()):.0f}% of the time. "
+                    if recovery
+                    else ""
+                )
+                + "So about a third of boundaries are off, nearly all by a word or two at the "
+                "seam. Scoring these against the Vulgate instead would report a median 0.86 "
+                "and no drift at all, because that is the objective the alignment maximised.",
+                *(
+                    [
+                        "Not everything under this manuscript's name is imported: "
+                        + "; ".join(f"{name} -- {why}" for name, why in SKIPPED.items())
+                    ]
+                    if codex == "Corbeiensis"
+                    else []
+                ),
+                *(
+                    [
+                        "Text standing before the first verse the Vulgate has, and so with "
+                        "nowhere to be stored, recorded here rather than dropped -- "
+                        + "; ".join(prologues)
+                    ]
+                    if prologues
                     else []
                 ),
             ],

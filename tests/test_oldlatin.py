@@ -8,10 +8,22 @@ dots is also a full stop.
 
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
-from biblereference.corpora.oldlatin import CORPORA, SKIPPED, _readable, _roman, _verses
+from biblereference.corpora.oldlatin import (
+    CORPORA,
+    DERIVED,
+    SKIPPED,
+    _Bound,
+    _derived_verses,
+    _readable,
+    _roman,
+    _verses,
+)
 from biblereference.corpora.tei import GAP
+from biblereference.refs import VerseRef
 
 # --------------------------------------------------------------------------------------
 # The hole, which is the whole difficulty
@@ -68,8 +80,9 @@ def test_a_number_inside_a_word_is_not_a_verse_number() -> None:
 
 
 def test_text_with_no_verse_numbers_yields_nothing() -> None:
-    """Corbeiensis and Brixianus are printed exactly like this, and the honest answer for
-    them is nothing rather than a guess."""
+    """Corbeiensis and Brixianus are printed exactly like this. This parser answers nothing
+    for them rather than guessing; their divisions come from the alignment below instead,
+    which at least records that the guess is a guess."""
     assert _verses("Liber generationis Jesu Christi, filii David, filii Abraham.") == []
 
 
@@ -92,11 +105,79 @@ def test_the_chapter_numerals(printed: str, expected: int) -> None:
 # --------------------------------------------------------------------------------------
 
 
-def test_two_manuscripts_are_imported_and_two_are_recorded_as_not() -> None:
-    """An absence with no reason beside it is indistinguishable from a bug. Corbeiensis and
-    Brixianus have no verse numbers and no chapter heads at all; numbering them would mean
-    aligning against the Vulgate and calling the result the manuscript's own."""
+def test_the_four_manuscripts_are_imported_three_ways() -> None:
+    """Two carry Bianchini's numbers, two are cut by alignment, and three gospels of
+    Corbeiensis are not a manuscript text at all. An absence with no reason beside it is
+    indistinguishable from a bug."""
     assert set(CORPORA) == {"Vercellensis", "Veronensis"}
-    assert set(SKIPPED) == {"Corbeiensis", "Brixianus"}
+    assert set(DERIVED) == {"Brixianus", "Corbeiensis"}
+    assert set(SKIPPED) == {"Corbeiensis Mark, Luke and John"}
     for name, why in SKIPPED.items():
         assert len(why.split()) > 8, f"{name} is dismissed without a reason"
+
+
+def test_a_derived_corpus_says_so_in_its_own_label() -> None:
+    """The notes are read by whoever goes looking; the label is read by everyone. A verse
+    division nobody printed must not be able to reach a reader looking like one that was."""
+    for _, label, _ in DERIVED.values():
+        assert "derived, not printed" in label
+
+
+def test_corbeiensis_takes_matthew_only() -> None:
+    """Its Mark, Luke and John are Bianchini's apparatus -- twelve-word fragments, some of
+    them notes about the manuscript rather than readings from it."""
+    assert DERIVED["Corbeiensis"][2] == ("MAT",)
+    assert DERIVED["Brixianus"][2] == ("MAT", "MRK", "LUK", "JHN")
+
+
+# --------------------------------------------------------------------------------------
+# The derived divisions, which are this library's and not the edition's
+# --------------------------------------------------------------------------------------
+
+
+def _record(stream: list[str], cuts: dict[str, int]) -> _Bound:
+    digest = hashlib.sha256(" ".join(stream).encode()).hexdigest()[:16]
+    return _Bound(digest, cuts)
+
+
+def test_offsets_are_refused_when_the_stream_is_not_the_one_they_were_measured_on() -> None:
+    """The offsets are word positions. A parser change that shifts the stream by one word
+    would move every verse in the manuscript, and would do it without any symptom -- so the
+    reading is checked against a digest rather than assumed to be the same one."""
+    stream = ["Liber", "generationis", "Jesu", "Christi", "Abraham", "genuit", "Isaac"]
+    record = _record(stream, {"1:1": 0, "1:2": 4})
+    verses, _ = _derived_verses(stream, "MAT", record)
+    assert len(verses) == 2
+
+    with pytest.raises(ValueError, match="different reading"):
+        _derived_verses([*stream, "extra"], "MAT", record)
+
+
+def test_text_before_the_first_verse_is_returned_rather_than_dropped() -> None:
+    """Corbeiensis opens Matthew with sixty-one words of genealogy from Adam that the
+    Vulgate has no verse for. Slicing from the first cut discards it, and a reading that
+    divergent going missing in silence is exactly what this module exists to prevent."""
+    stream = ["Deus", "fecit", "Adam.", "Liber", "generationis", "Jesu"]
+    verses, prologue = _derived_verses(stream, "MAT", _record(stream, {"1:1": 3}))
+    assert prologue == "Deus fecit Adam."
+    assert verses == [(VerseRef("MAT", 1, 1), "Liber generationis Jesu")]
+
+
+def test_the_cuts_partition_the_stream_without_overlap_or_loss() -> None:
+    """Every word after the first cut lands in exactly one verse. A projection that ran
+    backwards would duplicate text across two verses and read as a manuscript repeating
+    itself."""
+    stream = "a b c d e f g h".split()
+    verses, prologue = _derived_verses(
+        stream, "MAT", _record(stream, {"1:1": 0, "1:2": 3, "1:3": 5})
+    )
+    assert not prologue
+    assert [text for _, text in verses] == ["a b c", "d e", "f g h"]
+
+
+def test_an_empty_verse_is_left_out_rather_than_stored_blank() -> None:
+    """Two cuts at the same offset mean the alignment found nothing between them. Storing
+    the empty string would read as a verse the manuscript omits."""
+    stream = "a b c".split()
+    verses, _ = _derived_verses(stream, "MAT", _record(stream, {"1:1": 0, "1:2": 3, "1:3": 3}))
+    assert [str(ref) for ref, _ in verses] == ["MAT 1:1"]
