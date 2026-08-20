@@ -39,7 +39,7 @@ __all__ = ["FOLD_VERSION", "SpanNotFoundError", "apply_spans", "fold"]
 #: 3 -- Greek gains two scribal conventions (:data:`_GREEK_CONVENTIONS`) and sixteen more
 #: *nomina sacra*, both priced against real manuscript variation rather than guessed. Greek
 #: folds change; every other language answers exactly as it did at version 1.
-FOLD_VERSION: Final = 5
+FOLD_VERSION: Final = 6
 
 _MARKERS: Final[dict[str, str]] = {"bold": "**", "italic": "*"}
 
@@ -367,10 +367,23 @@ def _greek_word(word: str) -> str:
     """
     core = word.rstrip("".join(_TRAILING))
     tail = word[len(core) :]
-    lead = core[: len(core) - len(core.lstrip(_EDITORIAL))]
-    head = core[len(lead) :]
-    if not head:
+    if not core:
         return word
+    # Segmented on the editorial marks, not merely trimmed at the ends: Rahlfs writes a
+    # parenthesis with no spaces around it -- `πολλοί—οὕτως`, `ταῦτα—οὕτως` -- and `fold`
+    # splits on spaces, so that is one word to every rule and matches none of them. The word
+    # tokeniser then splits it anyway and files the unfolded half. `_SEGMENT` keeps the marks,
+    # so they go back exactly where the editor put them and the offsets still point at what
+    # was written.
+    return "".join(_greek_head(part) for part in _SEGMENT.split(core)) + tail
+
+
+def _greek_head(head: str) -> str:
+    """The rules, applied to one unbroken run of letters.
+
+    Split out so :func:`_greek_word` can map it over the pieces of a bracketed or dashed
+    token without recursing: a piece that is *only* marks re-splits into itself for ever.
+    """
     # The *nomina sacra* are looked up here too, and were not before: the expansion ran on
     # the raw token, so `θς` became θεός and `θς,` stayed `θς`. Every contraction followed
     # by a comma or an interpunct -- which in a manuscript transcription is a great many of
@@ -384,7 +397,7 @@ def _greek_word(word: str) -> str:
         and head not in _GENUINE_IOTA
     ):
         head = head[:-1]
-    return lead + head + tail
+    return head
 
 
 #: Punctuation `fold` leaves attached to a Greek word, which `_tokens` strips afterwards.
@@ -398,6 +411,10 @@ _TRAILING: Final = frozenset(".,;:·’'\u00b7\u0387[]()<>{}\u2014\u2013")
 #: went into the index with nothing to show it had happened. Exactly the fault the docstring
 #: below already records for `θς,` -- found again on the other end of the word.
 _EDITORIAL: Final = "[](){}<>\u2014\u2013\u00ab\u00bb"
+
+#: The same marks as a splitter, keeping them, so each run of letters between them is looked
+#: up on its own and the marks go back where they were.
+_SEGMENT: Final = re.compile(f"([{re.escape(_EDITORIAL)}]+)")
 
 
 def _rewrite_greek(out: list[str], offsets: list[int], *, orthographic: bool) -> _Folded:

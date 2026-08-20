@@ -344,7 +344,7 @@ def test_the_fold_version_moves_when_the_fold_does() -> None:
     """
     from biblereference.emphasis import FOLD_VERSION
 
-    assert FOLD_VERSION == 5
+    assert FOLD_VERSION == 6
     assert fold("Ἰησοῦς Χριστός, ᾧ ἡ δόξα", "grc") == "ιησουσ χριστοσ, ω η δοξα"
     assert fold("Jesu naVe", "la") == "iesu naue"
     assert fold("הָעַלְמָ֗ה אַל־תִּפְגְּעִי", "he") == "העלמה אל תפגעי"
@@ -492,3 +492,12 @@ def test_an_editorial_mark_does_not_hide_a_word_from_the_fold() -> None:
     assert fold("«πρωΐ»", "grc") == "«πρωι»"
     # the bare word folds the same way, which is the whole point
     assert fold("οὕτως", "grc") == "ουτω"
+
+    # A mark *inside* the word, which trimming the ends does not reach. Rahlfs opens a
+    # parenthesis with no space around it, so this is one token to a rule that looks up the
+    # whole head -- and the word tokeniser then splits it and files the unfolded half.
+    assert fold("πολλοί—οὕτως", "grc") == "πολλοι—ουτω"
+    assert fold("ταῦτα—οὕτως", "grc") == "ταυτα—ουτω"
+    # and a piece that is only marks must not send the splitter round again
+    assert fold("—", "grc") == "—"
+    assert fold("[]", "grc") == "[]"
