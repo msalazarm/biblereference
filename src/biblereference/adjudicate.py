@@ -125,11 +125,27 @@ WITNESSES: Mapping[str, Sequence[tuple[str, str]]] = {
         ("web", "en"),
     ),
     "eng": (("web", "en"), ("kjv", "en"), ("asv", "en")),
-    # Rahlfs before Swete: it is the standard critical text, and it follows what `lxx`
-    # declares on 85% of chapters against Swete's 81% -- including the Psalms of Solomon,
-    # where it matches on all eighteen and Swete on three.
-    "lxx": (("brenton", "en"), ("rahlfs", "grc"), ("swete", "grc")),
-    "vul": (("dra", "en"), ("latvuc", "la")),
+    # Greek first, for the reason spelled out above for `org` and not applied here until
+    # Judith 16 forced it. `brenton` led this tuple, and it is an *English-tradition* text
+    # speaking for a Greek system: it carries an incipit the Greek has not ("Then Judith
+    # began to sing this thanksgiving in all Israel"), so its 2-7 are rahlfs 1-6, and it
+    # merges rahlfs 7 and 8 into its own 8 and resynchronises at 9. One verse gained at the
+    # head, one lost to the merge, twenty-five either way -- so `faithful_chapters` sees
+    # matching counts and passes it, exactly as it passed `web` for org.
+    #
+    # `rahlfs`, `rahlfs-cc` and `swete` are identical through the disputed verses and agree
+    # with `peshitta-ot` -- an org witness in a third language -- verse for verse. Every
+    # contradiction here was brenton's numbering, not a mapping fault.
+    #
+    # Rahlfs before Swete among the Greek: it is the standard critical text, and follows
+    # what `lxx` declares on 85% of chapters against Swete's 81% -- including the Psalms of
+    # Solomon, where it matches on all eighteen and Swete on three. `brenton` stays, last,
+    # for the verses no Greek witness here holds: a hard-to-verify answer beats none, and
+    # which witness answered is recorded.
+    "lxx": (("rahlfs", "grc"), ("swete", "grc"), ("brenton", "en")),
+    # `dra` is Douay-Rheims, English, and led this tuple ahead of the Latin it translates.
+    # The same fault, found by looking rather than by being bitten.
+    "vul": (("latvuc", "la"), ("dra", "en")),
     "nvl": (("novavulgata", "la"),),
     # The Elizabeth Bible, and the second registry it has to be named in. `build_work`
     # asks COVERAGE_WITNESSES which verses a same-language witness can reach, but `_task`

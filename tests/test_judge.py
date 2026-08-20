@@ -277,3 +277,34 @@ def test_an_unknown_model_is_no_tier_rather_than_a_guess() -> None:
     drops it, which costs a server; guessing would cost the verdicts."""
     assert tier("llama-3-70b.gguf") == ""
     assert tier("mistral-small.gguf") == ""
+
+
+def test_no_english_witness_speaks_first_for_a_non_english_system() -> None:
+    """A witness answers in its *own* tradition's numbering, so an English translation
+    put at the head of a non-English system speaks for the wrong one wherever the two
+    differ -- and `faithful_chapters` cannot catch it, because it compares verse counts
+    and a compensating gain and merge leaves the count identical.
+
+    This has now been paid for twice. `web` leading `org` carried 82 of 87 surviving
+    flags in an overnight run that had to be thrown away. `brenton` leading `lxx` made
+    every contradiction in Judith 16: it carries an incipit the Greek has not, so its
+    2-7 are rahlfs 1-6, then it merges rahlfs 7 and 8 and resynchronises at 9 -- twenty
+    five verses either way. `dra` led `vul` in the same shape and was found by looking.
+
+    English witnesses are kept, last, for verses their system's own language does not
+    reach here. Only the first is load-bearing: `witness_for` takes the first that holds
+    the verse.
+    """
+    from biblereference.adjudicate import WITNESSES
+
+    for system, pairs in WITNESSES.items():
+        assert pairs, f"{system} has no witnesses"
+        corpus, language = pairs[0]
+        if system == "eng":
+            assert language == "en", f"{system} should lead with English, not {corpus}"
+            continue
+        assert language != "en", (
+            f"{system} leads with {corpus}, an English-tradition corpus. It will speak "
+            f"for the English numbering wherever the two systems differ, and the verse "
+            f"counts will agree anyway."
+        )
