@@ -2527,6 +2527,14 @@ class Searcher:
         if not self._inflected:
             return self._decorate(exact[:limit])
 
+        # The lemma axes, on the exact matches too. `_exact_cluster` has done this since the
+        # doxology case was found, and `search` was left behind: the same nine verbatim words
+        # scored 16.67 bits through `scan` and a silent 0.0 here, so a consumer whose gate
+        # carries a surprisal floor -- as the shipped Latin gate does on every arm -- refused
+        # every exact match this method returned, true ones included. Nothing else about the
+        # match changes; `run` and `containment` were already right.
+        exact = [self._with_axes(match, query, match.witnesses[0]) for match in exact]
+
         # Settled first and settled whole. Letting the two sets compete for `limit` places
         # cost eight passages in four hundred that the exact path had found on its own --
         # measured, not feared -- and a feature that improves recall by losing matches is

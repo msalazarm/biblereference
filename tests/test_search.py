@@ -1022,3 +1022,58 @@ def test_an_index_that_never_recorded_its_fold_is_not_cried_wolf_over(home: Data
         connection.execute("UPDATE search_state SET fold_version = NULL")
         connection.commit()
     assert index_is_stale(home) == []
+
+
+# --------------------------------------------------------------------------------------
+# The lemma axes on an exact match, which `search` used to leave at zero
+# --------------------------------------------------------------------------------------
+
+
+def test_search_puts_the_lemma_axes_on_its_exact_matches(
+    home: DataHome, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`_exact_cluster` has carried the axes since the doxology case; `search` did not.
+
+    The same nine verbatim words scored 16.67 bits through `scan` and a silent 0.0 through
+    `search`, so a consumer whose gate puts a surprisal floor on every arm -- as the shipped
+    Latin gate does -- refused every exact match this method returned, true ones included.
+    Nine hundred false positives were the reason that floor exists, so the floor is right and
+    the missing axes were the bug.
+
+    Asserted as wiring rather than as a number: the axes need a real lexicon, and the point
+    of failure was that the call was absent, not that it computed the wrong thing.
+    """
+    build(home, "archaic", {**ARCHAIC, **FILLER})
+    build_index(home)
+    seen: list[int] = []
+
+    original = Searcher._with_axes
+
+    def counted(self: Searcher, found: object, query: object, best: object) -> object:
+        seen.append(1)
+        return original(self, found, query, best)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Searcher, "_with_axes", counted)
+    with Searcher(home, inflected=True) as searcher:
+        found = searcher.search(ARCHAIC["JHN 1:1"])
+    assert found, "the fixture verse should still be found"
+    assert seen, "search returned an exact match without asking for its lemma axes"
+
+
+def test_search_does_not_pay_for_the_axes_when_inflected_is_off(
+    home: DataHome, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The axes cost a lexicon lookup per word. A caller who did not ask does not pay."""
+    build(home, "archaic", {**ARCHAIC, **FILLER})
+    build_index(home)
+    seen: list[int] = []
+    original = Searcher._with_axes
+
+    def counted(self: Searcher, found: object, query: object, best: object) -> object:
+        seen.append(1)
+        return original(self, found, query, best)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Searcher, "_with_axes", counted)
+    with Searcher(home) as searcher:
+        searcher.search(ARCHAIC["JHN 1:1"])
+    assert not seen
