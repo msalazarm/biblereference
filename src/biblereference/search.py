@@ -340,6 +340,62 @@ def _matcher(left: Sequence[str], right: Sequence[str]) -> SequenceMatcher[str]:
     return SequenceMatcher(None, left, right, autojunk=False)
 
 
+class _Query:
+    """The searched text, folded once per candidate language rather than once per searcher.
+
+    Every verse is tokenised in its own corpus's language, so folding the query some other
+    way puts the two sides of a comparison in different alphabets. `fold` maps j to i and v
+    to u for Latin precisely because the Clementine writes *Jesus* where the Nova Vulgata
+    writes *Iesus*; a query folded as Greek, or as nothing at all, never got the benefit,
+    and a Clementine verse searched verbatim against itself came back 0.933 rather than 1.0.
+
+    Retrieval still needs a single tokenisation -- the index holds every language at once
+    and the candidate is not known until it comes back -- so :attr:`terms` keeps that one.
+    The per-candidate folds are for scoring, which is where the language is known.
+    """
+
+    __slots__ = ("_default", "_folded", "_pinned", "_text")
+
+    def __init__(self, text: str, default: str | None) -> None:
+        self._text = text
+        self._default = default
+        self._folded: dict[str | None, list[str]] = {}
+        self._pinned: list[str] | None = None
+
+    def of(self, language: str | None) -> list[str]:
+        """The query as this language folds it. Memoised: a span is grown verse by verse
+        and every step asks the same few languages the same question."""
+        if self._pinned is not None:
+            return self._pinned
+        folded = self._folded.get(language)
+        if folded is None:
+            folded = self._folded[language] = _tokens(self._text, language)
+        return folded
+
+    @classmethod
+    def pinned(cls, tokens: Sequence[str]) -> _Query:
+        """A query its caller has already folded, which every language then sees unchanged.
+
+        The lemma path folds once in the language it was built for and passes *slices* of
+        that tokenisation around -- `tokens[low:high]` is the trimmed quotation inside a
+        padded window -- and a slice has no text to fold again. Pinning says so, rather than
+        re-folding some reconstructed string and calling the result per-candidate.
+
+        Those callers are single-language by construction, so there is nothing a second fold
+        would buy them; this keeps them exactly as they were.
+        """
+        query = cls("", None)
+        query._pinned = list(tokens)
+        return query
+
+    @property
+    def terms(self) -> list[str]:
+        return self.of(self._default)
+
+    def __len__(self) -> int:
+        return len(self.terms)
+
+
 def _ratio(left: Sequence[str], right: Sequence[str]) -> float:
     if not left or not right:
         return 0.0
@@ -2252,7 +2308,7 @@ class Searcher:
         """The contiguity gate for a query of this length."""
         return self._min_run(length) if callable(self._min_run) else self._min_run
 
-    def _is_quotation(self, query: Sequence[str], best: Witness) -> bool:
+    def _is_quotation(self, query: _Query, best: Witness) -> bool:
         """Whether the best-matching text is close enough, and contiguous enough, to keep.
 
         Two gates, because either alone lets the wrong things through. Coverage says how
@@ -2264,9 +2320,10 @@ class Searcher:
         if best.similarity < self._quotation and best.coverage < self._coverage:
             return False
         meta = self._corpora[best.corpus]
-        return longest_run(query, _tokens(best.text, meta.language)) >= self._min_run_for(
-            len(query)
-        )
+        # `len(mine)`, not `len(query)`: the run floor scales with the query's length, and
+        # the length is itself a thing the fold can change.
+        mine = query.of(meta.language)
+        return longest_run(mine, _tokens(best.text, meta.language)) >= self._min_run_for(len(mine))
 
     def _candidates(self, terms: Sequence[str], limit: int) -> list[tuple[int, float]]:
         """Indexed texts sharing words with the query, best first.
@@ -2367,20 +2424,22 @@ class Searcher:
         return {corpus: " ".join(parts) for corpus, parts in collected.items()}
 
     def _witnesses(
-        self, vrs: str, book: str, chapter: int, first: int, last: int, query: Sequence[str]
+        self, vrs: str, book: str, chapter: int, first: int, last: int, query: _Query
     ) -> list[Witness]:
         witnesses: list[Witness] = []
         for corpus, text in self._renderings(vrs, book, chapter, first, last).items():
             meta = self._corpora[corpus]
             tokens = _tokens(text, meta.language)
+            # Both sides folded by the same language's rules -- see :class:`_Query`.
+            mine = query.of(meta.language)
             witnesses.append(
                 Witness(
                     corpus,
                     meta.label,
                     text,
-                    _ratio(query, tokens),
+                    _ratio(mine, tokens),
                     _translated(corpus),
-                    _coverage(query, tokens),
+                    _coverage(mine, tokens),
                 )
             )
         # Best-covered first, because that is the question being asked here -- which passage
@@ -2390,7 +2449,7 @@ class Searcher:
         return witnesses
 
     def _grow(
-        self, vrs: str, book: str, chapter: int, first: int, last: int, query: Sequence[str]
+        self, vrs: str, book: str, chapter: int, first: int, last: int, query: _Query
     ) -> tuple[int, int, list[Witness]]:
         """Extend one span outward while doing so makes the match better.
 
@@ -2420,7 +2479,7 @@ class Searcher:
                     improved = True
         return first, last, witnesses
 
-    def _span_score(self, witnesses: Sequence[Witness], query: Sequence[str]) -> float:
+    def _span_score(self, witnesses: Sequence[Witness], query: _Query) -> float:
         """How well a span accounts for the query, for deciding whether to keep growing.
 
         Coverage over runs of at least :data:`_GROWTH_BLOCK` words, so that a neighbouring
@@ -2430,11 +2489,12 @@ class Searcher:
         if not witnesses:
             return 0.0
         best = witnesses[0]
-        tokens = _tokens(best.text, self._corpora[best.corpus].language)
-        return _coverage(query, tokens, min_block=_GROWTH_BLOCK)
+        language = self._corpora[best.corpus].language
+        tokens = _tokens(best.text, language)
+        return _coverage(query.of(language), tokens, min_block=_GROWTH_BLOCK)
 
     def _best_span(
-        self, vrs: str, book: str, chapter: int, first: int, last: int, query: Sequence[str]
+        self, vrs: str, book: str, chapter: int, first: int, last: int, query: _Query
     ) -> tuple[int, int, list[Witness]]:
         """The span of verses within a candidate run that best matches the query.
 
@@ -2486,11 +2546,11 @@ class Searcher:
         # old behaviour: the right answer there is to tokenise per candidate rather than per
         # searcher, and that is a larger change than this one.
         spoken = {meta.language for meta in self._corpora.values()}
-        query = _tokens(text, spoken.pop() if len(spoken) == 1 else None)
+        query = _Query(text, spoken.pop() if len(spoken) == 1 else None)
         if len(query) < self._min_query:
             return []
 
-        terms = self._query_terms(query)
+        terms = self._query_terms(query.terms)
         candidates = self._candidates(terms, _CANDIDATES)
         grouped = self._located([text_id for text_id, _ in candidates], dict(candidates))
 
@@ -2526,12 +2586,14 @@ class Searcher:
                     # that found it, and a `direct` match saying its run was nothing would
                     # be the one field here nobody could check.
                     run=longest_run(
-                        query, _tokens(witnesses[0].text, self._language_of(witnesses[0]))
+                        query.of(self._language_of(witnesses[0])),
+                        _tokens(witnesses[0].text, self._language_of(witnesses[0])),
                     ),
                     # `_coverage`'s arguments swapped: matched share of the *verse*, at
                     # the spelled tier, which is the tier that found this match.
                     containment=_coverage(
-                        _tokens(witnesses[0].text, self._language_of(witnesses[0])), query
+                        _tokens(witnesses[0].text, self._language_of(witnesses[0])),
+                        query.of(self._language_of(witnesses[0])),
                     ),
                 )
             )
@@ -2547,7 +2609,12 @@ class Searcher:
         # carries a surprisal floor -- as the shipped Latin gate does on every arm -- refused
         # every exact match this method returned, true ones included. Nothing else about the
         # match changes; `run` and `containment` were already right.
-        exact = [self._with_axes(match, query, match.witnesses[0]) for match in exact]
+        exact = [
+            self._with_axes(
+                match, query.of(self._language_of(match.witnesses[0])), match.witnesses[0]
+            )
+            for match in exact
+        ]
 
         # Settled first and settled whole. Letting the two sets compete for `limit` places
         # cost eight passages in four hundred that the exact path had found on its own --
@@ -2671,7 +2738,9 @@ class Searcher:
             spans.sort()
 
             for _, vrs, book, chapter, first, last in spans[:_PASSAGES]:
-                start, end, witnesses = self._best_span(vrs, book, chapter, first, last, query)
+                start, end, witnesses = self._best_span(
+                    vrs, book, chapter, first, last, _Query.pinned(query)
+                )
                 if not witnesses:
                     continue
                 passage = VerseRange(
@@ -3287,7 +3356,7 @@ class Searcher:
             return []
         found: list[tuple[float, int, int]] = []
         for seed in range(first, min(last, first + _MAX_SEEDS - 1) + 1):
-            start, end, witnesses = self._grow(vrs, book, chapter, seed, seed, query)
+            start, end, witnesses = self._grow(vrs, book, chapter, seed, seed, _Query.pinned(query))
             if witnesses:
                 found.append((witnesses[0].similarity, start, end))
         return found
@@ -3489,7 +3558,9 @@ class Searcher:
         best: tuple[float, int, int, list[Witness]] | None = None
         rivals: list[tuple[float, int, int]] = []
         for first, last in self._runs(verses):
-            start, end, witnesses = self._best_span(vrs, book, chapter, first, last, query)
+            start, end, witnesses = self._best_span(
+                vrs, book, chapter, first, last, _Query.pinned(query)
+            )
             if not witnesses:
                 continue
             rivals.extend(self._span_rivals(vrs, book, chapter, first, last, query))
@@ -3510,8 +3581,9 @@ class Searcher:
         # Re-score against only the words that actually matched. The window this came from
         # is padded with whatever the speaker said either side of the quotation, and
         # leaving that in would drag a real quotation below the threshold.
-        exact = self._witnesses(vrs, book, chapter, start, end, tokens[low:high])
-        if not exact or not self._is_quotation(tokens[low:high], exact[0]):
+        quotation = _Query.pinned(tokens[low:high])
+        exact = self._witnesses(vrs, book, chapter, start, end, quotation)
+        if not exact or not self._is_quotation(quotation, exact[0]):
             return None
 
         passage = VerseRange(
@@ -3586,7 +3658,7 @@ class Searcher:
         runs: list[tuple[int, int, list[Reading]]] = []
         rivals: list[tuple[float, int, int]] = []
         for first, last in self._runs(verses):
-            witnesses = self._witnesses(vrs, book, chapter, first, last, query)
+            witnesses = self._witnesses(vrs, book, chapter, first, last, _Query.pinned(query))
             if not witnesses:
                 continue
             theirs = lemma_readings(_tokens(witnesses[0].text, language), language, lexicon)
@@ -3660,7 +3732,7 @@ class Searcher:
 
         # Re-read the verse against the trimmed span, so the witness that answers is the one
         # that answers *this* quotation rather than the padded window around it.
-        held = self._witnesses(vrs, book, chapter, start, end, tokens[low:high])
+        held = self._witnesses(vrs, book, chapter, start, end, _Query.pinned(tokens[low:high]))
         if not held:
             return None
         trimmed, itacised_at, recovered_at = self._re_read(tokens[low:high], language, lexicon)
