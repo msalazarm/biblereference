@@ -210,7 +210,7 @@
         "keys": [
           "PSA 114:8"
         ],
-        "reason": "See _synodal_psalm_note. Contradicts the tail of 'PSA 114:0-8 -> PSA 116:0-8', which is exact and complete for a psalm rso's own maxVerses gives 8 verses. The stray additionally sends 114:8 to org 116:9, apparently to express that one Orthodox verse covers two Hebrew ones -- a split no range can state, since both sides must be the same length. Dropping it leaves org 116:9 with no rso source, which is an honest gap rather than a verse claimed twice. The Catholic file does not have this problem: rsc gives its Psalm 114 nine verses and maps 0-9 to 116:0-9 straight through."
+        "reason": "See _synodal_psalm_note. Contradicts the tail of 'PSA 114:0-8 -> PSA 116:0-8', which is exact and complete for a psalm rso's own maxVerses gives 8 verses. The stray additionally sends 114:8 to org 116:9, apparently to express that one Orthodox verse covers two Hebrew ones -- a split no range can state, since both sides must be the same length. Dropping it leaves org 116:9 with no rso source, which is an honest gap rather than a verse claimed twice. The Catholic file does not have this problem: rsc gives its Psalm 114 nine verses and maps 0-9 to 116:0-9 straight through. AMENDED 2026-08-20: the reasoning above is wrong, and the judge run overturned it. 'PSA 114:0-8 -> PSA 116:0-8' is NOT exact -- it is right for verses 1-3 and wrong from 4 on -- and the verse covering two Hebrew ones is 114:4, not 114:8. This stray was therefore correct: 114:8 does render org 116:9. The drop still stands, because the corrected 'PSA 114:5-8 -> PSA 116:6-9' below states the same thing as part of a range that is right throughout, and leaving both would claim org 116:9 twice. The 'honest gap' this note claims to leave at org 116:9 was a gap this project created."
       },
       {
         "keys": [
@@ -224,6 +224,24 @@
           "DAN 3:24-90"
         ],
         "reason": "Sends the Prayer of Azariah and Song of the Three into book DAG, Greek Daniel, which org does not have at all -- so all 67 verses land on references that cannot exist and org's own S3Y is unreachable from Synodal. Identical in kind to the eng entry and dropped for the same reason. The correspondence itself is sound: the Elizabeth Bible follows Theodotion verse for verse here, checked against rahlfs-alt at DAN 3:25, 3:26, 3:89, 3:90 and 3:91, all of which match the Greek exactly. It is the target book org lacks, not the alignment."
+      },
+      {
+        "keys": [
+          "PRO 18:9-25"
+        ],
+        "reason": "Declares the shift eleven verses too early. The Elizabeth Bible's Proverbs 18 has twenty-five verses against org's twenty-four, and the extra one is 18:23, 'Иже изгоняет жену добрую' -- an LXX plus with no Hebrew counterpart. So 18:1-22 is identity and only 18:24-25 are displaced; this range moves sixteen verses that are already in place. The judge run bears it out exactly: of twelve verses judged in the declared range, eight contradicted and the only two confirmed were 24 and 25, which the range happens to place correctly. Read against ojb: SL 18:22 = org 18:22 'he who findeth a wife', SL 18:24 = org 18:23 'the poor useth entreaties'. Replaced below by the two verses that move."
+      },
+      {
+        "keys": [
+          "PSA 139:0-14"
+        ],
+        "reason": "Straight through, and wrong for the first six verses. org's Psalm 140 numbers its superscription as verse 1 -- 'For the one directing. Mizmor of Dovid' in ojb, confirmed in wlc -- while the Slavonic's verse 1 is already 'Изми мя', 'Deliver me'. So the psalm bodies are offset by one until a Slavonic split closes the gap: SL 139:5-6 are two verses where org 140:6 is one. Verses 7-14 then align exactly, confirmed by the judge at 7, 8, 13 and 14, while 1-4 all contradicted. Replaced below by the head, the identity tail, and an honest gap where the split cannot be stated as a range."
+      },
+      {
+        "keys": [
+          "PSA 114:0-8"
+        ],
+        "reason": "Straight through, and wrong from verse 4 on. The Slavonic merges org's 116:4 and 116:5 into a single verse -- 'о, Господи, избави душу мою: милостив Господь и праведен' carries both 'O LORD, deliver my soul' and 'gracious is the LORD, and righteous' -- so everything after it is offset by one and 114:8 lands on 116:9. The judge confirmed verses 2 and 3 and contradicted 4 through 8. This range is what made the 'PSA 114:8' stray above look wrong; the stray was right, and that entry's reason is amended to say so."
       }
     ]
   },
@@ -672,6 +690,50 @@
       "DAN 3:24-90": {
         "to": "S3Y 1:1-67",
         "reason": "The Song's 67 verses sent to the standalone book org actually carries. Sixty-seven onto sixty-seven: org gives S3Y exactly 67 verses and the Synodal addition runs DAN 3:24-90, which is 67. The anchor is org's own chain, whose first entry 'S3Y 1:1-29 -> DAG 3:24-52' puts S3Y 1:1 at DAG 3:24 -- the verse the Elizabeth Bible numbers 3:24. That chain's interior is the faulty one the eng entry documents (DAG 3:52 claimed twice, and a citation of S3Y 1:68 where org gives 67), which is why this states the clean range instead of reassembling its pieces."
+      },
+      "PRO 18:24-25": {
+        "to": "PRO 18:23-24",
+        "reason": "The only two verses of Proverbs 18 that move, after the LXX plus at Slavonic 18:23. Two onto two, meeting org's last verse exactly; 18:1-22 needs no mapping because it is identity."
+      },
+      "PSA 139:0": {
+        "to": "PSA 140:1",
+        "reason": "The psalm titles, and the one part of this psalm that had to be derived rather than read. rso declares Psalm 139 as verses 0-14 and org declares Psalm 140 as 1-14; the Elizabeth Bible's text holds only 1-14, so rso's verse 0 is a declared slot for a superscription the edition never sets, while org stores its superscription as verse 1. Mapping 0 to 1 is what makes the arithmetic close: 1 + 4 + 2 + 8 = 15 rso slots onto 1 + 4 + 1 + 8 = 14 org verses, the 2-onto-1 being the split at 139:5-6."
+      },
+      "PSA 139:1-4": {
+        "to": "PSA 140:2-5",
+        "reason": "The psalm body up to the split: four verses onto four, from 'Изми мя' / 'Deliver me' to 'Сохрани мя' / 'Keep me from the hands of the wicked'. Read against ojb and wlc, never against a KJV-numbered witness -- English psalters leave superscriptions unnumbered, and against one of those this mapping looks correct and the judge looks broken."
+      },
+      "PSA 139:7-14": {
+        "to": "PSA 140:7-14",
+        "reason": "Identity, after the split at 139:5-6 closes the offset. Confirmed by the judge at 7, 8, 13 and 14. Slavonic 139:5-6 both render org 140:6 and are left unmapped: two verses onto one cannot be written as a range, and the same honest gap is recorded for PSA 114:4."
+      },
+      "PSA 114:1-3": {
+        "to": "PSA 116:1-3",
+        "reason": "Identity, before the merge. Slavonic 114:0 is a declared title slot with nothing to map to -- org's Psalm 116 has no superscription, its verse 1 being already 'I love the LORD, because he hath heard my voice' -- so it is left unmapped rather than sent to a verse that is not there."
+      },
+      "PSA 114:5-8": {
+        "to": "PSA 116:6-9",
+        "reason": "The tail, after the merge. Four onto four, ending where the dropped stray 'PSA 114:8 -> PSA 116:9' always said it ended. Slavonic 114:4 renders both org 116:4 and 116:5 and is left unmapped: one verse onto two cannot be written as a range."
+      },
+      "SNG 6:1-11": {
+        "to": "SNG 6:2-12",
+        "reason": "A mapping that was never written at all, which is why every verse of the chapter was read as identity and the judge contradicted ten of the twelve. Slavonic 5:16 carries org 5:16 and org 6:1 in one verse -- '...дщери Иерусалимли. Камо отиде брат твой, добрая в женах?', the second sentence being 'Whither is thy beloved gone' -- so the whole chapter runs one verse behind. Verified against ojb at every seam: SL 6:1 = org 6:2, SL 6:4 = org 6:5, SL 6:9 = org 6:10, SL 6:11 = org 6:12. org 6:1 has no Slavonic source of its own and is an honest gap."
+      },
+      "SNG 6:12": {
+        "to": "SNG 7:1",
+        "reason": "The Slavonic chapter runs one verse past org's chapter end, so its last verse belongs to the next chapter: 'Обратися, обратися, суламитино' is org's Song 7:1, 'Return, return, O Shulamite'. This is the verse English bibles number 6:13, which is what makes this chapter dangerous to read against a KJV-numbered witness: against KJV the Slavonic looks like a clean twelve-onto-thirteen shift inside one chapter, and org has no 6:13 for it to land on."
+      },
+      "SNG 7:1-13": {
+        "to": "SNG 7:2-14",
+        "reason": "The offset continues through the next chapter, because org's 7:1 has been taken by the Slavonic's 6:12. Thirteen onto thirteen, SL 7:1 = org 7:2 and SL 7:13 = org 7:14; the text resynchronises at chapter 8, where SL 8:1 = org 8:1. Note that rso declares Song 7 as fourteen verses while the Elizabeth Bible holds thirteen -- the declaration is against its own witness here, and the witness is what this mapping follows."
+      },
+      "NUM 10:34-35": {
+        "to": "NUM 10:35-36",
+        "reason": "A transposition, not a shift: the passage the Masoretes marked off with inverted nuns. The Slavonic follows the Greek in setting the two ark formulas before the cloud verse, where the Hebrew sets the cloud first. SL 10:34 'востани, Господи' is org 10:35 'Rise up, O LORD' and SL 10:35 'возвращай, Господи' is org 10:36 'Return, O LORD'. Two onto two; the third verse of the rotation is below."
+      },
+      "NUM 10:36": {
+        "to": "NUM 10:34",
+        "reason": "The other end of the rotation: SL 10:36 'И облак Господнь бысть осеняющь над ними в день' is org 10:34, 'And the cloud of the LORD was upon them by day'. Unlike the splits in the Psalms this one is cleanly statable, because a rotation of three verses is three equal-length claims rather than a merge."
       }
     },
     "nvl": {
