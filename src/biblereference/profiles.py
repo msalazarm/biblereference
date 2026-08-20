@@ -96,9 +96,7 @@ class Column:
         return self.lemmas | frozenset(form for form, _ in self.forms)
 
 
-def _score(
-    a_form: str, a_reading: Reading, b_form: str, b_reading: Reading
-) -> int:
+def _score(a_form: str, a_reading: Reading, b_form: str, b_reading: Reading) -> int:
     if a_form == b_form:
         return _EXACT
     if a_reading & b_reading:
@@ -131,11 +129,7 @@ def align_pair(
     out: list[tuple[int | None, int | None]] = []
     i, j = len(a), len(b)
     while i > 0 or j > 0:
-        if (
-            i > 0
-            and j > 0
-            and score[i][j] == score[i - 1][j - 1] + _score(*a[i - 1], *b[j - 1])
-        ):
+        if i > 0 and j > 0 and score[i][j] == score[i - 1][j - 1] + _score(*a[i - 1], *b[j - 1]):
             out.append((i - 1, j - 1))
             i, j = i - 1, j - 1
         elif i > 0 and score[i][j] == score[i - 1][j] + _GAP:
@@ -190,8 +184,7 @@ def merge(
             assert right is not None
             form, reading = witness[right]
             out.append(
-                Column(forms=((form, 1.0),), lemmas=reading, insert=attested > 0,
-                       members=(member,))
+                Column(forms=((form, 1.0),), lemmas=reading, insert=attested > 0, members=(member,))
             )
     return out
 
@@ -239,7 +232,7 @@ def profile_chain(
 _SCHEMA: Final = """
 CREATE TABLE profile (
     id INTEGER PRIMARY KEY,
-    vrs TEXT, book TEXT, chapter INTEGER, verse INTEGER,
+    vrs TEXT, language TEXT, book TEXT, chapter INTEGER, verse INTEGER,
     fold_version INTEGER, built_at TEXT, witnesses INTEGER, columns INTEGER);
 CREATE UNIQUE INDEX profile_anchor ON profile (vrs, book, chapter, verse);
 CREATE TABLE profile_member (
@@ -254,7 +247,18 @@ CREATE TABLE profile_reading (
 #: The critical text leads each numbering's seed order -- the pin CollateX's caveat
 #: demands, since progressive alignment is witness-order-dependent and the spike measured
 #: real families where two orders disagree.
-_SEEDS: Final = {"org": "n1904", "lxx": "rahlfs"}
+#:
+#: `vul` joins on 2026-08-20 with the Clementine, which is what lets the Latin be profiled
+#: at all. Note what that costs: a seed is consulted for *cross-family* witnesses too, so a
+#: Greek anchor whose family reaches `vul` now pulls Latin text. Every tokenising call
+#: therefore has to take the language of the corpus in front of it rather than the language
+#: of the run -- see :func:`_language_map`. Before this the table held only Greek
+#: numberings, so the question could not arise and nothing in the code asked it.
+_SEEDS: Final = {"org": "n1904", "lxx": "rahlfs", "vul": "latvuc"}
+
+#: The languages profiles can be built for: the two the lemma lexicons cover. A language
+#: with no lexicon cannot be profiled, because the columns are lemma readings.
+PROFILE_LANGUAGES: Final = ("grc", "la")
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,10 +267,26 @@ class ProfilesResult:
     witnesses: int
 
 
-def _greek_editions(connection: sqlite3.Connection) -> dict[str, list[str]]:
-    """Greek corpora by versification, the seed first and the rest alphabetical."""
+def _language_map(connection: sqlite3.Connection) -> dict[str, str]:
+    """Every corpus's language, so a witness is read in its own.
+
+    The seed table now spans two languages, and a seed is consulted for cross-family
+    witnesses as well as for its own numbering -- so a Greek anchor can reach a Latin
+    witness. Tokenising that with the run's language would hand Greek lemma rules to Latin
+    text and return readings for nothing, which is the shape of failure this project keeps
+    meeting: not an error, a plausible empty answer.
+    """
+    return {
+        str(corpus): str(language)
+        for corpus, language in connection.execute("SELECT corpus, language FROM source_meta")
+    }
+
+
+def _editions(connection: sqlite3.Connection, language: str) -> dict[str, list[str]]:
+    """One language's corpora by versification, the seed first and the rest alphabetical."""
     rows = connection.execute(
-        "SELECT corpus, versification FROM source_meta WHERE language = 'grc' ORDER BY corpus"
+        "SELECT corpus, versification FROM source_meta WHERE language = ? ORDER BY corpus",
+        (language,),
     ).fetchall()
     out: dict[str, list[str]] = {}
     for corpus, vrs in rows:
@@ -297,10 +317,20 @@ def build_profiles(
     assert isinstance(home, DataHome)
     target = out or home.root / "db" / "profiles.sqlite"
     lexicon = Lexicon(home)
-    lexicon.require("grc")
+    for language in PROFILE_LANGUAGES:
+        lexicon.require(language)
 
     with closing(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)) as db:
-        editions = _greek_editions(db)
+        spoken = _language_map(db)
+        # Keyed by (versification, language), because the two do not partition each other:
+        # `org` holds Greek, Hebrew, Syriac, English, Latin and Coptic corpora, and `vul`
+        # holds Latin, Greek and English. Keying on versification alone let one Latin
+        # corpus declaring `org` replace the five Greek editions of the Greek New
+        # Testament -- silently, since the result was still a non-empty list of editions.
+        editions: dict[tuple[str, str], list[str]] = {}
+        for language in PROFILE_LANGUAGES:
+            for vrs, corpora in _editions(db, language).items():
+                editions[(vrs, language)] = corpora
         # The anchor's numbering is derived from its book, not read off the table: the
         # first parallels build labelled every New Testament verse `lxx` (both
         # versification systems claim the whole canon, so has_book() could not decide),
@@ -309,12 +339,18 @@ def build_profiles(
         # rebuild, and against the corrected one after.
         from .parallels import numbering
 
+        # One anchor per language that actually holds two or more editions of the
+        # numbering: a family anchor is a verse, and a verse is profiled once per language,
+        # never once across them. A profile's columns are lemma readings, and two lexicons
+        # do not share a lemma space.
         wanted = {
-            (numbering(str(book)), str(book), int(chapter), int(verse))
+            (numbering(str(book)), tongue, str(book), int(chapter), int(verse))
             for book, chapter, verse in db.execute(
                 "SELECT book_a, chapter_a, verse_a FROM parallel_family "
                 "UNION SELECT book_b, chapter_b, verse_b FROM parallel_family"
             )
+            for tongue in PROFILE_LANGUAGES
+            if len(editions.get((numbering(str(book)), tongue), [])) >= 2
         }
         # Plus every verse the held editions disagree on *as token streams* -- Romans
         # 8:1's Byzantine long ending has no verbal cross-reference and every reason to
@@ -323,7 +359,7 @@ def build_profiles(
         # not raw text: a comma is an editor's and would profile everything.
         from .emphasis import fold
 
-        for vrs, corpora in _greek_editions(db).items():
+        for (vrs, tongue), corpora in editions.items():
             if len(corpora) < 2:
                 continue
             streams: dict[tuple[str, int, int], set[tuple[str, ...]]] = {}
@@ -333,9 +369,9 @@ def build_profiles(
                 corpora,
             ):
                 key = (str(book), int(chapter), int(verse))
-                streams.setdefault(key, set()).add(tuple(fold(str(text), "grc").split()))
+                streams.setdefault(key, set()).add(tuple(fold(str(text), tongue).split()))
             wanted.update(
-                (vrs, book, chapter, verse)
+                (vrs, tongue, book, chapter, verse)
                 for (book, chapter, verse), variants in streams.items()
                 if len(variants) >= 2
             )
@@ -361,8 +397,7 @@ def build_profiles(
                 (book, chapter, verse, book, chapter, verse),
             ).fetchall()
             return [
-                (numbering(str(b)), str(b), int(c), int(v), int(chain))
-                for b, c, v, chain in rows
+                (numbering(str(b)), str(b), int(c), int(v), int(chain)) for b, c, v, chain in rows
             ]
 
         target.unlink(missing_ok=True)
@@ -371,37 +406,51 @@ def build_profiles(
 
         built = 0
         total_witnesses = 0
-        for vrs, book, chapter, verse in anchors:
+        for vrs, language, book, chapter, verse in anchors:
             witnesses: list[tuple[str, list[tuple[str, Reading]]]] = []
-            for corpus in editions.get(str(vrs), []):
+            for corpus in editions.get((str(vrs), str(language)), []):
                 text = verse_text(corpus, str(book), int(chapter), int(verse))
                 if text:
-                    tokens = _tokens(text, "grc")
-                    readings = lemma_readings(tokens, "grc", lexicon)
+                    tokens = _tokens(text, str(language))
+                    readings = lemma_readings(tokens, str(language), lexicon)
                     witnesses.append((corpus, list(zip(tokens, readings, strict=True))))
             for f_vrs, f_book, f_chapter, f_verse, _ in family_of(
                 str(book), int(chapter), int(verse)
             ):
                 seed = _SEEDS.get(str(f_vrs))
-                if seed is None:
+                # Same language as the anchor, or not at all. A seed is a cross-family
+                # witness to the same words, and the profile's columns are lemma readings:
+                # putting the Clementine beside Nestle would be comparing two lexicons that
+                # share no lemma space, and would return columns rather than an error.
+                if seed is None or spoken.get(seed) != str(language):
                     continue
                 text = verse_text(seed, str(f_book), int(f_chapter), int(f_verse))
                 if text:
-                    tokens = _tokens(text, "grc")
-                    readings = lemma_readings(tokens, "grc", lexicon)
+                    tokens = _tokens(text, str(language))
+                    readings = lemma_readings(tokens, str(language), lexicon)
                     witnesses.append(
-                        (f"{seed}:{f_book} {f_chapter}:{f_verse}",
-                         list(zip(tokens, readings, strict=True)))
+                        (
+                            f"{seed}:{f_book} {f_chapter}:{f_verse}",
+                            list(zip(tokens, readings, strict=True)),
+                        )
                     )
             if len(witnesses) < 2:
                 continue
             profile = build_profile(witnesses)
             cursor = model.execute(
-                "INSERT INTO profile (vrs, book, chapter, verse, fold_version, built_at, "
-                "witnesses, columns) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (vrs, book, chapter, verse, FOLD_VERSION,
-                 datetime.now(UTC).isoformat(timespec="seconds"),
-                 len(witnesses), len(profile)),
+                "INSERT INTO profile (vrs, language, book, chapter, verse, fold_version, "
+                "built_at, witnesses, columns) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    vrs,
+                    language,
+                    book,
+                    chapter,
+                    verse,
+                    FOLD_VERSION,
+                    datetime.now(UTC).isoformat(timespec="seconds"),
+                    len(witnesses),
+                    len(profile),
+                ),
             )
             pid = cursor.lastrowid
             model.executemany(
@@ -417,8 +466,7 @@ def build_profiles(
                 ],
             )
             model.executemany(
-                "INSERT INTO profile_reading (profile, position, form, share) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT INTO profile_reading (profile, position, form, share) VALUES (?, ?, ?, ?)",
                 [
                     (pid, position, form, share)
                     for position, column in enumerate(profile)
