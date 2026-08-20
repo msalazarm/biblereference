@@ -35,7 +35,11 @@ __all__ = ["FOLD_VERSION", "SpanNotFoundError", "apply_spans", "fold"]
 #: 2 -- Greek elision marks fold away in all five spacing spellings, not only the
 #: combining one. See :data:`_GREEK_ELISION`. Greek folds change; every other language
 #: answers exactly as it did at version 1.
-FOLD_VERSION: Final = 2
+#:
+#: 3 -- Greek gains two scribal conventions (:data:`_GREEK_CONVENTIONS`) and sixteen more
+#: *nomina sacra*, both priced against real manuscript variation rather than guessed. Greek
+#: folds change; every other language answers exactly as it did at version 1.
+FOLD_VERSION: Final = 3
 
 _MARKERS: Final[dict[str, str]] = {"bold": "**", "italic": "*"}
 
@@ -177,6 +181,31 @@ _NOMINA_SACRA: Final[dict[str, str]] = {
     "σρσ": "σωτηροσ",
     "στσ": "σταυροσ",
     "εσται": "εσταυρωται",
+    # Added 2026-08-20 from churchfathers' PTA witness sample -- every `<expan>`/`<abbr>`
+    # pair attested in the source XML, 43,458 occurrences of which the table above resolved
+    # 76.4%. The misses were systematic rather than random: whole cases of a word we already
+    # held in other cases, which is what a table written from memory looks like beside one
+    # measured against a corpus. These sixteen are ~10,000 further attested occurrences.
+    "ανουσ": "ανθρωπουσ",
+    "ανοι": "ανθρωποι",
+    "ανοισ": "ανθρωποισ",
+    "ανον": "ανθρωπον",
+    "ανινα": "ανθρωπινα",
+    "ανινον": "ανθρωπινον",
+    "πνι": "πνευματι",
+    "ουνον": "ουρανον",
+    "ουνω": "ουρανω",
+    "ουνοισ": "ουρανοισ",
+    "κε": "κυριε",
+    "στρου": "σταυρου",
+    "στρον": "σταυρον",
+    "σρα": "σωτηρα",
+    "σριαν": "σωτηριαν",
+    "πρων": "πατερων",
+    # NOT `προσ -> πατροσ`, though it is attested 155 times. The contraction for *patros*
+    # written with an omicron is homographic with the preposition *pros*, one of the
+    # commonest words in Greek, and expanding it would corrupt every occurrence to bridge a
+    # hundred and fifty. Both projects reached that independently and neither wants it.
 }
 
 #: Greek letters and digraphs that came to be pronounced alike, so that scribes writing by
@@ -255,6 +284,71 @@ def _fold(text: str, language: str | None = None, *, orthographic: bool = False)
     return _Folded("".join(out), tuple(offsets))
 
 
+#: Greek only. Two scribal conventions that are spelling rather than disagreement, so
+#: folding them cannot lose a reading. Priced against churchfathers' PTA sample -- each codex
+#: transcribed separately, so the differences between two witnesses are what scribes actually
+#: wrote -- where they account for 3,024 and 130 of the 54,597 substitutions measured.
+#:
+#: **Iota adscript after omega and eta only.** A dative singular is written three ways --
+#: ``τῷ``, ``τῶι``, ``τῶ`` -- and the first folds to ``τω`` already, because a subscript is a
+#: combining mark and drops with the accents. The adscript is a real letter and survives, so
+#: ``τωι`` and ``τω`` were two tokens for one word.
+#:
+#: **Long alpha is deliberately excluded.** ``ᾳ`` carries a subscript too, but folding
+#: ``-αι`` to ``-α`` merges the nominative plural with the singular, which is grammar rather
+#: than orthography. Restricting to omega and eta keeps the rule to datives.
+#:
+#: **Movable nu is deliberately excluded, and it was the largest of the three.** Classifying
+#: a *pair* can see that ``ἀπέδειξε`` and ``ἀπέδειξεν`` are one word; folding a *single* word
+#: cannot, and stripping a final nu after -ε or -σι merges 162 lexicon forms into other
+#: lemmas -- 3,029 occurrences in the Greek scripture held here. The worst is ``μέν``, the
+#: commonest particle in the language, at 1,538 occurrences, which would become ``με``, the
+#: accusative of *I*. Then ``οὐδέν`` and ``μηδέν`` onto ``οὐδέ`` and ``μηδέ``, and the whole
+#: -θεν adverb class (``ποθεν``, ``οπισθεν``, ``εσωθεν``) where the nu was never movable at
+#: all. It would bridge 2,521 real variants and corrupt more than it bridged: the same trade
+#: as ``προσ -> πατροσ``, refused above for the same reason.
+#:
+#: What the two kept rules cost, measured rather than assumed: 274 lexicon forms collide
+#: under the iota rule and they occur **0 times** in the Greek scripture here and 21 times in
+#: 24 million tokens of patristic Greek -- Homeric and dialectal forms that the corpora do
+#: not contain. ``οὕτως``/``οὕτω`` collides with nothing.
+_GREEK_CONVENTIONS: Final = {"ουτωσ": "ουτω"}
+
+#: The vowels an adscript iota may follow. Alpha is absent on purpose -- see above.
+_ADSCRIPT_AFTER: Final = frozenset("ωη")
+
+
+def _greek_word(word: str) -> str:
+    """One Greek word with its contractions expanded and its conventions folded away.
+
+    **Applied to the word's letters, not to the whole token.** `_rewrite_greek` splits the
+    folded text on spaces, so a word keeps whatever punctuation followed it -- `fold` leaves
+    `αρτι·` and `δικαιοσυνην.` intact and only `_tokens` strips them, later. Matching the
+    raw token would fold *οὕτως γὰρ* and miss *οὕτως,*, which is how this was first written:
+    two of the three verses holding the word folded and the third did not, and the document
+    frequency of `ουτω` came out 2 where the corpus has 3. A rule that fires on some
+    occurrences of a word and not others is worse than one that never fires, because the
+    index and the query can disagree about the same text.
+    """
+    head = word.rstrip("".join(_TRAILING))
+    tail = word[len(head) :]
+    if not head:
+        return word
+    # The *nomina sacra* are looked up here too, and were not before: the expansion ran on
+    # the raw token, so `θς` became θεός and `θς,` stayed `θς`. Every contraction followed
+    # by a comma or an interpunct -- which in a manuscript transcription is a great many of
+    # them -- silently failed to expand. Found by a canary written for the new rules.
+    head = _NOMINA_SACRA.get(head, head)
+    head = _GREEK_CONVENTIONS.get(head, head)
+    if len(head) >= 3 and head.endswith("ι") and head[-2] in _ADSCRIPT_AFTER:
+        head = head[:-1]
+    return head + tail
+
+
+#: Punctuation `fold` leaves attached to a Greek word, which `_tokens` strips afterwards.
+_TRAILING: Final = frozenset(".,;:·’'\u00b7\u0387")
+
+
 def _rewrite_greek(out: list[str], offsets: list[int], *, orthographic: bool) -> _Folded:
     """Expand the nomina sacra, and optionally collapse itacism, a word at a time.
 
@@ -281,7 +375,7 @@ def _rewrite_greek(out: list[str], offsets: list[int], *, orthographic: bool) ->
             continue
         expanded = word
         if word != " ":
-            expanded = _NOMINA_SACRA.get(word, word)
+            expanded = _greek_word(word)
             if orthographic:
                 for written, spoken in _ITACISM:
                     expanded = expanded.replace(written, spoken)

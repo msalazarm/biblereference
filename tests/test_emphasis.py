@@ -344,10 +344,26 @@ def test_the_fold_version_moves_when_the_fold_does() -> None:
     """
     from biblereference.emphasis import FOLD_VERSION
 
-    assert FOLD_VERSION == 2
+    assert FOLD_VERSION == 3
     assert fold("Ἰησοῦς Χριστός, ᾧ ἡ δόξα", "grc") == "ιησουσ χριστοσ, ω η δοξα"
     assert fold("Jesu naVe", "la") == "iesu naue"
     assert fold("הָעַלְמָ֗ה אַל־תִּפְגְּעִי", "he") == "העלמה אל תפגעי"
+
+    # Version 3's own canaries. The three above still pass unchanged, which is the point of
+    # keeping them: Latin and Hebrew answer exactly as they did at version 1, and the Greek
+    # one exercises no rule that moved.
+    assert fold("τῶι οἴκωι τῆι πόληι", "grc") == "τω οικω τη πολη"
+    assert fold("οὕτως γὰρ οὕτω", "grc") == "ουτω γαρ ουτω"
+    assert fold("ἀνούς καὶ ἀνοι, κε", "grc") == "ανθρωπουσ και ανθρωποι, κυριε"
+    # Punctuation must not decide whether a rule fires. Written first as a lookup on the
+    # whole token, this folded `οὕτως γὰρ` and missed `οὕτως,`, and the document frequency
+    # of the word came out 2 where the corpus holds 3.
+    assert fold("οὕτως, οὕτως·", "grc") == "ουτω, ουτω·"
+    # Movable nu is deliberately NOT folded: μέν must not become με. See _GREEK_CONVENTIONS.
+    assert fold("μέν", "grc") != fold("με", "grc")
+    assert fold("οὐδέν", "grc") != fold("οὐδέ", "grc")
+    # Long-alpha datives are deliberately left alone: -αι is a plural, not an adscript.
+    assert fold("μαγεῖαι", "grc") != fold("μαγείᾳ", "grc")
 
 
 def test_every_spelling_of_an_elision_folds_the_same_way() -> None:
