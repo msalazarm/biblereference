@@ -39,8 +39,7 @@ def artifact_dict(**overrides: object) -> dict:
         # test below.
         "u": {"sample": 8, "words": 1000, "windows": 100, "collect_gate": ""},
         "thresholds": {"upper": 3.0, "lower": -1.0, "fp_target": 0.0, "miss_target": 0.05},
-        "null_tail": {"scores": [-2.0, -2.0, 3.0], "exact_above": 0.0, "decimation": 2,
-                      "total": 7},
+        "null_tail": {"scores": [-2.0, -2.0, 3.0], "exact_above": 0.0, "decimation": 2, "total": 7},
         "gumbel": None,
     }
     base.update(overrides)
@@ -131,18 +130,38 @@ def test_an_axes_only_control_file_is_the_four_axis_order() -> None:
     assert DEFAULT_ROW_FIELDS == ("run", "lemma_run", "chain", "bits")
 
 
-REAL_EVIDENCE = Path(
-    "/tmp/claude-1000/-home-marcollm-biblereference/cf75d9f5-8888-4553-a1c7-15903b7f648a"
-    "/scratchpad/control-evidence.json"
-)
+#: The 3M-word control sample the shipped artifact was actually built from -- its own
+#: `u.source` names this file. It used to point into a session scratchpad under `/tmp`,
+#: which is not a filing cabinet: the directory was wiped, the fixture went with it, and
+#: this test skipped silently for a day while the suite stayed green. Lab equipment lives
+#: in the data home, which is where the versification scripts ended up after being rescued
+#: from `/tmp` twice already.
+REAL_EVIDENCE = Path.home() / ".local/share/biblereference/db/control-classic-postpull.json"
 
 
 @pytest.mark.skipif(not REAL_EVIDENCE.exists(), reason="no control evidence on this machine")
-def test_the_two_refused_citations_clear_the_real_upper_threshold(tmp_path: Path) -> None:
-    """The measurement this module exists for: Didache 16:7 against Zechariah 14:5 and
-    1 Clement 13:2 against Matthew 7 are both refused by the calibrated gate union and
-    both clear the composite's zero-false-positive line. Consumes the saved evidence
-    file; never rescans anything."""
+def test_one_refused_citation_is_accepted_and_the_other_only_reviewed(tmp_path: Path) -> None:
+    """The measurement this module exists for, and it does not say what it used to say.
+
+    Didache 16:7 against Zechariah 14:5 and 1 Clement 13:2 against Matthew 7:2 are both
+    refused by the calibrated gate union. The composite **accepts the first and sends the
+    second to review** -- it does not clear both, and §5.6 of the reply ledger was corrected
+    in place when that was found: *"'both clear the zero-false-positive line' is wrong; one
+    clears, one lands in the clerical zone."* This test went on asserting the retracted
+    version, because it was pinned to a 30,000-word smoke sample on which both did clear.
+
+    Two things had to be right before the numbers made sense again, and neither was:
+
+    * **The evidence file.** A 30k smoke sample and the real 3M one do not merely differ in
+      precision -- they move the accept line and the weights together, so the same citation
+      scores differently. The smoke figures were +19.65 and +17.05; the real ones are +14.76
+      and +12.52 against a line at +14.72.
+    * **The inputs.** Didache carries 21.9 bits, not 19.7, and it is an announced quotation,
+      so `formula` is true. Dropped, those two turn +14.76 into +13.92 and the accept into a
+      review -- which looks exactly like a regression and is a stale constant.
+
+    Consumes the saved evidence file; never rescans anything.
+    """
     import os
     import subprocess
     import sys
@@ -155,9 +174,16 @@ def test_the_two_refused_citations_clear_the_real_upper_threshold(tmp_path: Path
         [
             sys.executable,
             str(Path(__file__).resolve().parents[1] / "tools" / "fs_composite.py"),
-            "--sample", "400",
-            "--control-evidence", str(REAL_EVIDENCE),
-            "--weights", str(out),
+            # 1200, not 400. The m-sample sets the accept line as well as the weights, and
+            # Didache clears that line by 0.04 bits -- at --sample 400 the line lands at
+            # 14.444, the citation scores 14.38, and the accept becomes a review for no
+            # reason but the sample. 1200 is what the shipped artifact was built with.
+            "--sample",
+            "1200",
+            "--control-evidence",
+            str(REAL_EVIDENCE),
+            "--weights",
+            str(out),
         ],
         capture_output=True,
         text=True,
@@ -170,10 +196,25 @@ def test_the_two_refused_citations_clear_the_real_upper_threshold(tmp_path: Path
     assert result.returncode == 0, result.stderr
     loaded = Composite.load(out)
     assert loaded.lower <= loaded.upper
-    didache = loaded.score(6, 6, 8, 19.7)
-    clement = loaded.score(3, 3, 8, 29.9)
+
+    # The fields as measured, `formula` included: both are announced quotations, and the
+    # artifact is a v2 that prices that field.
+    didache = loaded.score(6, 6, 8, 21.9, formula=True)
+    clement = loaded.score(3, 3, 8, 29.9, formula=True)
+    assert didache is not None and clement is not None
+
+    # The ordering is the durable claim -- it survives a recalibration, where the absolute
+    # scores do not.
+    assert didache > clement
+
+    # Didache clears by 0.04 bits (14.76 against a line at 14.72), which is knife-edge and
+    # worth saying out loud: this verdict is not robust, it is merely correct at the
+    # calibration the library ships. 1 Clement is nowhere near -- it misses by over two.
     assert loaded.zone(didache) == "accept"
-    assert loaded.zone(clement) == "accept"
+    assert loaded.zone(clement) == "review", (
+        "1 Clement 13:2 lands in the clerical zone, not accept. If this ever reads 'accept' "
+        "again, check whether the evidence file shrank before believing it."
+    )
 
 
 # -- the truncated-null guard -----------------------------------------------------------
