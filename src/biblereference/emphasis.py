@@ -344,32 +344,36 @@ def _fold(
 #: not contain. ``οὕτως``/``οὕτω`` collides with nothing.
 _GREEK_CONVENTIONS: Final = {"ουτωσ": "ουτω"}
 
-#: Contractions **not** expanded, even for a transcription, because the evidence does not yet
-#: say which reading dominates *inside* a manuscript.
+#: Contractions **not** expanded, even for a transcription.
 #:
-#: churchfathers' counts are of a whole corpus, so a low "share inside a manuscript" mostly
-#: reflects occurrences in printed editions -- which fold 7 no longer expands anyway. What none
-#: of us can answer yet is the narrower question: of the occurrences that *are* inside a
-#: transcription, how many are the contraction rather than the ordinary word?
+#: * ``εσται`` -- **settled: never expand.** churchfathers read all 705 in-manuscript
+#:   occurrences and every one is the future of εἰμί (690 written ἔσται, the rest accented
+#:   variants). One clause decides it without appealing to accents at all --
+#:   *ἄλλος ἂν εἴη θς παρὰ τοῦτον ποῦ δὲ καὶ ἔσται ὁ κατ αὐτοὺς θς* -- where the scribe
+#:   contracts θεός twice and writes ἔσται out in full in the same sentence. He is contracting
+#:   nomina sacra right there and declining to contract this word.
+#: * ``υσ``, ``υν``, ``κω`` -- still unread: ὗς the pig, Κῶ the island.
+#: * ``ιν`` -- **the information exists and this fold destroys it.** Their transcriptions mark
+#:   the difference by breathing: ἵν rough is elided ἵνα, 309 of them; ἰν smooth is Ἰησοῦν, 94,
+#:   of which 78 stand in *τὸν κν ἡμῶν ἰν χν*. Breathing is a combining mark, so the NFD pass
+#:   strips it before this table is consulted and both arrive as ``ιν``. Reinstating the entry
+#:   as it stands would take 309 ἵνα along with the 94 -- three wrong for each right.
 #:
-#: * ``εσται`` -- 34,793 occurrences there, 705 inside a manuscript. ἔσται, "will be", is
-#:   common in patristic Greek too, so those 705 are the live question. Their "deleting it was
-#:   right" was reasoned when expansion was unconditional, and the conditional reopens it.
-#: * ``υσ``, ``υν``, ``κω``, ``ιν`` -- 8,583 together, 1,446 inside a manuscript. Each is a
-#:   plain word: ὗς the pig, Κῶ the island, elided ἵν'.
+#: Withholding ``ιν`` splits the accusative formula τὸν κν ἡμῶν ἰν χν exactly as the genitive
+#: split before ``κυ`` came back. That cost is taken knowingly. The apostrophe is no escape
+#: either: this library writes elision both ways, ``ἵν’`` twice and bare ``ἵν`` twice.
 #:
-#: **``ιν`` carries a cluster risk and is the one to settle first.** ``κν`` and ``χν`` are
-#: expanded, so an accusative formula -- τὸν κν ἡμῶν ἰν χν -- splits exactly as the genitive
-#: one did before ``κυ`` came back. That is a real cost of withholding it, and it is accepted
-#: knowingly.
+#: **The real fix moves the rule, it does not edit the table.** The breathing that separates ἵν
+#: from ἰν, and the overline that marks a nomen sacrum at all, are both combining marks -- so
+#: both are gone by the time anything here looks a word up. Same shape as the diaeresis that
+#: :data:`_GENUINE_IOTA` exists to work around, and as the lexicon audit that hid ``εσται``:
+#: **the evidence is destroyed before the rule that needs it runs.** Consulting the table ahead
+#: of the NFD pass would let the scribe's own marking decide, and would settle ``υσ``/``υν``/
+#: ``κω`` by the same stroke rather than by counting.
 #:
-#: The obvious escape does not work. Elided ἵνα *looks* distinguishable by its apostrophe, so
-#: the rule could skip a head whose tail carries one -- but this library's Greek writes it both
-#: ways, ``ἵν’`` twice and bare ``ἵν`` twice, and a rule that fires on some occurrences of a
-#: word and not others is the fault :func:`_greek_word` already exists to avoid. Measured, not
-#: assumed.
-#:
-#: So withholding stands, as the safer default: expanding an ordinary word corrupts text,
+#: Not done yet, deliberately: it is a fold change, ``υσ``/``υν``/``κω`` are still unread, and
+#: one bump settling all of them costs the consumer less than two settling some. Until then
+#: withholding stands, as the safer default -- expanding an ordinary word corrupts text, while
 #: failing to expand a contraction only costs a match.
 _NOMINA_SACRA_UNDECIDED: Final[dict[str, str]] = {
     "εσται": "εσταυρωται",
