@@ -184,6 +184,19 @@ CREATE TABLE IF NOT EXISTS lemma_form (
     PRIMARY KEY (language, form, lemma)
 ) WITHOUT ROWID;
 
+-- Which fold built the table above. It had none, and could not: the forms are folded on the
+-- way in, so a fold change silently leaves every key spelled the way the old rule spelled it
+-- and `scan --inflected` quietly stops finding the words it stopped agreeing about. The
+-- search index has carried `fold_version` since it was bitten by exactly this; the lexicon
+-- is the same artifact with the same hazard and had no stamp to check.
+CREATE TABLE IF NOT EXISTS lemma_form_state (
+    language     TEXT PRIMARY KEY,
+    built_at     TEXT    NOT NULL,
+    fold_version INTEGER NOT NULL,
+    forms        INTEGER NOT NULL,
+    readings     INTEGER NOT NULL
+) WITHOUT ROWID;
+
 -- Unstemmed on purpose. `porter` is an English stemmer; on Greek it is noise, and the
 -- lemmas are already the reduction it would be trying and failing to approximate.
 CREATE VIRTUAL TABLE IF NOT EXISTS lemma_fts USING fts5(

@@ -1109,7 +1109,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     # Said here for the same reason the search index is: a feature that silently cannot
     # work is the fault this library has already been bitten by twice, and `doctor` is
     # where somebody looks.
-    from .lemmata import LEXICONS, lexicon_coverage
+    from .emphasis import FOLD_VERSION
+    from .lemmata import LEXICONS, lexicon_coverage, lexicon_folds
 
     lexicons = lexicon_coverage(home)
     if lexicons:
@@ -1122,6 +1123,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         absent = sorted(set(LEXICONS) - set(lexicons))
         if absent:
             _say(f"  not fetched: {', '.join(absent)} -- `biblereference lemmata`")
+        # The forms are folded on the way in, so a table built under a superseded rule is
+        # spelled wrong throughout and `scan --inflected` simply stops finding those words.
+        # Nothing else reports this; the table carried no fold until it was given one.
+        for language, recorded in sorted(lexicon_folds(home).items()):
+            if recorded is None:
+                _say(
+                    f"  {language}: built before the fold was recorded, so whether its forms "
+                    f"match this library's fold {FOLD_VERSION} is unknown "
+                    f"-- `biblereference lemmata --language {language}` to settle it"
+                )
+            elif recorded != FOLD_VERSION:
+                _say(
+                    f"  {language}: folded at {recorded}, library folds at {FOLD_VERSION} "
+                    f"-- `biblereference lemmata --language {language}`, then "
+                    f"`biblereference index --lemmata`"
+                )
     else:
         _say("\nlemmata: none. `scan --inflected` needs `biblereference lemmata` first")
 

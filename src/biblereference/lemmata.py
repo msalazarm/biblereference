@@ -32,10 +32,11 @@ import sqlite3
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
-from .emphasis import _language, fold
+from .emphasis import FOLD_VERSION, _language, fold
 from .licences import LICENCES, Licence
 from .sources import BuiltCorpus, RemoteFile, Source
 from .store import DataHome, open_store
@@ -47,6 +48,7 @@ __all__ = [
     "LexiconUnavailable",
     "build_lexicon",
     "lexicon_coverage",
+    "lexicon_folds",
 ]
 
 
@@ -170,15 +172,64 @@ def build_lexicon(
         if folded and root:
             rows.add((language, folded, root))
 
+    forms = len({row[1] for row in rows})
     with open_store(home) as connection:
         connection.execute("DELETE FROM lemma_form WHERE language = ?", (language,))
         connection.executemany(
             "INSERT OR IGNORE INTO lemma_form (language, form, lemma) VALUES (?, ?, ?)",
             sorted(rows),
         )
-    forms = len({row[1] for row in rows})
+        # Stamped in the same transaction as the rows it describes, so the two cannot
+        # disagree about which fold spelled these forms.
+        connection.execute(
+            "INSERT OR REPLACE INTO lemma_form_state "
+            "(language, built_at, fold_version, forms, readings) VALUES (?, ?, ?, ?, ?)",
+            (
+                language,
+                datetime.now(UTC).isoformat(timespec="seconds"),
+                FOLD_VERSION,
+                forms,
+                len(rows),
+            ),
+        )
     say(f"lemmata: {language} {forms:,} forms, {len(rows):,} readings")
     return len(rows)
+
+
+def lexicon_folds(home: DataHome) -> dict[str, int | None]:
+    """``language -> the fold that built its table``, or ``None`` where it was built before
+    the stamp existed and nothing can say.
+
+    An unstamped table is reported as unknown rather than assumed current: the forms are
+    folded on the way in, so one built under a superseded rule is spelled wrong throughout,
+    and guessing would be the reassurance this exists to withhold.
+    """
+    if not home.database.exists():
+        return {}
+    with closing(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)) as connection:
+        try:
+            held = {
+                str(language)
+                for (language,) in connection.execute(
+                    "SELECT DISTINCT language FROM lemma_form"
+                )
+            }
+        except sqlite3.OperationalError:
+            return {}
+        # Asked separately, and after: an install whose database predates the stamp has the
+        # forms but not the table, and that is precisely the case worth reporting. Folding
+        # the two queries into one `try` reported nothing at all for it -- the silence this
+        # function exists to break.
+        try:
+            stamped = {
+                str(language): int(fold_version)
+                for language, fold_version in connection.execute(
+                    "SELECT language, fold_version FROM lemma_form_state"
+                )
+            }
+        except sqlite3.OperationalError:
+            stamped = {}
+    return {language: stamped.get(language) for language in sorted(held)}
 
 
 def lexicon_coverage(home: DataHome) -> dict[str, int]:
