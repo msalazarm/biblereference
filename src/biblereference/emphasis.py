@@ -39,7 +39,7 @@ __all__ = ["FOLD_VERSION", "SpanNotFoundError", "apply_spans", "fold"]
 #: 3 -- Greek gains two scribal conventions (:data:`_GREEK_CONVENTIONS`) and sixteen more
 #: *nomina sacra*, both priced against real manuscript variation rather than guessed. Greek
 #: folds change; every other language answers exactly as it did at version 1.
-FOLD_VERSION: Final = 6
+FOLD_VERSION: Final = 7
 
 _MARKERS: Final[dict[str, str]] = {"bold": "**", "italic": "*"}
 
@@ -142,28 +142,41 @@ _MODIFIER_APOSTROPHE: Final = "ʼ"
 #: Contractions only, not every abbreviation: these are the conventional sacred names, the
 #: set a transcription of a biblical manuscript actually uses.
 #:
-#: **Eleven entries were removed at fold 5, because every one of them fired on a real word
-#: and none of them ever fired on a contraction.** This library holds printed critical
-#: editions, where an editor has already expanded the nomina sacra, so the contraction forms
-#: are free to collide with ordinary Greek -- and they did, 4,537 times:
+#: **Expanded only for a manuscript transcription, from fold 7.** A scribe contracts; an
+#: editor of a printed text has already expanded, so in an edition the contraction forms never
+#: appear as contractions and are free to collide with ordinary Greek. Eleven of them did here,
+#: on 4,537 words, catching nothing real: ``εσται`` took ἔσται, "will be", 4,412 times and
+#: returned ἐσταύρωται; ``θω`` took θῶ in *ἕως ἂν θῶ τοὺς ἐχθρούς σου*; ``υσ``/``υν`` took ὗς,
+#: the pig of the dietary law; ``κω`` took Κῶ, the island of Cos; ``ιν`` took elided ἵν' and the
+#: *hin* measure; ``ανουσ`` took ἄνους, "senseless"; ``ανων``/``ιηλ`` took the names Ἀνών, Ἰήλ.
 #:
-#: * ``εσται`` -> ἐσταύρωται destroyed **4,412** occurrences of ἔσται, "will be".
-#: * ``θω`` -> θεῷ took θῶ, the aorist subjunctive of τίθημι: *ἕως ἂν θῶ τοὺς ἐχθρούς σου*.
-#: * ``υσ``/``υν`` -> υἱός/υἱόν took ὗς, "pig" -- the dietary law and *the sow that washed*.
-#: * ``κω`` -> κυρίῳ took Κῶ, the island of Cos. ``ιηλ``, ``ανων`` took the names Ἰήλ, Ἀνών.
-#: * ``ιν`` -> Ἰησοῦν took elided ἵν' and the *hin*, a liquid measure.
-#: * ``ανουσ`` -> ἀνθρώπους took ἄνους, "senseless"; all twelve were the adjective.
-#: * ``θυ``, ``κυ`` are genuine contractions, but their only appearances here are line breaks
-#:   in the source -- ``θυ γατέρας``, ``κυ κλώσουσιν`` -- so in this library they only harm.
+#: Fold 5 deleted those eleven, and fold 6 shipped with the deletion. **That was wrong, and
+#: churchfathers found it by running the audit against their own corpora.** All 44 survivors
+#: occur there 53,040 times, 89% inside a transcription -- and worse, the deletion split a
+#: single formula: ``τοῦ κυ ἡμῶν ἰῦ χῦ`` folded to *του κυ ημων ιησου χριστου*, Christ spelled
+#: out and the Lord left contracted, because ``ιυ`` and ``χυ`` survived while ``κυ`` did not.
+#: A half-expanded nomen sacrum is worse than either whole answer.
 #:
-#: The remaining entries never occur in the Greek corpora at all, so nothing here can say
-#: whether they are safe in a *manuscript* corpus; the question is only live where somebody
-#: folds transcriptions. ``tools/nomina_sacra_audit.py`` re-runs the test.
+#: So the table is whole again and the *expansion* is conditional. This library holds printed
+#: editions only, so nothing here asks for it; a corpus of transcriptions passes
+#: ``transcription=True`` and gets all 55. ``tools/nomina_sacra_audit.py`` runs the test, and
+#: takes an explicit key list so a *deleted* entry can still be audited -- their first count
+#: came back zero because the audit could only look up keys the table still held.
 #:
-#: **Do not audit this table against the lemma lexicon.** Its forms are folded by this very
-#: rule, so it stores ἔσται under ``εσταυρωται`` and reports no collision for ``εσται`` --
-#: an instrument folded by the thing it is measuring. Count bare corpus words instead.
+#: **Never audit this table against the lemma lexicon.** Its forms are folded by this very
+#: rule, so it files ἔσται under ``εσταυρωται`` and reports no collision for ``εσται``. Count
+#: bare corpus words.
 _NOMINA_SACRA: Final[dict[str, str]] = {
+    # Restored at fold 7. Ordinary Greek in a printed edition, real contractions in a
+    # manuscript, where churchfathers count them 79-99.8% inside a transcription. `κυ` is the
+    # one that forced this: without it `τοῦ κυ ἡμῶν ἰῦ χῦ` expanded Christ and left the Lord
+    # contracted, inside one formula.
+    "θυ": "θεου",
+    "θω": "θεω",
+    "κυ": "κυριου",
+    "ανων": "ανθρωπων",
+    "ιηλ": "ισραηλ",
+    "ανουσ": "ανθρωπουσ",
     "θσ": "θεοσ",
     "θν": "θεον",
     "κσ": "κυριοσ",
@@ -256,7 +269,13 @@ class _Folded:
     ``text[i]``."""
 
 
-def _fold(text: str, language: str | None = None, *, orthographic: bool = False) -> _Folded:
+def _fold(
+    text: str,
+    language: str | None = None,
+    *,
+    orthographic: bool = False,
+    transcription: bool = False,
+) -> _Folded:
     latin = language == "la"
     greek = language == "grc"
     out: list[str] = []
@@ -291,7 +310,7 @@ def _fold(text: str, language: str | None = None, *, orthographic: bool = False)
             offsets.append(index)
 
     if greek:
-        return _rewrite_greek(out, offsets, orthographic=orthographic)
+        return _rewrite_greek(out, offsets, orthographic=orthographic, transcription=transcription)
     return _Folded("".join(out), tuple(offsets))
 
 
@@ -325,6 +344,41 @@ def _fold(text: str, language: str | None = None, *, orthographic: bool = False)
 #: not contain. ``οὕτως``/``οὕτω`` collides with nothing.
 _GREEK_CONVENTIONS: Final = {"ουτωσ": "ουτω"}
 
+#: Contractions **not** expanded, even for a transcription, because the evidence does not yet
+#: say which reading dominates *inside* a manuscript.
+#:
+#: churchfathers' counts are of a whole corpus, so a low "share inside a manuscript" mostly
+#: reflects occurrences in printed editions -- which fold 7 no longer expands anyway. What none
+#: of us can answer yet is the narrower question: of the occurrences that *are* inside a
+#: transcription, how many are the contraction rather than the ordinary word?
+#:
+#: * ``εσται`` -- 34,793 occurrences there, 705 inside a manuscript. ἔσται, "will be", is
+#:   common in patristic Greek too, so those 705 are the live question. Their "deleting it was
+#:   right" was reasoned when expansion was unconditional, and the conditional reopens it.
+#: * ``υσ``, ``υν``, ``κω``, ``ιν`` -- 8,583 together, 1,446 inside a manuscript. Each is a
+#:   plain word: ὗς the pig, Κῶ the island, elided ἵν'.
+#:
+#: **``ιν`` carries a cluster risk and is the one to settle first.** ``κν`` and ``χν`` are
+#: expanded, so an accusative formula -- τὸν κν ἡμῶν ἰν χν -- splits exactly as the genitive
+#: one did before ``κυ`` came back. That is a real cost of withholding it, and it is accepted
+#: knowingly.
+#:
+#: The obvious escape does not work. Elided ἵνα *looks* distinguishable by its apostrophe, so
+#: the rule could skip a head whose tail carries one -- but this library's Greek writes it both
+#: ways, ``ἵν’`` twice and bare ``ἵν`` twice, and a rule that fires on some occurrences of a
+#: word and not others is the fault :func:`_greek_word` already exists to avoid. Measured, not
+#: assumed.
+#:
+#: So withholding stands, as the safer default: expanding an ordinary word corrupts text,
+#: failing to expand a contraction only costs a match.
+_NOMINA_SACRA_UNDECIDED: Final[dict[str, str]] = {
+    "εσται": "εσταυρωται",
+    "υσ": "υιοσ",
+    "υν": "υιον",
+    "κω": "κυριω",
+    "ιν": "ιησουν",
+}
+
 #: The vowels an adscript iota may follow. Alpha is absent on purpose -- see above.
 _ADSCRIPT_AFTER: Final = frozenset("ωη")
 
@@ -353,7 +407,7 @@ _ADSCRIPT_AFTER: Final = frozenset("ωη")
 _GENUINE_IOTA: Final = frozenset({"πρωι", "ελωι", "νηι", "θεκωι", "αχωι", "ρηι"})
 
 
-def _greek_word(word: str) -> str:
+def _greek_word(word: str, *, transcription: bool) -> str:
     """One Greek word with its contractions expanded and its conventions folded away.
 
     **Applied to the word's letters, not to the whole token.** `_rewrite_greek` splits the
@@ -375,10 +429,13 @@ def _greek_word(word: str) -> str:
     # tokeniser then splits it anyway and files the unfolded half. `_SEGMENT` keeps the marks,
     # so they go back exactly where the editor put them and the offsets still point at what
     # was written.
-    return "".join(_greek_head(part) for part in _SEGMENT.split(core)) + tail
+    return (
+        "".join(_greek_head(part, transcription=transcription) for part in _SEGMENT.split(core))
+        + tail
+    )
 
 
-def _greek_head(head: str) -> str:
+def _greek_head(head: str, *, transcription: bool) -> str:
     """The rules, applied to one unbroken run of letters.
 
     Split out so :func:`_greek_word` can map it over the pieces of a bracketed or dashed
@@ -388,7 +445,10 @@ def _greek_head(head: str) -> str:
     # the raw token, so `θς` became θεός and `θς,` stayed `θς`. Every contraction followed
     # by a comma or an interpunct -- which in a manuscript transcription is a great many of
     # them -- silently failed to expand. Found by a canary written for the new rules.
-    head = _NOMINA_SACRA.get(head, head)
+    # Only where the text is a transcription. In a printed edition the editor expanded these
+    # centuries ago, so a "contraction" found here is an ordinary word wearing the same letters.
+    if transcription:
+        head = _NOMINA_SACRA.get(head, head)
     head = _GREEK_CONVENTIONS.get(head, head)
     if (
         len(head) >= 3
@@ -417,7 +477,9 @@ _EDITORIAL: Final = "[](){}<>\u2014\u2013\u00ab\u00bb"
 _SEGMENT: Final = re.compile(f"([{re.escape(_EDITORIAL)}]+)")
 
 
-def _rewrite_greek(out: list[str], offsets: list[int], *, orthographic: bool) -> _Folded:
+def _rewrite_greek(
+    out: list[str], offsets: list[int], *, orthographic: bool, transcription: bool
+) -> _Folded:
     """Expand the nomina sacra, and optionally collapse itacism, a word at a time.
 
     The character-by-character fold above cannot do this: a contraction is a property of
@@ -443,7 +505,7 @@ def _rewrite_greek(out: list[str], offsets: list[int], *, orthographic: bool) ->
             continue
         expanded = word
         if word != " ":
-            expanded = _greek_word(word)
+            expanded = _greek_word(word, transcription=transcription)
             if orthographic:
                 for written, spoken in _ITACISM:
                     expanded = expanded.replace(written, spoken)
@@ -463,7 +525,13 @@ def _rewrite_greek(out: list[str], offsets: list[int], *, orthographic: bool) ->
     return _Folded("".join(rewritten), tuple(positions))
 
 
-def fold(text: str, language: str | None = None, *, orthographic: bool = False) -> str:
+def fold(
+    text: str,
+    language: str | None = None,
+    *,
+    orthographic: bool = False,
+    transcription: bool = False,
+) -> str:
     """The searchable form of ``text``: no accents, no points, collapsed whitespace.
 
     :param language: Where given, applies that language's own equivalences. ``"la"``
@@ -497,7 +565,7 @@ def fold(text: str, language: str | None = None, *, orthographic: bool = False) 
         and the rest, and is now what decides. ``None`` still means no language-specific
         folding, which is a different thing from a language that was not understood.
     """
-    return _folded(text, _language(language), orthographic)
+    return _folded(text, _language(language), orthographic, transcription)
 
 
 def _language(language: str | None) -> str | None:
@@ -524,13 +592,13 @@ _FOLD_CACHE: Final = 200_000
 
 
 @lru_cache(maxsize=_FOLD_CACHE)
-def _folded(text: str, language: str | None, orthographic: bool) -> str:
+def _folded(text: str, language: str | None, orthographic: bool, transcription: bool) -> str:
     """The cached body of :func:`fold`.
 
     Positional, because ``lru_cache`` keys on the call signature and ``fold(x, "grc")`` and
     ``fold(x, language="grc")`` would otherwise be two entries for one question.
     """
-    return _fold(text, language, orthographic=orthographic).text
+    return _fold(text, language, orthographic=orthographic, transcription=transcription).text
 
 
 def _after_cluster(text: str, index: int) -> int:
@@ -546,17 +614,26 @@ def _after_cluster(text: str, index: int) -> int:
     return end
 
 
-def apply_spans(text: str, spans: Sequence[Emphasis], language: str | None = None) -> str:
+def apply_spans(
+    text: str,
+    spans: Sequence[Emphasis],
+    language: str | None = None,
+    *,
+    transcription: bool = False,
+) -> str:
     """Wrap each span of ``text`` in its marker.
 
     :param language: Passed to :func:`fold`, so a Latin anchor finds either spelling.
+    :param transcription: Passed to :func:`fold`. An anchor written against expanded *nomina
+        sacra* only meets the text when the text is folded the same way, and the expansion is
+        conditional from fold 7 -- so a caller marking up a manuscript must say so here too.
     :raises SpanNotFoundError: an anchor is missing, the end precedes the start, or two
         spans overlap.
     """
     if not spans:
         return text
 
-    folded = _fold(text, language)
+    folded = _fold(text, language, transcription=transcription)
     located: list[tuple[int, int, str]] = []
 
     for span in spans:

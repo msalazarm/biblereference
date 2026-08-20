@@ -212,14 +212,19 @@ def test_nomina_sacra_expand(written: str, expected: str) -> None:
     Note the expansions end in a plain sigma: fold normalises the final sigma, and an
     expansion that ended in one would be a different string from every other rendering of
     the same word.
+
+    Conditional since fold 7: only a transcription asks for it. In a printed edition an
+    editor expanded these long ago, so a contraction found there is an ordinary word wearing
+    the same letters -- which is how ἔσται came to be indexed as ἐσταύρωται 4,412 times.
     """
-    assert fold(written, "grc") == expected
+    assert fold(written, "grc", transcription=True) == expected
+    assert fold(written, "grc") == fold(written.lower(), "grc")
 
 
 def test_a_contraction_expands_in_the_middle_of_a_sentence() -> None:
     """The contraction is a property of the whole word, which is why this cannot be done
     character by character as the rest of the fold is."""
-    folded = fold("ἦν πρὸς τὸν ΘΝ", "grc")
+    folded = fold("ἦν πρὸς τὸν ΘΝ", "grc", transcription=True)
     assert folded == "ην προσ τον θεον"
 
 
@@ -257,7 +262,7 @@ def test_folding_english_does_not_apply_the_other_languages_rules() -> None:
     # Final sigma folds whatever the language -- that is not a Greek-only rule -- but the
     # contraction must not expand without being told the text is Greek.
     assert fold("θς") == "θσ"
-    assert fold("θς") != fold("θς", "grc")
+    assert fold("θς") != fold("θς", "grc", transcription=True)
 
 
 def test_an_unchanged_greek_word_keeps_its_own_offsets() -> None:
@@ -274,7 +279,8 @@ def test_a_span_ending_on_a_contraction_covers_what_was_written() -> None:
     """An expansion is longer than its source, so its tail is anchored on the source's last
     character. Otherwise a span ending on ΘΝ would mark up only the theta."""
     text = "ἦν πρὸς τὸν ΘΝ"
-    assert apply_spans(text, [Emphasis("προσ", "θεον", "italic")], "grc") == ("ἦν *πρὸς τὸν ΘΝ*")
+    marked = apply_spans(text, [Emphasis("προσ", "θεον", "italic")], "grc", transcription=True)
+    assert marked == "ἦν *πρὸς τὸν ΘΝ*"
 
 
 # --------------------------------------------------------------------------------------
@@ -344,7 +350,7 @@ def test_the_fold_version_moves_when_the_fold_does() -> None:
     """
     from biblereference.emphasis import FOLD_VERSION
 
-    assert FOLD_VERSION == 6
+    assert FOLD_VERSION == 7
     assert fold("Ἰησοῦς Χριστός, ᾧ ἡ δόξα", "grc") == "ιησουσ χριστοσ, ω η δοξα"
     assert fold("Jesu naVe", "la") == "iesu naue"
     assert fold("הָעַלְמָ֗ה אַל־תִּפְגְּעִי", "he") == "העלמה אל תפגעי"
@@ -354,10 +360,13 @@ def test_the_fold_version_moves_when_the_fold_does() -> None:
     # one exercises no rule that moved.
     assert fold("τῶι οἴκωι τῆι πόληι", "grc") == "τω οικω τη πολη"
     assert fold("οὕτως γὰρ οὕτω", "grc") == "ουτω γαρ ουτω"
-    # Changed at version 5, and the change is the finding: ἀνούς is *senseless*, an
-    # adjective the corpora use twelve times and never as a contraction, so it keeps its
-    # own spelling now. `ανοι` and `κε` never occur in the corpora at all and still expand.
-    assert fold("ἀνούς καὶ ἀνοι, κε", "grc") == "ανουσ και ανθρωποι, κυριε"
+    # Changed twice. Version 5 deleted `ανουσ` because ἀνούς is *senseless*, an adjective the
+    # corpora use twelve times and never as a contraction. Version 7 put it back and made the
+    # *expansion* conditional instead: it is a real contraction in a manuscript, which
+    # churchfathers counted 96% of the time, and an ordinary word in the editions held here.
+    assert fold("ἀνούς καὶ ἀνοι, κε", "grc", transcription=True) == "ανθρωπουσ και ανθρωποι, κυριε"
+    # An edition expands none of them, so ἀνούς stays the adjective it is.
+    assert fold("ἀνούς καὶ ἀνοι, κε", "grc") == "ανουσ και ανοι, κε"
     # Punctuation must not decide whether a rule fires. Written first as a lookup on the
     # whole token, this folded `οὕτως γὰρ` and missed `οὕτως,`, and the document frequency
     # of the word came out 2 where the corpus holds 3.
@@ -471,10 +480,10 @@ def test_a_contraction_never_takes_a_real_word() -> None:
     ):
         assert fold(word, "grc") == folded
 
-    # ...and the contractions that are contractions still expand.
-    assert fold("θς", "grc") == "θεοσ"
-    assert fold("κς", "grc") == "κυριοσ"
-    assert fold("χς", "grc") == "χριστοσ"
+    # ...and the contractions that are contractions still expand, for a transcription.
+    assert fold("θς", "grc", transcription=True) == "θεοσ"
+    assert fold("κς", "grc", transcription=True) == "κυριοσ"
+    assert fold("χς", "grc", transcription=True) == "χριστοσ"
 
 
 def test_an_editorial_mark_does_not_hide_a_word_from_the_fold() -> None:
@@ -488,7 +497,7 @@ def test_an_editorial_mark_does_not_hide_a_word_from_the_fold() -> None:
     assert fold("[οὕτως].", "grc") == "[ουτω]."
     assert fold("—οὕτως", "grc") == "—ουτω"
     assert fold("[Οὕτως", "grc") == "[ουτω"
-    assert fold("[θς]", "grc") == "[θεοσ]"
+    assert fold("[θς]", "grc", transcription=True) == "[θεοσ]"
     assert fold("«πρωΐ»", "grc") == "«πρωι»"
     # the bare word folds the same way, which is the whole point
     assert fold("οὕτως", "grc") == "ουτω"
@@ -501,3 +510,32 @@ def test_an_editorial_mark_does_not_hide_a_word_from_the_fold() -> None:
     # and a piece that is only marks must not send the splitter round again
     assert fold("—", "grc") == "—"
     assert fold("[]", "grc") == "[]"
+
+
+def test_a_contraction_expands_only_for_a_transcription() -> None:
+    """A scribe contracts; an editor of a printed text expanded these centuries ago. So in an
+    edition every "contraction" found is an ordinary word wearing the same letters, and in a
+    transcription it may be the real thing. The expansion is conditional from fold 7.
+
+    Fold 5 tried to settle it by deleting the eleven that collide, and that split a formula:
+    `τοῦ κυ ἡμῶν ἰῦ χῦ` expanded Christ and left the Lord contracted, because `ιυ` and `χυ`
+    survived the cut while `κυ` did not. churchfathers found it by running our own audit
+    against their corpora, where all the survivors occur and 89% sit inside a manuscript.
+    """
+    formula = "τοῦ κυ ἡμῶν ἰῦ χῦ"
+    # An edition expands none of it, so the four stay consistent with each other.
+    assert fold(formula, "grc") == "του κυ ημων ιυ χυ"
+    # A transcription expands all four -- of our Lord Jesus Christ.
+    assert fold(formula, "grc", transcription=True) == "του κυριου ημων ιησου χριστου"
+
+    # Ordinary words are never touched in an edition, whatever the table holds.
+    for word, folded in (("ἔσται", "εσται"), ("θῶ", "θω"), ("ὗς", "υσ"), ("Κῶ", "κω")):
+        assert fold(word, "grc") == folded
+
+    # ...and the five withheld entries are not expanded even for a transcription, because
+    # nobody has yet counted which reading dominates *inside* a manuscript.
+    for word in ("ἔσται", "ὗς", "Κῶ"):
+        assert fold(word, "grc", transcription=True) == fold(word, "grc")
+    # while a contraction that is not also a word does expand there
+    assert fold("θς", "grc", transcription=True) == "θεοσ"
+    assert fold("θς", "grc") == "θσ"

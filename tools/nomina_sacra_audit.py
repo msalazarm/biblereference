@@ -19,6 +19,7 @@ contraction it claims. It is *undecided*, and this prints what a person needs to
 
 from __future__ import annotations
 
+import argparse
 import collections
 import re
 import sqlite3
@@ -28,7 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from biblereference.emphasis import _NOMINA_SACRA
+from biblereference.emphasis import _NOMINA_SACRA, _NOMINA_SACRA_UNDECIDED
 from biblereference.store import DataHome
 
 _WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
@@ -42,6 +43,32 @@ def _bare(word: str) -> str:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--keys",
+        nargs="+",
+        default=None,
+        metavar="KEY",
+        help="audit these contractions instead of the table's own. **The flag that matters.** "
+        "Auditing only what the table still holds cannot see an entry that was wrongly "
+        "deleted: churchfathers ran this after fold 5 removed eleven keys and got a clean "
+        "zero, because the keys the question was about were no longer there to look up -- a "
+        "count from a table that no longer contains the question.",
+    )
+    parser.add_argument(
+        "--withheld",
+        action="store_true",
+        help="audit the entries fold 7 declines to expand even for a transcription",
+    )
+    args = parser.parse_args()
+
+    table: dict[str, str] = dict(_NOMINA_SACRA)
+    if args.withheld:
+        table = dict(_NOMINA_SACRA_UNDECIDED)
+    if args.keys:
+        known = {**_NOMINA_SACRA, **_NOMINA_SACRA_UNDECIDED}
+        table = {key: known.get(key, "(not in any table)") for key in args.keys}
+
     home = DataHome()
     db = sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)
     greek = [
@@ -50,7 +77,7 @@ def main() -> int:
         if language == "grc"
     ]
     holes = ",".join("?" * len(greek))
-    keys = set(_NOMINA_SACRA)
+    keys = set(table)
     seen: collections.Counter[str] = collections.Counter()
     where: dict[str, str] = {}
     for corpus, book, chapter, verse, text in db.execute(
@@ -63,13 +90,13 @@ def main() -> int:
                 seen[bare] += 1
                 where.setdefault(bare, f"{corpus} {book} {chapter}:{verse}")
 
-    print(f"{len(greek)} Greek corpora, {len(_NOMINA_SACRA)} contractions\n")
+    print(f"{len(greek)} Greek corpora, {len(table)} contractions\n")
     if not seen:
         print("No contraction occurs as a bare word in the corpora. Nothing to decide.")
         return 0
     print(f"{'contraction':<12}{'occurs':>8}  {'would become':<16}first seen")
     for key, count in seen.most_common():
-        print(f"{key:<12}{count:>8}  {_NOMINA_SACRA[key]:<16}{where[key]}")
+        print(f"{key:<12}{count:>8}  {table[key]:<16}{where[key]}")
     print(
         f"\n{len(seen)} contraction(s) occur as bare words. Read each one in context: it is "
         f"either a genuine contraction this corpus preserves, or a real word the fold is "
