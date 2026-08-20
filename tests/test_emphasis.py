@@ -344,7 +344,7 @@ def test_the_fold_version_moves_when_the_fold_does() -> None:
     """
     from biblereference.emphasis import FOLD_VERSION
 
-    assert FOLD_VERSION == 4
+    assert FOLD_VERSION == 5
     assert fold("Ἰησοῦς Χριστός, ᾧ ἡ δόξα", "grc") == "ιησουσ χριστοσ, ω η δοξα"
     assert fold("Jesu naVe", "la") == "iesu naue"
     assert fold("הָעַלְמָ֗ה אַל־תִּפְגְּעִי", "he") == "העלמה אל תפגעי"
@@ -354,7 +354,10 @@ def test_the_fold_version_moves_when_the_fold_does() -> None:
     # one exercises no rule that moved.
     assert fold("τῶι οἴκωι τῆι πόληι", "grc") == "τω οικω τη πολη"
     assert fold("οὕτως γὰρ οὕτω", "grc") == "ουτω γαρ ουτω"
-    assert fold("ἀνούς καὶ ἀνοι, κε", "grc") == "ανθρωπουσ και ανθρωποι, κυριε"
+    # Changed at version 5, and the change is the finding: ἀνούς is *senseless*, an
+    # adjective the corpora use twelve times and never as a contraction, so it keeps its
+    # own spelling now. `ανοι` and `κε` never occur in the corpora at all and still expand.
+    assert fold("ἀνούς καὶ ἀνοι, κε", "grc") == "ανουσ και ανθρωποι, κυριε"
     # Punctuation must not decide whether a rule fires. Written first as a lookup on the
     # whole token, this folded `οὕτως γὰρ` and missed `οὕτως,`, and the document frequency
     # of the word came out 2 where the corpus holds 3.
@@ -445,3 +448,47 @@ def test_a_full_vowel_iota_is_not_an_adscript() -> None:
     assert fold("λογωι", "grc") == "λογω"
     assert fold("παντηι", "grc") == "παντη"
     assert fold("λαθρηι", "grc") == "λαθρη"
+
+
+def test_a_contraction_never_takes_a_real_word() -> None:
+    """The *nomina sacra* are expanded so a quotation can meet a manuscript transcription.
+    This library holds printed critical editions, where an editor has already expanded
+    them -- so the contraction forms are free to collide with ordinary Greek, and eleven
+    of them did, on 4,537 words that were never contractions at all.
+
+    The worst took ἔσται, "will be", on 4,412 occurrences and returned ἐσταύρωται, "has
+    been crucified", against five real ones. Each of these is a word the corpora actually
+    use; none of them was ever a contraction there.
+    """
+    for word, folded in (
+        ("ἔσται", "εσται"),  # future of εἰμί, not ἐσταύρωται
+        ("θῶ", "θω"),  # ἕως ἂν θῶ τοὺς ἐχθρούς σου -- τίθημι, not θεῷ
+        ("ὗς", "υσ"),  # the sow that washed, not υἱός
+        ("ὗν", "υν"),  # the pig of the dietary law, not υἱόν
+        ("Κῶ", "κω"),  # the island of Cos, not κυρίῳ
+        ("Ἰήλ", "ιηλ"),  # a name, not Ἰσραήλ
+        ("ἄνους", "ανουσ"),  # senseless, not ἀνθρώπους
+    ):
+        assert fold(word, "grc") == folded
+
+    # ...and the contractions that are contractions still expand.
+    assert fold("θς", "grc") == "θεοσ"
+    assert fold("κς", "grc") == "κυριοσ"
+    assert fold("χς", "grc") == "χριστοσ"
+
+
+def test_an_editorial_mark_does_not_hide_a_word_from_the_fold() -> None:
+    """Every rule in `_greek_word` is a lookup on the whole head, so a bracket or a dash
+    made the lookup miss -- and `_WORD_RE` then discarded the mark anyway, putting the
+    unfolded spelling in the index with nothing to show for it.
+
+    Swete supplies a reading as `[οὕτως].`, WH as `[Οὕτως`, and Rahlfs opens speech with
+    `—οὕτως`. The mark is kept, because the offsets are anchored on what was written.
+    """
+    assert fold("[οὕτως].", "grc") == "[ουτω]."
+    assert fold("—οὕτως", "grc") == "—ουτω"
+    assert fold("[Οὕτως", "grc") == "[ουτω"
+    assert fold("[θς]", "grc") == "[θεοσ]"
+    assert fold("«πρωΐ»", "grc") == "«πρωι»"
+    # the bare word folds the same way, which is the whole point
+    assert fold("οὕτως", "grc") == "ουτω"

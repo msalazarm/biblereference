@@ -39,7 +39,7 @@ __all__ = ["FOLD_VERSION", "SpanNotFoundError", "apply_spans", "fold"]
 #: 3 -- Greek gains two scribal conventions (:data:`_GREEK_CONVENTIONS`) and sixteen more
 #: *nomina sacra*, both priced against real manuscript variation rather than guessed. Greek
 #: folds change; every other language answers exactly as it did at version 1.
-FOLD_VERSION: Final = 4
+FOLD_VERSION: Final = 5
 
 _MARKERS: Final[dict[str, str]] = {"bold": "**", "italic": "*"}
 
@@ -141,18 +141,35 @@ _MODIFIER_APOSTROPHE: Final = "ʼ"
 #:
 #: Contractions only, not every abbreviation: these are the conventional sacred names, the
 #: set a transcription of a biblical manuscript actually uses.
+#:
+#: **Eleven entries were removed at fold 5, because every one of them fired on a real word
+#: and none of them ever fired on a contraction.** This library holds printed critical
+#: editions, where an editor has already expanded the nomina sacra, so the contraction forms
+#: are free to collide with ordinary Greek -- and they did, 4,537 times:
+#:
+#: * ``εσται`` -> ἐσταύρωται destroyed **4,412** occurrences of ἔσται, "will be".
+#: * ``θω`` -> θεῷ took θῶ, the aorist subjunctive of τίθημι: *ἕως ἂν θῶ τοὺς ἐχθρούς σου*.
+#: * ``υσ``/``υν`` -> υἱός/υἱόν took ὗς, "pig" -- the dietary law and *the sow that washed*.
+#: * ``κω`` -> κυρίῳ took Κῶ, the island of Cos. ``ιηλ``, ``ανων`` took the names Ἰήλ, Ἀνών.
+#: * ``ιν`` -> Ἰησοῦν took elided ἵν' and the *hin*, a liquid measure.
+#: * ``ανουσ`` -> ἀνθρώπους took ἄνους, "senseless"; all twelve were the adjective.
+#: * ``θυ``, ``κυ`` are genuine contractions, but their only appearances here are line breaks
+#:   in the source -- ``θυ γατέρας``, ``κυ κλώσουσιν`` -- so in this library they only harm.
+#:
+#: The remaining entries never occur in the Greek corpora at all, so nothing here can say
+#: whether they are safe in a *manuscript* corpus; the question is only live where somebody
+#: folds transcriptions. ``tools/nomina_sacra_audit.py`` re-runs the test.
+#:
+#: **Do not audit this table against the lemma lexicon.** Its forms are folded by this very
+#: rule, so it stores ἔσται under ``εσταυρωται`` and reports no collision for ``εσται`` --
+#: an instrument folded by the thing it is measuring. Count bare corpus words instead.
 _NOMINA_SACRA: Final[dict[str, str]] = {
     "θσ": "θεοσ",
-    "θυ": "θεου",
-    "θω": "θεω",
     "θν": "θεον",
     "κσ": "κυριοσ",
-    "κυ": "κυριου",
-    "κω": "κυριω",
     "κν": "κυριον",
     "ισ": "ιησουσ",
     "ιυ": "ιησου",
-    "ιν": "ιησουν",
     "χσ": "χριστοσ",
     "χυ": "χριστου",
     "χω": "χριστω",
@@ -165,28 +182,22 @@ _NOMINA_SACRA: Final[dict[str, str]] = {
     "πρα": "πατερα",
     "μηρ": "μητηρ",
     "μρσ": "μητροσ",
-    "υσ": "υιοσ",
     "υυ": "υιου",
-    "υν": "υιον",
     "ανοσ": "ανθρωποσ",
     "ανου": "ανθρωπου",
-    "ανων": "ανθρωπων",
     "ουνοσ": "ουρανοσ",
     "ουνου": "ουρανου",
     "ουνων": "ουρανων",
     "δαδ": "δαυιδ",
-    "ιηλ": "ισραηλ",
     "ιλημ": "ιερουσαλημ",
     "σηρ": "σωτηρ",
     "σρσ": "σωτηροσ",
     "στσ": "σταυροσ",
-    "εσται": "εσταυρωται",
     # Added 2026-08-20 from churchfathers' PTA witness sample -- every `<expan>`/`<abbr>`
     # pair attested in the source XML, 43,458 occurrences of which the table above resolved
     # 76.4%. The misses were systematic rather than random: whole cases of a word we already
     # held in other cases, which is what a table written from memory looks like beside one
     # measured against a corpus. These sixteen are ~10,000 further attested occurrences.
-    "ανουσ": "ανθρωπουσ",
     "ανοι": "ανθρωποι",
     "ανοισ": "ανθρωποισ",
     "ανον": "ανθρωπον",
@@ -354,8 +365,10 @@ def _greek_word(word: str) -> str:
     occurrences of a word and not others is worse than one that never fires, because the
     index and the query can disagree about the same text.
     """
-    head = word.rstrip("".join(_TRAILING))
-    tail = word[len(head) :]
+    core = word.rstrip("".join(_TRAILING))
+    tail = word[len(core) :]
+    lead = core[: len(core) - len(core.lstrip(_EDITORIAL))]
+    head = core[len(lead) :]
     if not head:
         return word
     # The *nomina sacra* are looked up here too, and were not before: the expansion ran on
@@ -371,11 +384,20 @@ def _greek_word(word: str) -> str:
         and head not in _GENUINE_IOTA
     ):
         head = head[:-1]
-    return head + tail
+    return lead + head + tail
 
 
 #: Punctuation `fold` leaves attached to a Greek word, which `_tokens` strips afterwards.
-_TRAILING: Final = frozenset(".,;:·’'\u00b7\u0387")
+_TRAILING: Final = frozenset(".,;:·’'\u00b7\u0387[]()<>{}\u2014\u2013")
+
+#: Editorial marks that may *precede* a word, stripped before the rules below look it up and
+#: put back afterwards. An editor brackets a supplied reading -- Swete's ``[οὕτως].``, WH's
+#: ``[Οὕτως`` -- and Rahlfs opens a speech with an em dash, ``—οὕτως``. Every rule in
+#: :func:`_greek_word` is a dictionary lookup on the whole head, so a mark on either side
+#: made the lookup miss; then `_WORD_RE` discarded the mark anyway and the unfolded spelling
+#: went into the index with nothing to show it had happened. Exactly the fault the docstring
+#: below already records for `θς,` -- found again on the other end of the word.
+_EDITORIAL: Final = "[](){}<>\u2014\u2013\u00ab\u00bb"
 
 
 def _rewrite_greek(out: list[str], offsets: list[int], *, orthographic: bool) -> _Folded:
