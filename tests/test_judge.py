@@ -17,7 +17,17 @@ from contextlib import contextmanager
 from typing import Any
 from unittest.mock import patch
 
-from biblereference.judge import DEFAULT_TEMPERATURE, Judge, Judgement, Verdict
+import pytest
+
+from biblereference.judge import (
+    BIG,
+    DEFAULT_TEMPERATURE,
+    SMALL,
+    Judge,
+    Judgement,
+    Verdict,
+    tier,
+)
 from biblereference.refs import VerseRef
 
 
@@ -237,3 +247,33 @@ def test_the_report_distinguishes_measured_and_unmeasured_exclusions() -> None:
     described = calibration.describe()
     assert "never measured" in described
     assert described.count("EXCLUDED") == 2
+
+
+# --------------------------------------------------------------------------------------
+# Which model a server is running, which health alone cannot answer
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf", BIG),
+        ("./models/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf", BIG),
+        ("gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf", SMALL),
+        ("gemma-4-E2B-it.gguf", SMALL),
+        ("some-other-model.gguf", ""),
+        ("", ""),
+    ],
+)
+def test_the_tier_is_read_off_the_model_name(model: str, expected: str) -> None:
+    """Not off the port. `:8081` is the small model on both boxes today, and that is a
+    convention rather than a guarantee -- the day it stops being true, a run judged under
+    strength would look exactly like a good one."""
+    assert tier(model) == expected
+
+
+def test_an_unknown_model_is_no_tier_rather_than_a_guess() -> None:
+    """A model this table has never seen is not quietly filed as large. `available(needs=BIG)`
+    drops it, which costs a server; guessing would cost the verdicts."""
+    assert tier("llama-3-70b.gguf") == ""
+    assert tier("mistral-small.gguf") == ""

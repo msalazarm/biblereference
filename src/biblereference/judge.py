@@ -59,13 +59,16 @@ from typing import Final
 from .refs import VerseRef
 
 __all__ = [
+    "BIG",
     "DEFAULT_SERVERS",
     "DEFAULT_TEMPERATURE",
     "GRAMMAR",
+    "SMALL",
     "Judge",
     "Judgement",
     "Verdict",
     "open_judgements",
+    "tier",
 ]
 
 #: The whole grammar. Two tokens, so the answer needs no parsing and cannot wander. Passed
@@ -73,14 +76,55 @@ __all__ = [
 #: above was measured without it and must not depend on it.
 GRAMMAR: Final = 'root ::= "YES" | "NO"'
 
-#: Two servers by default. The weights are shared across a server's slots, so concurrency
-#: costs no VRAM; a second process was measured on this machine to beat four slots on one.
-DEFAULT_SERVERS: Final = ("http://127.0.0.1:8080", "http://127.0.0.1:8081")
+#: The two **gemma4 26b** endpoints, one per box: this machine's RTX 3090 and the remote's.
+#: Both serve the same build -- ``gemma-4-26B-A4B-it-qat-UD-Q4_K_XL`` -- which is what makes
+#: pooling them legitimate: a calibration measured across the pair describes one instrument
+#: sampled twice, not two averaged. The weights are shared across a server's slots, so
+#: concurrency costs no VRAM.
+#:
+#: **Neither ``:8081`` is here, and both boxes now run one.** They serve gemma4 E4B, and
+#: :func:`~biblereference.adjudicate.calibrate` measures the *pool* rather than each server
+#: -- it round-robins through :meth:`Judge.judge` like any other question -- so mixing the
+#: tiers would average two instruments under one calibration and a pass would describe
+#: neither. Prefer :meth:`Judge.available` with an explicit ``needs=BIG`` over trusting this
+#: tuple: a default is a guess about the fleet, and the fleet changed twice on 2026-08-19.
+DEFAULT_SERVERS: Final = ("http://127.0.0.1:8080", "http://10.0.0.182:8080")
 
 #: Sampling temperature. Not zero: see the module docstring -- at zero the votes of a
 #: best-of-three are one computation repeated, and the disagreement that makes a vote worth
 #: taking can never occur.
 DEFAULT_TEMPERATURE: Final = 0.7
+
+#: The two model tiers the fleet runs, named exactly as ``churchfathers.adjudicate`` names
+#: them so the two projects can hand each other a *requirement* rather than an address. An
+#: address list goes stale -- ``100.98.85.58`` did, in ten files across two repositories --
+#: and a tier does not.
+#:
+#: **The requirement has to be declared because getting it wrong is silent.** A run that
+#: needs the large model and is handed the small one does not fail: it answers, less
+#: decisively, and the verdicts it writes are the same shape as good ones. Measured on
+#: 2026-08-19 over the 96 calibration rows, ``e4b`` was right every time it committed but
+#: informative on 82% of rows against ``26b``'s 89-91% -- and on Church Slavonic, on one row
+#: of three against three of three. Nothing downstream can tell a thin verdict from a
+#: confident one, so the caller says what it needs and :meth:`Judge.available` refuses
+#: rather than quietly running under strength.
+BIG: Final = "26b"
+SMALL: Final = "e4b"
+
+
+def tier(model: str) -> str:
+    """Which tier a model name belongs to, by the part of the name that states its size.
+
+    Read off the name the server reports rather than the port it answers on: ``:8081`` is
+    the small model on both boxes today and that is a convention, not a guarantee.
+    """
+    name = str(model).lower()
+    if "26b" in name:
+        return BIG
+    if "e4b" in name or "e2b" in name:
+        return SMALL
+    return ""
+
 
 _POSITIVE_SYSTEM: Final = (
     "You compare Bible verses. Two verses may be in different languages or translations "
@@ -196,8 +240,32 @@ class Judge:
         self._next = 0
         self.calls = 0
 
-    def available(self) -> list[str]:
-        """Which of the configured servers answer. An empty list means no run is possible."""
+    def model_of(self, server: str) -> str:
+        """The model a server reports, or ``""`` if it will not say.
+
+        Health alone cannot answer this, and health alone is what this method used to check
+        -- so a server running the small model was indistinguishable from one running the
+        large, and a run could be judged under strength without any symptom.
+        """
+        try:
+            with urllib.request.urlopen(f"{server}/v1/models", timeout=5) as response:
+                data = json.load(response).get("data", [])
+        except (urllib.error.URLError, OSError, ValueError):
+            return ""
+        return str(data[0].get("id", "")) if data else ""
+
+    def available(self, *, needs: str = "") -> list[str]:
+        """Which of the configured servers answer, and are strong enough. Empty means no run.
+
+        ``needs=BIG`` keeps only the large model. ``needs=SMALL`` *prefers* the small one and
+        falls back to the large when no small server answered -- which matters with two of
+        each in the fleet: a small job helping itself to the large servers starves the big
+        job beside it, and holding both exists so the two can run at once. A small question
+        is not answered worse by a large model; sending it there is merely wasteful.
+
+        ``needs=""`` keeps whatever answers, which is right only for a caller that does not
+        care -- and a caller judging scripture always cares.
+        """
         alive = []
         for server in self._servers:
             try:
@@ -205,7 +273,14 @@ class Judge:
                     alive.append(server)
             except (urllib.error.URLError, OSError):
                 continue
-        return alive
+        if not needs:
+            return alive
+        tiers = {server: tier(self.model_of(server)) for server in alive}
+        if needs == BIG:
+            return [server for server in alive if tiers[server] == BIG]
+        return [server for server in alive if tiers[server] == SMALL] or [
+            server for server in alive if tiers[server] == BIG
+        ]
 
     def _take_server(self) -> str:
         """Strict round-robin.

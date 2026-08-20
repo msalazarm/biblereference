@@ -39,23 +39,29 @@ from biblereference.adjudicate import (
     shuffled,
 )
 from biblereference.audit import _Texts
-from biblereference.judge import Judge, Verdict, open_judgements
+from biblereference.judge import BIG, Judge, Verdict, open_judgements
 from biblereference.store import DataHome
 from biblereference.versification import PIVOT, Versification
 
-#: All four, when nothing else wants them. Two of these -- ``100.98.85.58:8090`` and
-#: ``127.0.0.1:8080`` -- belong to another project and must be dropped from this tuple the
-#: moment it needs them again; the run is resumable, so stopping and restarting on two
-#: costs only the judgements in flight.
+#: **Every** endpoint in the fleet, both tiers. The run declares what it needs rather than
+#: encoding it here -- ``available(needs=BIG)`` below drops the small ones -- because an
+#: address list is what went stale last time: ``100.98.85.58`` survived in ten files across
+#: two repositories after the machine it named was gone.
+#:
+#: Shared with churchfathers, which judges against the same fleet: whichever run starts
+#: second gets a smaller round-robin share rather than an error, and this run is resumable,
+#: so stopping it costs only the judgements in flight.
 #:
 #: The bottleneck is the round-robin share each server gets rather than any one server's
 #: slots, which is why the count matters more than which ones: measured on two, this run
-#: does about six judgements a second, and 128,000 verses is eight hours of that.
+#: does about six judgements a second, and 128,000 verses is eight hours of that. The
+#: 2026-08-19 Slavonic run had only the local one and managed 2.5/s -- 56,651 verses in
+#: 6h11m -- which is the figure to plan a single-server night against.
 SERVERS = (
-    "http://100.98.85.58:8080",
-    "http://100.98.85.58:8090",
     "http://127.0.0.1:8080",
+    "http://10.0.0.182:8080",
     "http://127.0.0.1:8081",
+    "http://10.0.0.182:8081",
 )
 
 HOME = DataHome()
@@ -133,11 +139,13 @@ def main() -> int:
         say(f"report rebuilt: {REPORT}")
         return 0
 
-    # Narrowed to the servers that answered, not merely reported. `Judge` round-robins
-    # over whatever list it holds, so leaving the dead ones in sends three of every four
-    # requests to a closed port -- which never showed while all four were up, and stopped
-    # the first Slavonic run dead when only one was.
-    alive = judge.available()
+    # Narrowed twice: to the servers that answered, and to the ones strong enough. `Judge`
+    # round-robins over whatever list it holds, so leaving the dead ones in sends requests to
+    # a closed port -- which never showed while all four were up, and stopped the first
+    # Slavonic run dead when only one was. `needs=BIG` drops the E4B servers, which answer
+    # and would be judged as though they were the large model; calibration measures the pool
+    # rather than the server, so it cannot catch that for us.
+    alive = judge.available(needs=BIG)
     say(f"servers alive: {len(alive)} of {len(SERVERS)}")
     if not alive:
         say("no model server answering; nothing to do")
