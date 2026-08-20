@@ -620,34 +620,8 @@
     "pretty": "John 1:14",
     "book": "JHN",
     "vrs": "vul",
-    "similarity": 0.7727,
-    "coverage": 0.7727,
-    "identified": false,
-    "decisive": false,
-    "anachronistic": false,
-    "composed": null,
-    "span": null,
-    "quoted": null,
-    "ambiguous": false,
-    "alternates": [],
-    "translations": [
-     {
-      "corpus": "latvuc",
-      "label": "LATVUC",
-      "similarity": 0.7727,
-      "translated": 405
-     }
-    ]
-   }
-  ],
-  "PSA 22:1": [
-   {
-    "passage": "PSA 22:1",
-    "pretty": "Psalms 22:1",
-    "book": "PSA",
-    "vrs": "vul",
-    "similarity": 0.8889,
-    "coverage": 0.8889,
+    "similarity": 1.0,
+    "coverage": 1.0,
     "identified": true,
     "decisive": true,
     "anachronistic": false,
@@ -660,7 +634,33 @@
      {
       "corpus": "latvuc",
       "label": "LATVUC",
-      "similarity": 0.8889,
+      "similarity": 1.0,
+      "translated": 405
+     }
+    ]
+   }
+  ],
+  "PSA 22:1": [
+   {
+    "passage": "PSA 22:1",
+    "pretty": "Psalms 22:1",
+    "book": "PSA",
+    "vrs": "vul",
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
+    "anachronistic": false,
+    "composed": null,
+    "span": null,
+    "quoted": null,
+    "ambiguous": false,
+    "alternates": [],
+    "translations": [
+     {
+      "corpus": "latvuc",
+      "label": "LATVUC",
+      "similarity": 1.0,
       "translated": 405
      }
     ]
@@ -672,10 +672,10 @@
     "pretty": "Romans 12:1",
     "book": "ROM",
     "vrs": "vul",
-    "similarity": 0.7895,
-    "coverage": 0.7895,
-    "identified": false,
-    "decisive": false,
+    "similarity": 1.0,
+    "coverage": 1.0,
+    "identified": true,
+    "decisive": true,
     "anachronistic": false,
     "composed": null,
     "span": null,
@@ -686,7 +686,7 @@
      {
       "corpus": "latvuc",
       "label": "LATVUC",
-      "similarity": 0.7895,
+      "similarity": 1.0,
       "translated": 405
      }
     ]

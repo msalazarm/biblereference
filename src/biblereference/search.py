@@ -1996,8 +1996,7 @@ class Searcher:
             vectors = PpmiVectors(home.root / "db" / "ppmi-grc.sqlite3")
             if not vectors.held:
                 raise ValueError(
-                    "ppmi=True needs the vector artifact; build it with "
-                    "tools/ppmi_vectors.py"
+                    "ppmi=True needs the vector artifact; build it with tools/ppmi_vectors.py"
                 )
             self._ppmi = vectors
         #: The explicit second look per candidate (see `verification.py`). Opt-in -- it
@@ -2472,7 +2471,22 @@ class Searcher:
         scripture rather than a quotation of it, and a matcher that guesses at such
         sentences would put noise into every count made from its output.
         """
-        query = _tokens(text)
+        # Tokenised in the language of the corpora being searched, where they agree on one.
+        #
+        # `_tokens(text)` with no language was the whole of this line, and every *verse* it
+        # is compared against is tokenised with `meta.language` -- so the two sides folded
+        # the same words differently. In Latin that is not subtle: `fold` maps j to i and v
+        # to u precisely because the Clementine writes *Jesus* and the Nova Vulgata *Iesus*,
+        # and the query never got the benefit. Searching a Clementine verse verbatim against
+        # itself returned 0.933, not 1.0, and 1 Corinthians 11:23 lost its run at *vobis*
+        # against *uobis* -- a gate with a `run` arm sees that.
+        #
+        # Only where the loaded corpora speak one language, which is how both consumers call
+        # this and how every language-scoped sweep runs. A multi-language searcher keeps the
+        # old behaviour: the right answer there is to tokenise per candidate rather than per
+        # searcher, and that is a larger change than this one.
+        spoken = {meta.language for meta in self._corpora.values()}
+        query = _tokens(text, spoken.pop() if len(spoken) == 1 else None)
         if len(query) < self._min_query:
             return []
 
@@ -2892,9 +2906,7 @@ class Searcher:
 
         owned: list[tuple[int, int]] = []
         for a, b in spans:
-            first_inside = next(
-                (i for i, (_, start, end) in enumerate(words) if start >= a), 0
-            )
+            first_inside = next((i for i, (_, start, end) in enumerate(words) if start >= a), 0)
             lead = words[max(0, first_inside - REACH)][1] if words else a
             owned.append((min(lead, a), b))
         residue = [
@@ -2905,8 +2917,7 @@ class Searcher:
         if not residue:
             return []
         folded = [
-            (position, fold(token, "grc"), start, end)
-            for position, token, start, end in residue
+            (position, fold(token, "grc"), start, end) for position, token, start, end in residue
         ]
         by_form = index.by_form("grc", [token for _, token, _, _ in folded])
         mentions = [
@@ -2978,13 +2989,9 @@ class Searcher:
             ties = [row for row in scored if best_rank - row[0] <= _TIE_BITS]
             ties.sort(key=lambda row: (row[2][1] not in quoted_books, -row[0]))
             _, winner_score, winner = ties[0]
-            losers = [c for _, _, c in ties[1:]] + [c for _, _, c in scored[len(ties):][:3]]
+            losers = [c for _, _, c in ties[1:]] + [c for _, _, c in scored[len(ties) :][:3]]
             vrs, book, c1, v1, c2, v2, names, episode = winner
-            grade = (
-                "reference"
-                if self._formula_before(words, cluster[0][0], "grc")
-                else "allusion"
-            )
+            grade = "reference" if self._formula_before(words, cluster[0][0], "grc") else "allusion"
             out.append(
                 Match(
                     VerseRange(
@@ -3004,9 +3011,7 @@ class Searcher:
                     + ((episode,) if episode else ()),
                     formula=self._formula_before(words, cluster[0][0], "grc"),
                     alternates=tuple(
-                        VerseRange(
-                            VerseRef(b, ca, va, vrs=vr), VerseRef(b, cb, vb, vrs=vr)
-                        )
+                        VerseRange(VerseRef(b, ca, va, vrs=vr), VerseRef(b, cb, vb, vrs=vr))
                         for vr, b, ca, va, cb, vb, _, _ in losers[:4]
                     ),
                 )
@@ -3025,9 +3030,7 @@ class Searcher:
         serves the language."""
         nothing = (0.0, frozenset[str](), frozenset[str]())
         vrs, book, c1, v1, c2, v2 = candidate[:6]
-        language = next(
-            (m.language for m in self._corpora.values() if m.versification == vrs), ""
-        )
+        language = next((m.language for m in self._corpora.values() if m.versification == vrs), "")
         if language not in LEMMA_LANGUAGES:
             return nothing
         corpora = [c for c, m in self._corpora.items() if m.versification == vrs]
@@ -3431,7 +3434,13 @@ class Searcher:
         return [
             found,
             *self._graded_cluster(
-                vrs, book, chapter, query, first_token, tokens, words,
+                vrs,
+                book,
+                chapter,
+                query,
+                first_token,
+                tokens,
+                words,
                 masked=self._span_tokens(found.span, words, first_token),
             ),
         ]
@@ -3610,8 +3619,19 @@ class Searcher:
             for position in range(*chained.span):
                 remaining[position] = frozenset()
             found = self._chain_match(
-                chained, vrs, book, chapter, start, end, first_token, tokens, words,
-                language, weigh, lexicon, rivals,
+                chained,
+                vrs,
+                book,
+                chapter,
+                start,
+                end,
+                first_token,
+                tokens,
+                words,
+                language,
+                weigh,
+                lexicon,
+                rivals,
             )
             if found is not None:
                 matches.append(found)

@@ -219,7 +219,13 @@ def test_scan_and_search_return_what_they_returned_before(home: DataHome) -> Non
 
     if os.environ.get("BIBLEREFERENCE_REGENERATE_GOLDEN"):
         GOLDEN.parent.mkdir(parents=True, exist_ok=True)
-        GOLDEN.write_text(json.dumps(found, ensure_ascii=False, indent=1) + "\n", "utf-8")
+        # Written in the shape the file has always had: without the keys `Match.to_dict`
+        # gained after it was recorded. The comparison below strips them from `found`, so
+        # writing them in makes the very next run fail against a file it just produced --
+        # which is what happened the first time this branch was used after `ADDED` grew.
+        # Regenerating must reproduce the contract, not the current dict.
+        stripped = {key: _without_additions(value) for key, value in found.items()}
+        GOLDEN.write_text(json.dumps(stripped, ensure_ascii=False, indent=1) + "\n", "utf-8")
         pytest.skip(f"regenerated {GOLDEN}")
 
     assert GOLDEN.exists(), f"{GOLDEN} is missing; regenerate it deliberately, not by accident"
@@ -241,12 +247,22 @@ ADDED: frozenset[str] = frozenset(
     # salutation/farewell combination and the 34-verdict inner-biblical class --
     # threshold-free, computed from the store's own tables, and like `formula` they
     # report evidence without acting on it.
-    {"positional_candidate", "family", "itacised", "composite", "e_value",
-     "containment", "fragmentation", "verified_odds", "patristic_rate", "recovered",
-     # The verification stage computed this from the first and reported only the summed
-     # odds, so a caller testing whether rare lemmas *line up* read None on every row and
-     # could measure only a number dominated by how much evidence there was.
-     "offset_peak"},
+    {
+        "positional_candidate",
+        "family",
+        "itacised",
+        "composite",
+        "e_value",
+        "containment",
+        "fragmentation",
+        "verified_odds",
+        "patristic_rate",
+        "recovered",
+        # The verification stage computed this from the first and reported only the summed
+        # odds, so a caller testing whether rare lemmas *line up* read None on every row and
+        # could measure only a number dominated by how much evidence there was.
+        "offset_peak",
+    },
 )
 
 
