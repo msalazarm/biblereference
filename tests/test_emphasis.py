@@ -574,3 +574,52 @@ def test_the_breathing_decides_whether_iota_nu_is_a_contraction() -> None:
     # An edition expands none of it, breathing or not.
     assert fold("τὸν κν ἡμῶν ἰν χν", "grc") == "τον κν ημων ιν χν"
     assert fold("ἰν", "grc") == "ιν"
+
+
+def test_a_mark_the_scribe_wrote_decides_the_three_remaining_contractions() -> None:
+    """`κω`, `υσ` and `υν` are each a contraction and something else, and the something else
+    carries a mark. churchfathers counted every occurrence in their transcriptions by form,
+    so these numbers are complete rather than sampled.
+
+    `κω` is κυρίῳ, except where it is Κῶ, the island of Acts 21:1. The dative ending survives
+    on the contraction as an iota subscript -- 83 `κῳ` and 8 `κῷ` of 349 -- while the island
+    carries a perispomeni and no subscript, which is the 4 `κῶ`.
+
+    `υσ`/`υν` are υἱός/υἱόν. ὗς the pig takes a rough breathing *and* a perispomeni: zero of
+    645. What the perispomeni does catch is a word broken across a line -- their `ῦς` and `ὖν`
+    are νοῦς and οὖν split, visible in *ὁ νο ὖν ῦς διακρίνῃ*, the same fault as the
+    `θυ γατέρας` split that cost us fold 5.
+    """
+    # κω: the subscript expands, the bare perispomeni refuses.
+    assert fold("κῳ", "grc", transcription=True) == "κυριω"
+    assert fold("κῷ", "grc", transcription=True) == "κυριω"
+    assert fold("κῶ", "grc", transcription=True) == "κω"
+
+    # υσ / υν: a perispomeni means a fragment or the pig, and refuses either way.
+    assert fold("ῦς", "grc", transcription=True) == "υσ"
+    assert fold("ὖν", "grc", transcription=True) == "υν"
+    assert fold("ὗς", "grc", transcription=True) == "υσ"
+    assert fold("υς", "grc", transcription=True) == "υιοσ"
+    assert fold("υν", "grc", transcription=True) == "υιον"
+
+    # All three formulas whole -- genitive, accusative, dative. Each split in turn, and each
+    # split was the same fault found a version later than the last.
+    assert fold("τοῦ κυ ἡμῶν ἰῦ χῦ", "grc", transcription=True) == "του κυριου ημων ιησου χριστου"
+    assert fold("τὸν κν ἡμῶν ἰν χν", "grc", transcription=True) == "τον κυριον ημων ιησουν χριστον"
+    assert (
+        fold("τῷ ἰδίῳ λόγῳ τῷ κω ἡμῶν ἰῦ χῷ", "grc", transcription=True)
+        == "τω ιδιω λογω τω κυριω ημων ιησου χριστω"
+    )
+
+    # An edition expands none of it.
+    assert fold("τῷ κω ἡμῶν ἰῦ χῷ", "grc") == "τω κω ημων ιυ χω"
+
+
+def test_a_guard_reads_the_whole_word_not_its_first_letter() -> None:
+    """`ἰν` carries its breathing on the iota, so reading only the first character worked and
+    hid the assumption. `κῶ` carries its perispomeni on the omega, and reading the first
+    character let the island expand to κυρίῳ -- caught by checking a mark that does not sit
+    where the last one did.
+    """
+    assert fold("κῶ", "grc", transcription=True) == "κω"
+    assert fold("ἰν", "grc", transcription=True) == "ιησουν"

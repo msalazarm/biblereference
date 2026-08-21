@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from itertools import pairwise
@@ -174,8 +174,11 @@ _NOMINA_SACRA: Final[dict[str, str]] = {
     "θυ": "θεου",
     "θω": "θεω",
     "κυ": "κυριου",
-    # Guarded by :data:`_REQUIRES_PSILI`: only where the scribe wrote the smooth breathing.
+    # All four guarded by :data:`_MARK_GUARDS`, on a mark the source actually carries.
     "ιν": "ιησουν",
+    "κω": "κυριω",
+    "υσ": "υιοσ",
+    "υν": "υιον",
     "ανων": "ανθρωπων",
     "ιηλ": "ισραηλ",
     "ανουσ": "ανθρωπουσ",
@@ -282,7 +285,7 @@ def _fold(
     greek = language == "grc"
     out: list[str] = []
     offsets: list[int] = []
-    psili: list[bool] = []
+    marks: list[int] = []
     pending_space = False
 
     for index, character in enumerate(text):
@@ -299,9 +302,12 @@ def _fold(
         if not kept:
             continue
         # Read before the marks are dropped, because dropping them is the whole problem.
-        # See :data:`_REQUIRES_PSILI`: this is the one piece of diacritical evidence the
-        # fold now carries past its own strip.
-        breathing = _PSILI in decomposed
+        # See :data:`_MARK_GUARDS`: the diacritical evidence the fold carries past its own
+        # strip, and the only place it does.
+        carried = 0
+        for mark, bit in _CARRIED_MARKS:
+            if mark in decomposed:
+                carried |= bit
 
         kept = kept.lower().replace("ς", "σ")
         kept = "".join(_LIGATURES.get(c, c) for c in kept)
@@ -311,16 +317,16 @@ def _fold(
         if pending_space:
             out.append(" ")
             offsets.append(index)
-            psili.append(False)
+            marks.append(0)
             pending_space = False
         for piece in kept:
             out.append(piece)
             offsets.append(index)
-            psili.append(breathing)
+            marks.append(carried)
 
     if greek:
         return _rewrite_greek(
-            out, offsets, psili, orthographic=orthographic, transcription=transcription
+            out, offsets, marks, orthographic=orthographic, transcription=transcription
         )
     return _Folded("".join(out), tuple(offsets))
 
@@ -388,36 +394,83 @@ _GREEK_CONVENTIONS: Final = {"ουτωσ": "ουτω"}
 #: failing to expand a contraction only costs a match.
 _NOMINA_SACRA_UNDECIDED: Final[dict[str, str]] = {
     "εσται": "εσταυρωται",
-    "υσ": "υιοσ",
-    "υν": "υιον",
-    "κω": "κυριω",
 }
 
-#: COMBINING COMMA ABOVE -- the smooth breathing, *psili*.
-_PSILI: Final = "\u0313"
+#: The four combining marks this fold carries past its own NFD strip, as a bitmask. Everything
+#: else about a diacritic is still dropped; these four are kept because a contraction and an
+#: ordinary word are told apart by them and by nothing else.
+_PSILI: Final = 1  #: U+0313, smooth breathing
+_DASIA: Final = 2  #: U+0314, rough breathing
+_PERISPOMENI: Final = 4  #: U+0342, circumflex
+_YPOGEGRAMMENI: Final = 8  #: U+0345, iota subscript
 
-#: Contractions expanded **only where the source carried a smooth breathing**, and the one
-#: place this fold consults a diacritic it has already stripped.
-#:
-#: ``ιν`` is two words. Elided ἵνα takes the rough breathing, ἰν for Ἰησοῦν takes the smooth,
-#: and churchfathers' transcriptions mark the difference every time: 311 rough against 101
-#: smooth, of which 78 stand in *τὸν κν ἡμῶν ἰν χν* identically across Ms44-Ms48. Both arrive
-#: here as ``ιν`` because breathing is a combining mark and the NFD pass drops it, so fold 7
-#: had to withhold the entry entirely -- and withholding split the accusative formula exactly
-#: as the genitive one split before ``κυ`` came back.
-#:
-#: **Only on a positive smooth breathing, never on a bare form.** 40 occurrences carry no
-#: breathing at all and stay unexpanded, as they were at fold 7: the scribe did not say, and
-#: guessing there would expand ἵνα. This is not the "fires on some occurrences and not others"
-#: fault -- the marked forms are two different words, not one word marked inconsistently, and
-#: declining where the evidence is absent costs a match rather than corrupting a word.
-#:
-#: **The overline would have been the general answer and it is not there.** churchfathers
-#: counted: 0 of 65,642 nomina sacra carry one, and it is not their pipeline -- macrons are
-#: alive in their Greek, marking letters-as-letters, transliterated Hebrew and Latin scribal
-#: abbreviation, just never these. So ``υσ``/``υν``/``κω`` cannot be settled this way and still
-#: want counting.
-_REQUIRES_PSILI: Final = frozenset({"ιν"})
+_CARRIED_MARKS: Final = (
+    ("\u0313", _PSILI),
+    ("\u0314", _DASIA),
+    ("\u0342", _PERISPOMENI),
+    ("\u0345", _YPOGEGRAMMENI),
+)
+
+
+def _union(marks: Sequence[int]) -> int:
+    """Every mark anywhere in the word, as one bitmask."""
+    carried = 0
+    for mark in marks:
+        carried |= mark
+    return carried
+
+
+def _always(marks: int) -> bool:
+    return True
+
+
+def _smooth_breathing(marks: int) -> bool:
+    """``ιν`` is two words, and the breathing is the whole of the difference.
+
+    Elided ἵνα takes the rough breathing, ἰν for Ἰησοῦν the smooth: churchfathers count 311
+    rough against 101 smooth, 78 of the latter standing in *τὸν κν ἡμῶν ἰν χν* identically
+    across Ms44-Ms48. Their 40 unmarked occurrences stay unexpanded -- the scribe did not say,
+    and guessing there would turn ἵνα into Ἰησοῦν.
+    """
+    return bool(marks & _PSILI)
+
+
+def _dative_not_the_island(marks: int) -> bool:
+    """``κω`` is κυρίῳ contracted, except where it is Κῶ, the island of Acts 21:1.
+
+    The dative ending survives on the contraction as an iota subscript -- 83 written ``κῳ`` and
+    8 ``κῷ`` of 349 -- exactly as the genitive's perispomeni survives on θῦ, ἰῦ, χῦ. The island
+    carries a perispomeni and no subscript, which is the 4 written ``κῶ``.
+
+    So a perispomeni alone refuses; a perispomeni with a subscript is the dative and expands.
+    Without this, *τῷ ἰδίῳ λόγῳ τῷ κω ἡμῶν ἰῦ χῷ* splits in the dative exactly as the genitive
+    formula split before ``κυ`` came back.
+    """
+    return not marks & _PERISPOMENI or bool(marks & _YPOGEGRAMMENI)
+
+
+def _not_broken_across_a_line(marks: int) -> bool:
+    """``υσ``/``υν`` are υἱός/υἱόν contracted, and the perispomeni marks what they are not.
+
+    Two things wear those letters otherwise. ὗς, the pig of Leviticus 11:7 and 2 Peter, takes a
+    rough breathing *and* a perispomeni -- zero of 645 in churchfathers' transcriptions, which is
+    what one expects of Athanasius. And a word broken across a line leaves a tail behind: their
+    ``ῦς`` (2) and ``ὖν`` (6) are νοῦς and οὖν split, visible in *ὁ νο ὖν ῦς διακρίνῃ*. Both are
+    the same fault as the ``θυ γατέρας`` and ``κυ κλώσουσιν`` splits that cost us fold 5.
+
+    A perispomeni refuses, which covers the pig and the fragments together.
+    """
+    return not marks & _PERISPOMENI
+
+
+#: Contractions whose expansion depends on a mark the source carries. Everything not named here
+#: expands whenever the text is a transcription.
+_MARK_GUARDS: Final[dict[str, Callable[[int], bool]]] = {
+    "ιν": _smooth_breathing,
+    "κω": _dative_not_the_island,
+    "υσ": _not_broken_across_a_line,
+    "υν": _not_broken_across_a_line,
+}
 
 #: The vowels an adscript iota may follow. Alpha is absent on purpose -- see above.
 _ADSCRIPT_AFTER: Final = frozenset("ωη")
@@ -447,7 +500,7 @@ _ADSCRIPT_AFTER: Final = frozenset("ωη")
 _GENUINE_IOTA: Final = frozenset({"πρωι", "ελωι", "νηι", "θεκωι", "αχωι", "ρηι"})
 
 
-def _greek_word(word: str, *, transcription: bool, psili: bool = False) -> str:
+def _greek_word(word: str, *, transcription: bool, marks: int = 0) -> str:
     """One Greek word with its contractions expanded and its conventions folded away.
 
     **Applied to the word's letters, not to the whole token.** `_rewrite_greek` splits the
@@ -471,14 +524,14 @@ def _greek_word(word: str, *, transcription: bool, psili: bool = False) -> str:
     # was written.
     return (
         "".join(
-            _greek_head(part, transcription=transcription, psili=psili)
+            _greek_head(part, transcription=transcription, marks=marks)
             for part in _SEGMENT.split(core)
         )
         + tail
     )
 
 
-def _greek_head(head: str, *, transcription: bool, psili: bool = False) -> str:
+def _greek_head(head: str, *, transcription: bool, marks: int = 0) -> str:
     """The rules, applied to one unbroken run of letters.
 
     Split out so :func:`_greek_word` can map it over the pieces of a bracketed or dashed
@@ -490,7 +543,7 @@ def _greek_head(head: str, *, transcription: bool, psili: bool = False) -> str:
     # them -- silently failed to expand. Found by a canary written for the new rules.
     # Only where the text is a transcription. In a printed edition the editor expanded these
     # centuries ago, so a "contraction" found here is an ordinary word wearing the same letters.
-    if transcription and (head not in _REQUIRES_PSILI or psili):
+    if transcription and _MARK_GUARDS.get(head, _always)(marks):
         head = _NOMINA_SACRA.get(head, head)
     head = _GREEK_CONVENTIONS.get(head, head)
     if (
@@ -523,7 +576,7 @@ _SEGMENT: Final = re.compile(f"([{re.escape(_EDITORIAL)}]+)")
 def _rewrite_greek(
     out: list[str],
     offsets: list[int],
-    psili: Sequence[bool],
+    marks: Sequence[int],
     *,
     orthographic: bool,
     transcription: bool,
@@ -556,7 +609,10 @@ def _rewrite_greek(
             expanded = _greek_word(
                 word,
                 transcription=transcription,
-                psili=start < len(psili) and psili[start],
+                # The union over the word, not the mark on its first letter. `ἰν` carries its
+                # breathing on the iota and worked either way; `κῶ` carries its perispomeni on
+                # the omega, and reading only the first character let the island expand.
+                marks=_union(marks[start : start + len(word)]),
             )
             if orthographic:
                 for written, spoken in _ITACISM:
