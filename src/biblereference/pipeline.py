@@ -50,7 +50,13 @@ class StepResult:
 
     name: str
     state: str
-    """``built`` | ``skipped`` | ``failed``."""
+    """``built`` | ``skipped`` | ``failed`` | ``degraded``.
+
+    ``degraded`` is an *optional* layer that did not build: reported, and not fatal. The
+    n-grams and PPMI want a checkout the wheel does not ship, and PPMI additionally wants a
+    Diorisis archive that no source registry publishes -- so `mirror` never copies it. None
+    of that should condemn a run that built everything else.
+    """
     count: int = 0
     unit: str = ""
     detail: str = ""
@@ -125,6 +131,58 @@ def _build_profiles(home: DataHome, report: Reporter) -> int:
     return build_profiles(home, report=report).anchors
 
 
+def _checkout_tools() -> Path | None:
+    """``tools/`` beside the installed package, or ``None`` in a wheel.
+
+    The last two layers live in `tools/`, which `[tool.hatch.build.targets.wheel]` does not
+    ship. Running them from here rather than making the user remember them is worth a
+    subprocess; pretending they do not exist when the directory is absent is worth saying.
+    """
+    tools = Path(__file__).resolve().parents[2] / "tools"
+    return tools if (tools / "scripture_ngrams.py").exists() else None
+
+
+def _run_tool(script: str, args: Sequence[str], report: Reporter) -> None:
+    import subprocess
+    import sys
+
+    tools = _checkout_tools()
+    if tools is None:
+        raise FileNotFoundError(
+            "tools/ is not beside the installed package -- these layers need a checkout, "
+            "not a wheel"
+        )
+    completed = subprocess.run(
+        [sys.executable, str(tools / script), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    for line in completed.stdout.splitlines()[-3:]:
+        report(f"  {line}")
+    if completed.returncode != 0:
+        tail = (completed.stderr or completed.stdout).strip().splitlines()
+        raise RuntimeError(f"{script} exited {completed.returncode}: {tail[-1] if tail else ''}")
+
+
+def _build_ngrams(home: DataHome, report: Reporter) -> int:
+    import sqlite3
+
+    _run_tool("scripture_ngrams.py", ["--language", "grc"], report)
+    path = Path(home.root) / "db" / "ngrams-scripture-grc.sqlite3"
+    with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as db:
+        return int(db.execute("SELECT COUNT(*) FROM ngram").fetchone()[0])
+
+
+def _build_ppmi(home: DataHome, report: Reporter) -> int:
+    import sqlite3
+
+    path = Path(home.root) / "db" / "ppmi-grc.sqlite3"
+    _run_tool("ppmi_vectors.py", ["--save", str(path)], report)
+    with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as db:
+        return int(db.execute("SELECT COUNT(*) FROM vector").fetchone()[0])
+
+
 #: In dependency order. `needs` names steps that must have *succeeded*, not merely run.
 STEPS: Final[tuple[Step, ...]] = (
     Step("verses", "verses", _build_verses),
@@ -138,6 +196,18 @@ STEPS: Final[tuple[Step, ...]] = (
     Step("parallel families", "pairs", _build_parallels, needs=("lemma index",)),
     Step("entity index", "references", _build_entities, needs=("verses",), optional=True),
     Step("verse profiles", "anchors", _build_profiles, needs=("parallel families",)),
+    # The last two live in `tools/`, which the wheel does not ship. Optional so a wheel
+    # install reports them rather than failing, and so a missing Diorisis archive -- which
+    # no source registry publishes, so `mirror` never copies it -- degrades this one layer
+    # instead of the run.
+    Step(
+        "scripture n-grams",
+        "grams",
+        _build_ngrams,
+        needs=("search index",),
+        optional=True,
+    ),
+    Step("ppmi vectors", "weights", _build_ppmi, needs=("verses",), optional=True),
 )
 
 
@@ -147,6 +217,12 @@ class PipelineResult:
 
     @property
     def failed(self) -> list[StepResult]:
+        return [s for s in self.steps if s.state in ("failed", "degraded")]
+
+    @property
+    def fatal(self) -> list[StepResult]:
+        """Failures of layers something else needs. A ``degraded`` optional layer is
+        reported and does not condemn the run; a required one does."""
         return [s for s in self.steps if s.state == "failed"]
 
     @property
@@ -166,7 +242,7 @@ class PipelineResult:
         shape of error this module exists to refuse; it should not be reintroduced by the
         exit code.
         """
-        return bool(self.built) and not self.failed
+        return bool(self.built) and not self.fatal
 
     def describe(self) -> str:
         width = max((len(s.name) for s in self.steps), default=0)
@@ -222,7 +298,10 @@ def rebuild(
         except Exception as exc:  # reported, and the run continues
             result.steps.append(
                 StepResult(
-                    step.name, "failed", unit=step.unit, detail=f"{type(exc).__name__}: {exc}"
+                    step.name,
+                    "degraded" if step.optional else "failed",
+                    unit=step.unit,
+                    detail=f"{type(exc).__name__}: {exc}",
                 )
             )
             continue
@@ -234,7 +313,7 @@ def rebuild(
             result.steps.append(
                 StepResult(
                     step.name,
-                    "failed",
+                    "degraded" if step.optional else "failed",
                     unit=step.unit,
                     detail=f"built 0 {step.unit} -- an empty layer, not a built one",
                 )
@@ -264,6 +343,8 @@ _PRESENCE: Final[dict[str, tuple[str | None, str]]] = {
     "parallel families": (None, "SELECT COUNT(*) FROM parallel_family"),
     "entity index": ("entities.sqlite", "SELECT COUNT(*) FROM entity_verse"),
     "verse profiles": ("profiles.sqlite", "SELECT COUNT(*) FROM profile"),
+    "scripture n-grams": ("ngrams-scripture-grc.sqlite3", "SELECT COUNT(*) FROM ngram"),
+    "ppmi vectors": ("ppmi-grc.sqlite3", "SELECT COUNT(*) FROM vector"),
 }
 
 

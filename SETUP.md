@@ -250,10 +250,19 @@ cd ~/biblereference
 venv/bin/biblereference rebuild
 ```
 
-It builds, in dependency order: **verse store → search index → lemma lexicon → lemma index →
-parallel families → entity index → verse profiles**. No network — the CLTK lexicon zips, TIPNR,
-the four Theographic files and the OpenBible seed all carry manifest lines, so a mirrored
-archive already holds them and `fetch_source` no-ops.
+It builds nine layers in dependency order:
+
+```
+verses → search index → lemma lexicon → lemma index → parallel families
+       → entity index → verse profiles → scripture n-grams → ppmi vectors
+```
+
+No network. The CLTK lexicon zips, TIPNR, the four Theographic files and the OpenBible seed all
+carry manifest lines, so a mirrored archive already holds them and `fetch_source` no-ops.
+
+`biblereference rebuild --step NAME` runs one layer, repeatable. Its dependencies are still
+checked against what is present **and non-empty**, so asking for a layer out of order refuses
+rather than writing an empty one.
 
 **An earlier version of this document listed those steps by hand and left out `parallels`.**
 That was a real fault, not a typo: `build_profiles` reads `parallel_family` for its anchors, so
@@ -263,17 +272,17 @@ and the dependencies are not something a person should have to keep in their hea
 dependency did not build is now **skipped**, and a step that produces an empty layer is
 reported **failed**, exit 1.
 
-Two layers it cannot build, and it names them rather than leaving a gap:
+**Three states, and the difference matters.** A layer that builds reports its count. A layer
+whose dependency did not build is **SKIPPED**. A layer that builds *nothing* is **FAILED** — an
+empty table is not a built table — and the run exits 1. The last two layers are marked optional,
+so they report **DEGRADED** instead: they run from `tools/`, which the wheel does not ship, and
+PPMI additionally wants `sources/diorisis`, which no source registry publishes and `mirror`
+therefore never copies. Neither should condemn a run that built everything else.
 
-```bash
-D=~/.local/share/biblereference/db
-venv/bin/python tools/scripture_ngrams.py --language grc          # ~4 min, needs a checkout
-venv/bin/python tools/ppmi_vectors.py --save $D/ppmi-grc.sqlite3  # ~4 min, needs sources/diorisis
-```
-
-And two that need churchfathers and cannot be built on this box at any price — `composite-grc.json`
-and `register-null-grc.json`. Copy them (Route 1) or go without; `search`/`serve` simply take no
-`--composite`, and `register` scores against no null.
+Two layers no rebuild can reach, because they are built from churchfathers' corpus:
+`composite-grc.json` and `register-null-grc.json`. Copy them (Route 1) or go without —
+`search`/`serve` simply take no `--composite`, and `register` scores against no null. The
+command names them at the end rather than leaving a gap.
 
 **`register-null-grc.json` cannot be rebuilt here** — it is built from churchfathers'
 `ngrams-grc.sqlite3`, which is out of scope for this box. Copy it (Route 1) or leave it absent.
@@ -297,7 +306,7 @@ Only needed if you want the cross-language adjudication results. Nothing in the 
 ```bash
 cd ~/biblereference
 venv/bin/biblereference doctor          # should report no drift and no stale folds
-venv/bin/python -m pytest -q            # expect 1,138 passed
+venv/bin/python -m pytest -q            # expect 1,149 passed
 ```
 
 **What to expect depends on how much you have copied, and a green run early means less than it
@@ -306,8 +315,8 @@ looks.**
 | state of the box | result |
 |---|---|
 | venv built, **no corpus yet** | **1,081 passed, 57 skipped** |
-| corpus copied, no churchfathers | 1,137 passed, 1 skipped |
-| everything, as on the source machine | 1,138 passed |
+| corpus copied, no churchfathers | 1,148 passed, 1 skipped |
+| everything, as on the source machine | **1,149 passed** |
 
 The 57 skips are guarded on absent artifacts — *"needs a built library and `biblereference
 lemmata`"*, *"ppmi artifact not built"*, *"&lt;corpus&gt; archive not fetched"*. **Nothing in that
@@ -317,8 +326,23 @@ suite before you copy the data is close to meaningless. Run it again after §5.
 The single remaining skip needs churchfathers' `ngrams-grc.sqlite3` at the current fold, and is
 correct on a box that does not hold churchfathers.
 
+### What `doctor` now catches, and what it still cannot
+
+It reports a stale or unstamped fold for the **lemma lexicon**, the **entity index** and the
+**parallel families**. All three fold their contents on the way in and none could say under
+which rule until this week; between them they went several fold bumps unnoticed. An unstamped
+one reports as *unknown*, never as current — "cannot say" reading as "fine" is precisely how
+they hid.
+
+**It cannot catch a true stamp on a stale input.** `profiles.sqlite` records its own fold
+honestly, and for six fold bumps it recorded fold 8 while its anchors came from a
+`parallel_family` table nobody had rebuilt. Reading a stamp back — the discipline below, which
+caught every other fault this month — could not see it. Only rebuilding the layer underneath
+and noticing the count move did. This is the argument for `rebuild` doing the whole chain
+rather than you picking steps.
+
 Then read a folded token **out** of an artifact rather than trusting its recorded
-`fold_version` — this is how every one of the six fold faults this month was found:
+`fold_version` — this is how every one of the fold faults this month was found:
 
 ```bash
 venv/bin/python - <<'PY'
@@ -413,9 +437,36 @@ derived artifacts (§5b) do **not** rebuild themselves — `doctor` naming them 
 
 ---
 
-## 9. Quick reference — the whole port in one block
+## 9. Quick reference
 
-Assumes you clone the code (§3) and copy the artifacts (Route 1, §5b).
+### The short way — mirror does the rest
+
+If the source machine can serve, this is the whole port. `mirror` copies the archive
+checksum-verified and then builds all nine layers itself.
+
+```bash
+# --- on the SOURCE machine ---
+export BIBLEREFERENCE_TOKEN=$(openssl rand -hex 16); echo "$BIBLEREFERENCE_TOKEN"
+venv/bin/biblereference serve --host 0.0.0.0 --port 8000 --token "$BIBLEREFERENCE_TOKEN"
+
+# --- on the NEW box ---
+sudo apt update && sudo apt install -y git curl python3-venv
+git clone https://github.com/msalazarm/biblereference.git ~/biblereference
+cd ~/biblereference
+python3 -m venv venv && venv/bin/pip install --upgrade pip && venv/bin/pip install -e ".[dev,web]"
+export BIBLEREFERENCE_TOKEN=<the token printed above>
+venv/bin/biblereference mirror http://<source-host>:8000
+venv/bin/biblereference doctor
+```
+
+637 MB over the wire and roughly 40 minutes of building. Afterwards, copy
+`composite-grc.json` and `register-null-grc.json` if you want them — nothing can rebuild those
+here. See §5b.
+
+### The long way — copy the built artifacts instead
+
+Assumes you clone the code (§3) and copy the artifacts (Route 1, §5b). Moves more bytes and
+builds nothing.
 
 ```bash
 # --- on the SOURCE machine ---
@@ -432,7 +483,7 @@ rsync -avh --progress \
   marcoadmin@10.0.0.182:~/.local/share/biblereference/db/
 
 # --- on the NEW box ---
-sudo apt update && sudo apt install -y git rsync curl
+sudo apt update && sudo apt install -y git rsync curl python3-venv
 git clone https://github.com/msalazarm/biblereference.git ~/biblereference
 cd ~/biblereference
 python3 -m venv venv

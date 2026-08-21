@@ -218,24 +218,15 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 
 def _what_the_mirror_could_not_do(home: DataHome) -> str:
-    """The layers a mirror cannot reach, named rather than left as an empty space.
+    """The layers no rebuild can reach, named rather than left as an empty space.
 
-    Two of them need a corpus this machine may not hold, and one needs an archive entry
-    that no source registry publishes. Saying so is the difference between an install that
-    is finished and one that merely stopped.
+    The pipeline reports its own steps, including the two that want a checkout. What is
+    left here is the pair that needs churchfathers' corpus, which this machine may simply
+    not hold -- and saying so is the difference between an install that is finished and one
+    that merely stopped.
     """
     lines: list[str] = []
     db = home.root / "db"
-    if not (db / "ngrams-scripture-grc.sqlite3").exists():
-        lines.append(
-            "  scripture n-grams  `python tools/scripture_ngrams.py --language grc` "
-            "(needs a checkout; not shipped in the wheel)"
-        )
-    if not (db / "ppmi-grc.sqlite3").exists():
-        lines.append(
-            "  ppmi vectors       `python tools/ppmi_vectors.py --save <db>/ppmi-grc.sqlite3` "
-            "(needs sources/diorisis, which no source registry publishes)"
-        )
     if not (db / "composite-grc.json").exists():
         lines.append(
             "  composite          built from churchfathers' marked quotations; copy it, or "
