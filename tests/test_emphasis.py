@@ -350,7 +350,7 @@ def test_the_fold_version_moves_when_the_fold_does() -> None:
     """
     from biblereference.emphasis import FOLD_VERSION
 
-    assert FOLD_VERSION == 7
+    assert FOLD_VERSION == 8
     assert fold("Ἰησοῦς Χριστός, ᾧ ἡ δόξα", "grc") == "ιησουσ χριστοσ, ω η δοξα"
     assert fold("Jesu naVe", "la") == "iesu naue"
     assert fold("הָעַלְמָ֗ה אַל־תִּפְגְּעִי", "he") == "העלמה אל תפגעי"
@@ -539,3 +539,38 @@ def test_a_contraction_expands_only_for_a_transcription() -> None:
     # while a contraction that is not also a word does expand there
     assert fold("θς", "grc", transcription=True) == "θεοσ"
     assert fold("θς", "grc") == "θσ"
+
+
+def test_the_breathing_decides_whether_iota_nu_is_a_contraction() -> None:
+    """`ιν` is two words. Elided ἵνα takes the rough breathing; ἰν for Ἰησοῦν takes the
+    smooth. Both reach the table as `ιν`, because breathing is a combining mark and the NFD
+    pass drops it before anything looks the word up -- so fold 7 withheld the entry, and
+    withholding split the accusative formula exactly as the genitive one split before `κυ`
+    came back.
+
+    churchfathers' transcriptions mark it every time: 311 rough against 101 smooth, 78 of the
+    latter in `τὸν κν ἡμῶν ἰν χν` identically across Ms44-Ms48. So the fold now carries that
+    one bit past its own strip.
+    """
+    import unicodedata
+
+    # Every precomposed iota-with-breathing, checked against its own Unicode name rather
+    # than against a hand-written list -- the polarity is the whole correctness of this.
+    for codepoint in range(0x1F30, 0x1F3A):
+        letter = chr(codepoint)
+        rough = "DASIA" in unicodedata.name(letter)
+        folded = fold(letter + "ν", "grc", transcription=True)
+        assert folded == ("ιν" if rough else "ιησουν"), unicodedata.name(letter)
+
+    # A bare form carries no breathing, so the scribe did not say: left alone rather than
+    # guessed at, which is what fold 7 did with every spelling.
+    assert fold("ιν", "grc", transcription=True) == "ιν"
+    assert fold("ῖν", "grc", transcription=True) == "ιν"
+
+    # The formula the withholding broke, whole again -- and its genitive unchanged.
+    assert fold("τὸν κν ἡμῶν ἰν χν", "grc", transcription=True) == "τον κυριον ημων ιησουν χριστον"
+    assert fold("τοῦ κυ ἡμῶν ἰῦ χῦ", "grc", transcription=True) == "του κυριου ημων ιησου χριστου"
+
+    # An edition expands none of it, breathing or not.
+    assert fold("τὸν κν ἡμῶν ἰν χν", "grc") == "τον κν ημων ιν χν"
+    assert fold("ἰν", "grc") == "ιν"

@@ -39,7 +39,7 @@ __all__ = ["FOLD_VERSION", "SpanNotFoundError", "apply_spans", "fold"]
 #: 3 -- Greek gains two scribal conventions (:data:`_GREEK_CONVENTIONS`) and sixteen more
 #: *nomina sacra*, both priced against real manuscript variation rather than guessed. Greek
 #: folds change; every other language answers exactly as it did at version 1.
-FOLD_VERSION: Final = 7
+FOLD_VERSION: Final = 8
 
 _MARKERS: Final[dict[str, str]] = {"bold": "**", "italic": "*"}
 
@@ -174,6 +174,8 @@ _NOMINA_SACRA: Final[dict[str, str]] = {
     "θυ": "θεου",
     "θω": "θεω",
     "κυ": "κυριου",
+    # Guarded by :data:`_REQUIRES_PSILI`: only where the scribe wrote the smooth breathing.
+    "ιν": "ιησουν",
     "ανων": "ανθρωπων",
     "ιηλ": "ισραηλ",
     "ανουσ": "ανθρωπουσ",
@@ -280,6 +282,7 @@ def _fold(
     greek = language == "grc"
     out: list[str] = []
     offsets: list[int] = []
+    psili: list[bool] = []
     pending_space = False
 
     for index, character in enumerate(text):
@@ -295,6 +298,10 @@ def _fold(
         kept = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
         if not kept:
             continue
+        # Read before the marks are dropped, because dropping them is the whole problem.
+        # See :data:`_REQUIRES_PSILI`: this is the one piece of diacritical evidence the
+        # fold now carries past its own strip.
+        breathing = _PSILI in decomposed
 
         kept = kept.lower().replace("ς", "σ")
         kept = "".join(_LIGATURES.get(c, c) for c in kept)
@@ -304,13 +311,17 @@ def _fold(
         if pending_space:
             out.append(" ")
             offsets.append(index)
+            psili.append(False)
             pending_space = False
         for piece in kept:
             out.append(piece)
             offsets.append(index)
+            psili.append(breathing)
 
     if greek:
-        return _rewrite_greek(out, offsets, orthographic=orthographic, transcription=transcription)
+        return _rewrite_greek(
+            out, offsets, psili, orthographic=orthographic, transcription=transcription
+        )
     return _Folded("".join(out), tuple(offsets))
 
 
@@ -380,8 +391,33 @@ _NOMINA_SACRA_UNDECIDED: Final[dict[str, str]] = {
     "υσ": "υιοσ",
     "υν": "υιον",
     "κω": "κυριω",
-    "ιν": "ιησουν",
 }
+
+#: COMBINING COMMA ABOVE -- the smooth breathing, *psili*.
+_PSILI: Final = "\u0313"
+
+#: Contractions expanded **only where the source carried a smooth breathing**, and the one
+#: place this fold consults a diacritic it has already stripped.
+#:
+#: ``ιν`` is two words. Elided ἵνα takes the rough breathing, ἰν for Ἰησοῦν takes the smooth,
+#: and churchfathers' transcriptions mark the difference every time: 311 rough against 101
+#: smooth, of which 78 stand in *τὸν κν ἡμῶν ἰν χν* identically across Ms44-Ms48. Both arrive
+#: here as ``ιν`` because breathing is a combining mark and the NFD pass drops it, so fold 7
+#: had to withhold the entry entirely -- and withholding split the accusative formula exactly
+#: as the genitive one split before ``κυ`` came back.
+#:
+#: **Only on a positive smooth breathing, never on a bare form.** 40 occurrences carry no
+#: breathing at all and stay unexpanded, as they were at fold 7: the scribe did not say, and
+#: guessing there would expand ἵνα. This is not the "fires on some occurrences and not others"
+#: fault -- the marked forms are two different words, not one word marked inconsistently, and
+#: declining where the evidence is absent costs a match rather than corrupting a word.
+#:
+#: **The overline would have been the general answer and it is not there.** churchfathers
+#: counted: 0 of 65,642 nomina sacra carry one, and it is not their pipeline -- macrons are
+#: alive in their Greek, marking letters-as-letters, transliterated Hebrew and Latin scribal
+#: abbreviation, just never these. So ``υσ``/``υν``/``κω`` cannot be settled this way and still
+#: want counting.
+_REQUIRES_PSILI: Final = frozenset({"ιν"})
 
 #: The vowels an adscript iota may follow. Alpha is absent on purpose -- see above.
 _ADSCRIPT_AFTER: Final = frozenset("ωη")
@@ -411,7 +447,7 @@ _ADSCRIPT_AFTER: Final = frozenset("ωη")
 _GENUINE_IOTA: Final = frozenset({"πρωι", "ελωι", "νηι", "θεκωι", "αχωι", "ρηι"})
 
 
-def _greek_word(word: str, *, transcription: bool) -> str:
+def _greek_word(word: str, *, transcription: bool, psili: bool = False) -> str:
     """One Greek word with its contractions expanded and its conventions folded away.
 
     **Applied to the word's letters, not to the whole token.** `_rewrite_greek` splits the
@@ -434,12 +470,15 @@ def _greek_word(word: str, *, transcription: bool) -> str:
     # so they go back exactly where the editor put them and the offsets still point at what
     # was written.
     return (
-        "".join(_greek_head(part, transcription=transcription) for part in _SEGMENT.split(core))
+        "".join(
+            _greek_head(part, transcription=transcription, psili=psili)
+            for part in _SEGMENT.split(core)
+        )
         + tail
     )
 
 
-def _greek_head(head: str, *, transcription: bool) -> str:
+def _greek_head(head: str, *, transcription: bool, psili: bool = False) -> str:
     """The rules, applied to one unbroken run of letters.
 
     Split out so :func:`_greek_word` can map it over the pieces of a bracketed or dashed
@@ -451,7 +490,7 @@ def _greek_head(head: str, *, transcription: bool) -> str:
     # them -- silently failed to expand. Found by a canary written for the new rules.
     # Only where the text is a transcription. In a printed edition the editor expanded these
     # centuries ago, so a "contraction" found here is an ordinary word wearing the same letters.
-    if transcription:
+    if transcription and (head not in _REQUIRES_PSILI or psili):
         head = _NOMINA_SACRA.get(head, head)
     head = _GREEK_CONVENTIONS.get(head, head)
     if (
@@ -482,7 +521,12 @@ _SEGMENT: Final = re.compile(f"([{re.escape(_EDITORIAL)}]+)")
 
 
 def _rewrite_greek(
-    out: list[str], offsets: list[int], *, orthographic: bool, transcription: bool
+    out: list[str],
+    offsets: list[int],
+    psili: Sequence[bool],
+    *,
+    orthographic: bool,
+    transcription: bool,
 ) -> _Folded:
     """Expand the nomina sacra, and optionally collapse itacism, a word at a time.
 
@@ -509,7 +553,11 @@ def _rewrite_greek(
             continue
         expanded = word
         if word != " ":
-            expanded = _greek_word(word, transcription=transcription)
+            expanded = _greek_word(
+                word,
+                transcription=transcription,
+                psili=start < len(psili) and psili[start],
+            )
             if orthographic:
                 for written, spoken in _ITACISM:
                     expanded = expanded.replace(written, spoken)
