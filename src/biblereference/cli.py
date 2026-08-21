@@ -22,6 +22,7 @@ from typing import Final
 from .canon import NamingScheme, resolve_book
 from .compare import BookComparison, compare_corpora
 from .fetch import build_source, fetch_source, iter_sources, mirror_archive
+from .pipeline import STEPS, rebuild
 from .refs import ReferenceParseError, parse_reference
 from .render import Config, Renderer
 from .search import DEFAULT_BUDGET, Gate, Match, Resolver, Searcher, Witness, build_index
@@ -216,13 +217,66 @@ def cmd_sync(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _what_the_mirror_could_not_do(home: DataHome) -> str:
+    """The layers a mirror cannot reach, named rather than left as an empty space.
+
+    Two of them need a corpus this machine may not hold, and one needs an archive entry
+    that no source registry publishes. Saying so is the difference between an install that
+    is finished and one that merely stopped.
+    """
+    lines: list[str] = []
+    db = home.root / "db"
+    if not (db / "ngrams-scripture-grc.sqlite3").exists():
+        lines.append(
+            "  scripture n-grams  `python tools/scripture_ngrams.py --language grc` "
+            "(needs a checkout; not shipped in the wheel)"
+        )
+    if not (db / "ppmi-grc.sqlite3").exists():
+        lines.append(
+            "  ppmi vectors       `python tools/ppmi_vectors.py --save <db>/ppmi-grc.sqlite3` "
+            "(needs sources/diorisis, which no source registry publishes)"
+        )
+    if not (db / "composite-grc.json").exists():
+        lines.append(
+            "  composite          built from churchfathers' marked quotations; copy it, or "
+            "`search`/`serve` simply take no --composite"
+        )
+    if not (db / "register-null-grc.json").exists():
+        lines.append(
+            "  register null      built from churchfathers' n-gram model; copy it, or "
+            "`register` scores against no null"
+        )
+    if not lines:
+        return "\nEvery layer this machine can build is built."
+    return "\nNot built here, and each for a reason a rebuild cannot fix:\n" + "\n".join(lines)
+
+
+def cmd_rebuild(args: argparse.Namespace) -> int:
+    """Build every derived layer from an archive that is already here."""
+    home = _home(args)
+    outcome = rebuild(home, report=_say, only=args.step or None)
+    _say("\n" + outcome.describe())
+    if outcome.failed:
+        _say("\nSomething built nothing. An empty layer is not a built one -- see above.")
+    elif not outcome.built:
+        _say("\nNothing was built: every step was skipped for want of what it needs.")
+    _say(_what_the_mirror_could_not_do(home))
+    return 0 if outcome.worked else 1
+
+
 def cmd_mirror(args: argparse.Namespace) -> int:
-    """Copy another machine's archive here, then rebuild from it.
+    """Copy another machine's archive here, then build every layer it can.
 
     The way to make two machines hold the same library. `sync` cannot promise that: it
     downloads from a dozen upstreams, and upstream is free to publish something different
     between one machine's sync and the other's -- which is not hypothetical, since eBible
     republished two files between two syncs two days apart during this command's writing.
+
+    It used to stop after `build` and `index`, which left the lemma lexicon, the lemma
+    index, the parallel families, the entity index and the profiles absent -- and the worst
+    of those was silent, since `scan --inflected` against a library with no lemma index
+    returns nothing at all rather than saying it cannot answer. Everything those layers need
+    is already in the archive it just copied.
     """
     home = _home(args)
     result = mirror_archive(
@@ -236,17 +290,12 @@ def cmd_mirror(args: argparse.Namespace) -> int:
         return 0
 
     _say("\nbuilding from the archive...")
-    total = 0
-    for source in iter_sources(None):
-        try:
-            total += build_source(source, home, report=_say).verses
-        except FileNotFoundError as exc:
-            _say(f"skipped: {exc}")
-    indexed = build_index(home, report=_silent)
-    _say(f"\n{total:,} verses built, {indexed.verses:,} indexed for search")
+    outcome = rebuild(home, report=_say)
+    _say("\n" + outcome.describe())
     _say("\n" + library_digest(home).describe())
     _say("\nCompare that with the other machine's `doctor`, or its /api/digest.")
-    return 0
+    _say(_what_the_mirror_could_not_do(home))
+    return 0 if outcome.worked else 1
 
 
 def cmd_search(args: argparse.Namespace) -> int:
@@ -1530,6 +1579,29 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-build", action="store_true", help="copy the archive but do not rebuild yet"
     )
     mirror.set_defaults(func=cmd_mirror)
+
+    rebuild_p = subparsers.add_parser(
+        "rebuild",
+        help="build every derived layer from the archive already here",
+        description="Builds the whole derived library in dependency order -- verse store, "
+        "search index, lemma lexicon, lemma index, parallel families, entity index, verse "
+        "profiles -- from an archive that is already on disk. No network: the lexicon zips, "
+        "TIPNR, Theographic and the OpenBible seed all carry manifest lines, so a mirrored "
+        "archive already holds them. `mirror` runs this for you; this is the way to run it "
+        "again, or to run one step. A step whose dependency did not build is skipped rather "
+        "than run, and a step that produces an empty layer is reported as failed, because an "
+        "empty table that exists is what makes `doctor` call a broken library finished.",
+    )
+    rebuild_p.add_argument(
+        "--step",
+        action="append",
+        metavar="NAME",
+        choices=[s.name for s in STEPS],
+        help="just this layer; repeatable. Its dependencies are still checked against what "
+        "is already built and non-empty, so asking for one out of order refuses rather than "
+        "writing an empty layer.",
+    )
+    rebuild_p.set_defaults(func=cmd_rebuild)
 
     compare = subparsers.add_parser(
         "compare", help="report how far two editions of one text differ, book by book"

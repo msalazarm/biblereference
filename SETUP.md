@@ -228,36 +228,52 @@ rebuilding.** `corpus.sqlite` holds 27 tables and carries all of it: the verse s
 `search_text`, `search_df`), the **lemma index** (`lemma_state`, `lemma_fts`, `lemma_text`,
 `lemma_df`) **and the lemma lexicon** (`lemma_form`, `lemma_form_state`).
 
-**If you used `mirror`, you must still build the lemma side.** `mirror` rebuilds
-`corpus.sqlite` from the archive and its rebuild is `build` + `index` only — it does not fetch
-the lexicon or build the lemma index:
+**If you used `mirror`, everything below is already done.** `mirror` now runs the full
+`rebuild` pipeline itself — that is the whole point of it being one command. It used to stop
+after `build` + `index`, leaving the lemma lexicon, lemma index, parallel families, entity
+index and profiles absent; if you are reading an older checkout, run `rebuild` by hand:
 
 ```bash
 # on the NEW box, ONLY if you mirrored rather than copied corpus.sqlite
 cd ~/biblereference
-venv/bin/biblereference lemmata            # ~6 min, 33 MB download
-venv/bin/biblereference index --lemmata    # ~4 min
+venv/bin/biblereference rebuild            # every derived layer, in order
 ```
 
-Skipping this after a `mirror` leaves `scan --inflected` finding nothing, with no error.
+`mirror` now runs this for you, so you should not need it — it is here for re-running a layer
+by hand. Skipping it after a bare archive copy leaves `scan --inflected` finding nothing, with
+no error.
 
-**Route 2 — rebuild from the archive (≈ 4.5 hours, most of it one job).** Measured on the
-source machine 2026-08-21:
+**Route 2 — rebuild from the archive.** One command:
 
 ```bash
 cd ~/biblereference
-D=~/.local/share/biblereference/db
-venv/bin/biblereference lemmata                                   # ~6 min (33 MB download)
-venv/bin/biblereference index --lemmata                           # ~4 min
-venv/bin/biblereference entities                                  # entity index
-venv/bin/python tools/scripture_ngrams.py --language grc          # ~4 min
-venv/bin/python tools/ppmi_vectors.py --save $D/ppmi-grc.sqlite3  # ~4 min
-venv/bin/python -m biblereference.profiles                        # ~12 min
-venv/bin/python tools/calibrate_inflected.py --control 3000000 \
-  --save $D/control.json --workers 10                             # ~3 HOURS, 22,372 shards
-venv/bin/python tools/fs_composite.py --sample 1200 \
-  --control-evidence $D/control.json --weights $D/composite-grc.json  # ~1 min
+venv/bin/biblereference rebuild
 ```
+
+It builds, in dependency order: **verse store → search index → lemma lexicon → lemma index →
+parallel families → entity index → verse profiles**. No network — the CLTK lexicon zips, TIPNR,
+the four Theographic files and the OpenBible seed all carry manifest lines, so a mirrored
+archive already holds them and `fetch_source` no-ops.
+
+**An earlier version of this document listed those steps by hand and left out `parallels`.**
+That was a real fault, not a typo: `build_profiles` reads `parallel_family` for its anchors, so
+following the old list built the profiles against an empty families table — no error, no
+warning, a profile set that looks built. The whole reason `rebuild` exists is that the order
+and the dependencies are not something a person should have to keep in their head. A step whose
+dependency did not build is now **skipped**, and a step that produces an empty layer is
+reported **failed**, exit 1.
+
+Two layers it cannot build, and it names them rather than leaving a gap:
+
+```bash
+D=~/.local/share/biblereference/db
+venv/bin/python tools/scripture_ngrams.py --language grc          # ~4 min, needs a checkout
+venv/bin/python tools/ppmi_vectors.py --save $D/ppmi-grc.sqlite3  # ~4 min, needs sources/diorisis
+```
+
+And two that need churchfathers and cannot be built on this box at any price — `composite-grc.json`
+and `register-null-grc.json`. Copy them (Route 1) or go without; `search`/`serve` simply take no
+`--composite`, and `register` scores against no null.
 
 **`register-null-grc.json` cannot be rebuilt here** — it is built from churchfathers'
 `ngrams-grc.sqlite3`, which is out of scope for this box. Copy it (Route 1) or leave it absent.
