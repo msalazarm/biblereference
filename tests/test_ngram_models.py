@@ -135,8 +135,10 @@ def _consumer_model_is_current() -> bool:
     not _consumer_model_is_current(),
     reason=(
         "consumer's n-gram model is absent or was built under an older FOLD_VERSION. "
-        "biblereference folds at 3 as of 2026-08-20; churchfathers must rebuild "
-        "data/ngrams-{grc,lat}.sqlite3 with tools/patristic_ngrams.py before this reads."
+        f"biblereference folds at {FOLD_VERSION}; churchfathers must rebuild "
+        "data/ngrams-{grc,lat}.sqlite3 with tools/patristic_ngrams.py before this reads. "
+        "The version is read live rather than written here -- it was pinned at 3 and went "
+        "five folds stale in two days, telling anyone who hit the skip the wrong number."
     ),
 )
 def test_the_consumers_own_measurement_reproduces_through_the_reader() -> None:

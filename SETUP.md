@@ -259,10 +259,13 @@ Only needed if you want the cross-language adjudication results. Nothing in the 
 ```bash
 cd ~/biblereference
 venv/bin/biblereference doctor          # should report no drift and no stale folds
-venv/bin/python -m pytest -q            # expect 1,137 passed, 1 skipped
+venv/bin/python -m pytest -q            # expect 1,138 passed
 ```
 
-The skip is a known one: it needs a consumer artifact this box does not have.
+**A skip here is not a failure, and its cause is worth knowing.** One test reads churchfathers'
+`ngrams-grc.sqlite3` and skips itself when that model is absent or built on a superseded fold.
+On a box that does not hold churchfathers you will see **1,137 passed, 1 skipped**, which is
+correct and expected. On this machine it runs because that model is current.
 
 Then read a folded token **out** of an artifact rather than trusting its recorded
 `fold_version` — this is how every one of the six fold faults this month was found:
