@@ -208,9 +208,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     # licences, so `sync` does not reach for them on its own -- but a library missing them
     # is not a whole library, and silence here is what makes a rebuild from zero look
     # finished when it is two steps short.
-    remaining = [
-        (label, command) for label, count, command, _ in _derived_state(home) if not count
-    ]
+    remaining = [(label, command) for label, count, command, _ in _derived_state(home) if not count]
     if remaining:
         _say("\nstill to build, and nothing here does it for you:")
         for label, command in remaining:
@@ -943,18 +941,42 @@ _DERIVED: Final = (
 #: a consumer's sweep freezes the corpus, and each rebuildable by the command written
 #: here. ``(label, filename under db/, count query or None for artifacts, command)``.
 _STANDALONE: Final = (
-    ("entity index", "entities.sqlite", "SELECT COUNT(*) FROM entity_verse",
-     "python -m biblereference.entities"),
-    ("verse profiles", "profiles.sqlite", "SELECT COUNT(*) FROM profile",
-     "python -m biblereference.profiles"),
-    ("scripture n-grams", "ngrams-scripture-grc.sqlite3", "SELECT COUNT(*) FROM ngram",
-     "python tools/scripture_ngrams.py"),
-    ("ppmi vectors", "ppmi-grc.sqlite3", "SELECT COUNT(*) FROM vector",
-     "python tools/ppmi_vectors.py --save ..."),
-    ("register null", "register-null-grc.json", None,
-     "python tools/register_null.py --father ... --save ..."),
-    ("composite calibration", "composite-grc.json", None,
-     "python tools/fs_composite.py --control-evidence ... --weights ..."),
+    (
+        "entity index",
+        "entities.sqlite",
+        "SELECT COUNT(*) FROM entity_verse",
+        "python -m biblereference.entities",
+    ),
+    (
+        "verse profiles",
+        "profiles.sqlite",
+        "SELECT COUNT(*) FROM profile",
+        "python -m biblereference.profiles",
+    ),
+    (
+        "scripture n-grams",
+        "ngrams-scripture-grc.sqlite3",
+        "SELECT COUNT(*) FROM ngram",
+        "python tools/scripture_ngrams.py",
+    ),
+    (
+        "ppmi vectors",
+        "ppmi-grc.sqlite3",
+        "SELECT COUNT(*) FROM vector",
+        "python tools/ppmi_vectors.py --save ...",
+    ),
+    (
+        "register null",
+        "register-null-grc.json",
+        None,
+        "python tools/register_null.py --father ... --save ...",
+    ),
+    (
+        "composite calibration",
+        "composite-grc.json",
+        None,
+        "python tools/fs_composite.py --control-evidence ... --weights ...",
+    ),
 )
 
 
@@ -1141,6 +1163,25 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 )
     else:
         _say("\nlemmata: none. `scan --inflected` needs `biblereference lemmata` first")
+
+    # The entity index folds its surfaces on the way in too, and had no stamp at all until
+    # the same hazard was found there. An index keyed under a superseded fold does not fail;
+    # `allusions()` just returns fewer entities and says nothing.
+    from .entities import Entities
+
+    entities = Entities(home.root / "db" / "entities.sqlite")
+    if entities.held and entities.stale:
+        if entities.fold_version is None:
+            _say(
+                f"\nentity index: built before the fold was recorded, so whether its folded "
+                f"surfaces match this library's fold {FOLD_VERSION} is unknown "
+                f"-- `biblereference entities` to settle it"
+            )
+        else:
+            _say(
+                f"\nentity index: folded at {entities.fold_version}, library folds at "
+                f"{FOLD_VERSION} -- `biblereference entities`"
+            )
 
     _say_derived(home)
 

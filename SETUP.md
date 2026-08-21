@@ -72,8 +72,22 @@ every console script. Rebuild it on the target — it takes under a minute.
 ## 2. System prep on the new box
 
 Ubuntu 26.04 ships Python **3.14.4** as `python3`, and the package requires `>=3.11`, so the
-stock interpreter is fine. **`python3 -m venv` works without `python3-venv` installed** — verified
-on the source machine, which does not have that package.
+stock interpreter is fine.
+
+**Install `python3-venv`.** An earlier draft of this file said it was unnecessary, "verified on
+the source machine, which does not have that package". That verification was wrong, and the way
+it was wrong is worth recording: `dpkg -l python3-venv` reports `un` — never installed — but
+`ensurepip` comes from **`python3.14-venv`**, the versioned package, which *is* installed here:
+
+```
+$ dpkg -S /usr/lib/python3.14/ensurepip/__init__.py
+python3.14-venv: /usr/lib/python3.14/ensurepip/__init__.py
+```
+
+So `python3 -m venv` succeeded on this box for a reason that will not hold on a minimal install,
+where it fails with `ensurepip is not available`. Checking the meta-package name and concluding
+nothing was needed is the same shape of error as everything else in this repository's history:
+**a measurement that returned a confident answer to a question it was not actually asking.**
 
 `lxml` installs from a `cp314` manylinux wheel, so **no compiler and no `libxml2-dev` are
 needed**. The source machine has neither `python3-dev`, `libxslt1-dev` nor `sqlite3` installed
@@ -82,11 +96,15 @@ and the whole suite passes.
 ```bash
 # on the NEW box
 sudo apt update
-sudo apt install -y git rsync curl
+sudo apt install -y git rsync curl python3-venv
 ```
 
-That is genuinely the whole list. Add `sqlite3` only if you want the CLI for poking at the
-databases by hand.
+`python3-venv` pulls in `python3.14-venv` and `python3-pip-whl`. Add `sqlite3` only if you want
+the CLI for poking at the databases by hand.
+
+`lxml` installs from a `cp314` manylinux wheel, so **no compiler and no `libxml2-dev` are
+needed** — verified by building a clean venv from scratch: 32 packages, 46 MB of wheels, no
+compiler invoked.
 
 ### SSH, so the copy can run unattended
 
@@ -136,9 +154,13 @@ venv/bin/pip install -e ".[dev,web]"
 venv/bin/biblereference --help
 ```
 
-Pinned versions currently in use, if you need to match exactly: `pythonbible 0.15.5`,
-`lxml 6.1.1`, `jinja2 3.1.6`, `pyyaml 6.0.3`, `platformdirs 4.11.0`, `httpx 0.28.1`,
-`regex 2026.7.19`, `beautifulsoup4 4.15.0`, `pytest 9.1.1`, `ruff 0.16.1`, `mypy 2.3.0`.
+**There is no lockfile, and nothing pins these.** The versions on the source machine as of
+2026-08-21 are `pythonbible 0.15.5`, `lxml 6.1.1`, `jinja2 3.1.6`, `pyyaml 6.0.3`,
+`platformdirs 4.11.0`, `httpx 0.28.1`, `regex 2026.7.19`, `beautifulsoup4 4.15.0`,
+`pytest 9.1.1`, `ruff 0.16.1`, `mypy 2.3.0` — but a fresh install *today* already drifts from
+them: lxml 6.1.2, mypy 2.3.1, ruff 0.16.4, platformdirs 4.11.3 and eight others. That list is a
+**record of what was used, not a constraint**. If you need the two machines to agree exactly,
+pin them yourself; nothing in the repository will do it for you.
 
 ---
 
@@ -262,10 +284,22 @@ venv/bin/biblereference doctor          # should report no drift and no stale fo
 venv/bin/python -m pytest -q            # expect 1,138 passed
 ```
 
-**A skip here is not a failure, and its cause is worth knowing.** One test reads churchfathers'
-`ngrams-grc.sqlite3` and skips itself when that model is absent or built on a superseded fold.
-On a box that does not hold churchfathers you will see **1,137 passed, 1 skipped**, which is
-correct and expected. On this machine it runs because that model is current.
+**What to expect depends on how much you have copied, and a green run early means less than it
+looks.**
+
+| state of the box | result |
+|---|---|
+| venv built, **no corpus yet** | **1,081 passed, 57 skipped** |
+| corpus copied, no churchfathers | 1,137 passed, 1 skipped |
+| everything, as on the source machine | 1,138 passed |
+
+The 57 skips are guarded on absent artifacts — *"needs a built library and `biblereference
+lemmata`"*, *"ppmi artifact not built"*, *"&lt;corpus&gt; archive not fetched"*. **Nothing in that
+run exercises the search index, the lemma index, PPMI, profiles or the calibration**, so a green
+suite before you copy the data is close to meaningless. Run it again after §5.
+
+The single remaining skip needs churchfathers' `ngrams-grc.sqlite3` at the current fold, and is
+correct on a box that does not hold churchfathers.
 
 Then read a folded token **out** of an artifact rather than trusting its recorded
 `fold_version` — this is how every one of the six fold faults this month was found:

@@ -27,7 +27,6 @@ from __future__ import annotations
 import json
 import math
 import re
-import warnings
 from bisect import bisect_left
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -193,11 +192,21 @@ class Composite:
                 f"the other mis-zones every match. Rebuild with tools/fs_composite.py."
             )
         if int(raw["fold_version"]) != FOLD_VERSION:
-            warnings.warn(
+            # Refused, not warned about. This warned for one release and the warning was
+            # worse than nothing: `serve --composite` (web/server.py) loads the artifact at
+            # startup precisely so a bad file refuses rather than failing on the
+            # ten-thousandth scan -- but a warning does not refuse, so the server came up
+            # clean and mis-zoned every match for the life of the process behind a message
+            # Python filters by default. The `bits` axis is surprisal over this library's
+            # lemma index and `BINS["bits"]` is a fixed edge list, so weights fitted under
+            # another fold put every match in the wrong bin. That is a wrong E-value, not a
+            # degraded one. `RegisterNull.load` has always raised here; these two artifacts
+            # carry the same kind of number and now answer the same way.
+            raise ValueError(
                 f"composite artifact was calibrated on fold {raw['fold_version']} and this "
                 f"library folds at {FOLD_VERSION}; its weights describe axes measured under "
-                f"a different normalisation",
-                stacklevel=2,
+                f"a different normalisation, so every match would be zoned against the wrong "
+                f"scale. Rebuild with tools/fs_composite.py."
             )
         thresholds = raw["thresholds"]
         tail = raw["null_tail"]
@@ -231,9 +240,7 @@ class Composite:
         the empty ``chain<2`` and ``bits<5`` bins and outscores a genuine eight-word
         chain. Below the gate the honest answer is not a number.
         """
-        floors = {
-            name: float(value) for name, value in _GATE_RE.findall(self.collect_gate)
-        }
+        floors = {name: float(value) for name, value in _GATE_RE.findall(self.collect_gate)}
         held = {"run": run, "lemma_run": lemma_run, "chain": chain, "bits": bits}
         return all(held[name] >= floor for name, floor in floors.items())
 

@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
-from .emphasis import fold
+from .emphasis import FOLD_VERSION, fold
 from .licences import get
 from .sources import BuiltCorpus, RemoteFile, Source
 
@@ -42,9 +42,7 @@ __all__ = ["THEOGRAPHIC", "TIPNR", "Entities", "build_entities"]
 
 
 def _refuse(archive: Path) -> list[BuiltCorpus]:
-    raise RuntimeError(
-        "proper nouns are an index, not a corpus; build them with `build_entities`"
-    )
+    raise RuntimeError("proper nouns are an index, not a corpus; build them with `build_entities`")
 
 
 _TIPNR_FILE: Final = (
@@ -103,8 +101,16 @@ _REF_RE: Final = re.compile(r"^[1-3]?[A-Za-z]+\.\d+\.\d+$")
 #: summary; the parenthesised kinds repeat a previous line's refs under bookkeeping
 #: variations.
 _FORMS: Final = frozenset(
-    {"Named", "Greek", "Spelled", "Aramaic", "Name combined", "Spelled combined",
-     "Aramaic combined", "Group"}
+    {
+        "Named",
+        "Greek",
+        "Spelled",
+        "Aramaic",
+        "Name combined",
+        "Spelled combined",
+        "Aramaic combined",
+        "Group",
+    }
 )
 
 
@@ -236,11 +242,9 @@ def _build_episodes(
                 rows.append((event_id, ref.vrs, ref.book, ref.chapter, ref.verse))
             if not rows:
                 continue
-            db.execute("INSERT OR IGNORE INTO event (id, title) VALUES (?, ?)",
-                       (event_id, title))
+            db.execute("INSERT OR IGNORE INTO event (id, title) VALUES (?, ?)", (event_id, title))
             db.executemany(
-                "INSERT INTO event_verse (event, vrs, book, chapter, verse) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO event_verse (event, vrs, book, chapter, verse) VALUES (?, ?, ?, ?, ?)",
                 rows,
             )
             events += 1
@@ -287,9 +291,7 @@ def build_entities(
     from .versification import Versification
 
     assert isinstance(home, DataHome)
-    archive = max(
-        (home.sources / TIPNR.id).iterdir(), key=lambda path: path.name, default=None
-    )
+    archive = max((home.sources / TIPNR.id).iterdir(), key=lambda path: path.name, default=None)
     if archive is None:
         raise FileNotFoundError(f"no archive for {TIPNR.id}; fetch it first")
     target = out or home.root / "db" / "entities.sqlite"
@@ -324,8 +326,7 @@ def build_entities(
             [(record.entity, language, form) for language, form in record.forms],
         )
         db.executemany(
-            "INSERT INTO entity_verse (entity, vrs, book, chapter, verse) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO entity_verse (entity, vrs, book, chapter, verse) VALUES (?, ?, ?, ?, ?)",
             rows,
         )
         entities += 1
@@ -352,6 +353,13 @@ def build_entities(
             "crosswalk_ambiguous": str(ambiguous),
             "source": TIPNR.id,
             "built_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            # The surfaces are folded on the way in (see `fold(surface, language)` above), so
+            # an index built under a superseded fold is keyed the way the old rule spelled it
+            # and `by_form` quietly stops matching. It carried no stamp until now, and the
+            # copy on the machine this was written for was built at fold 2 and queried at
+            # fold 8 -- three months of lookups against keys nothing could report as stale.
+            # Same hazard, same fix, as `lemma_form_state`.
+            "fold_version": str(FOLD_VERSION),
             "entities": str(entities),
             "references": str(references),
             "unconvertible": str(unconvertible),
@@ -363,16 +371,38 @@ def build_entities(
 
 
 class Entities:
-    """Reads the entity index. Silent — empty answers — where it was never built."""
+    """Reads the entity index. Silent — empty answers — where it was never built.
+
+    Silent about absence, **loud about staleness**. Absence is a choice the caller made;
+    a stale index is a wrong answer wearing a right one. Its surfaces are folded on the way
+    in, so an index built under a superseded fold is keyed the way the old rule spelled the
+    words and :meth:`by_form` simply stops matching — no error, fewer allusions, nothing to
+    read. The copy this check was written against had been built at fold 2 and queried at
+    fold 8 for three days.
+    """
 
     def __init__(self, path: Path) -> None:
         self._db: sqlite3.Connection | None = None
+        self.fold_version: int | None = None
         if path.exists():
             self._db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
             self._verse_count: int = int(
-                self._db.execute("SELECT COUNT(DISTINCT book||chapter||verse) FROM entity_verse")
-                .fetchone()[0]
+                self._db.execute(
+                    "SELECT COUNT(DISTINCT book||chapter||verse) FROM entity_verse"
+                ).fetchone()[0]
             )
+            recorded = dict(self._db.execute("SELECT key, value FROM meta")).get("fold_version")
+            self.fold_version = int(recorded) if recorded is not None else None
+
+    @property
+    def stale(self) -> bool:
+        """Whether this index was folded by a rule the library no longer applies.
+
+        ``True`` for an index carrying no stamp at all: one built before the stamp existed
+        cannot say, and treating "cannot say" as "current" is how the unstamped copy went
+        six folds without anyone noticing.
+        """
+        return self._db is not None and self.fold_version != FOLD_VERSION
 
     @property
     def held(self) -> bool:
@@ -432,9 +462,7 @@ class Entities:
                 if cluster and verse - cluster[-1][0] > spread:
                     names = frozenset(e for _, e in cluster)
                     if len(names) >= least:
-                        out.append(
-                            (vrs, book, chapter, cluster[0][0], cluster[-1][0], names)
-                        )
+                        out.append((vrs, book, chapter, cluster[0][0], cluster[-1][0], names))
                     cluster = []
                 if entity:
                     cluster.append((verse, entity))
@@ -467,18 +495,19 @@ class Entities:
             if span is None:
                 continue
             vrs, book, c1, c2 = str(span[0]), str(span[1]), int(span[2]), int(span[3])
-            v1 = int(self._db.execute(
-                "SELECT MIN(verse) FROM event_verse WHERE event=? AND book=? AND chapter=?",
-                (event_id, book, c1),
-            ).fetchone()[0])
-            v2 = int(self._db.execute(
-                "SELECT MAX(verse) FROM event_verse WHERE event=? AND book=? AND chapter=?",
-                (event_id, book, c2),
-            ).fetchone()[0])
-            out.append(
-                (str(title), vrs, book, c1, v1, c2, v2,
-                 frozenset(str(joined).split(",")))
+            v1 = int(
+                self._db.execute(
+                    "SELECT MIN(verse) FROM event_verse WHERE event=? AND book=? AND chapter=?",
+                    (event_id, book, c1),
+                ).fetchone()[0]
             )
+            v2 = int(
+                self._db.execute(
+                    "SELECT MAX(verse) FROM event_verse WHERE event=? AND book=? AND chapter=?",
+                    (event_id, book, c2),
+                ).fetchone()[0]
+            )
+            out.append((str(title), vrs, book, c1, v1, c2, v2, frozenset(str(joined).split(","))))
         out.sort(key=lambda row: -len(row[7]))
         return out
 

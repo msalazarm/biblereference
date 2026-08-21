@@ -339,3 +339,94 @@ def test_unseen_by_both_is_a_draw_and_classical_prose_does_not_outscore_scriptur
     )
     # And the shared gram, held at the same rate in both, is likewise a draw.
     assert abs(_evidence(["α", "β", "γ"], scripture, father, 3)) < 0.5
+
+
+def test_a_register_null_refuses_a_scripture_model_it_was_not_measured_on(
+    tmp_path: Path,
+) -> None:
+    """The bands are a function of the scripture model's size, so applying them to a
+    differently-sized model mis-flags every span by a constant factor.
+
+    `_evidence` divides by `scripture.tokens(order)` and takes its smoothing floor from
+    `max(scripture_total, father_total)` (register.py). The artifact has always recorded
+    which model it was measured against -- `scripture: {path, tokens}` -- and `load` never
+    read it back, so the one field that could catch this sat unused while "transfer the
+    null, rebuild the model" was exactly the arrangement being recommended for a new box.
+    """
+    import json
+
+    from biblereference.emphasis import FOLD_VERSION
+    from biblereference.register import RegisterNull
+
+    artifact = tmp_path / "null.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "schema": "biblereference-register-null/1",
+                "fold_version": FOLD_VERSION,
+                "window": 12,
+                "stride": 6,
+                "order": 3,
+                "replicates": 400,
+                "bands": {"500": {"0.95": 9.9}},
+                "scripture": {"path": "/somewhere/ngrams.sqlite3", "tokens": 2_510_850},
+            }
+        ),
+        "utf-8",
+    )
+
+    null = RegisterNull.load(artifact)
+    assert null.scripture_tokens == 2_510_850
+
+    class _Model:
+        def __init__(self, tokens: int) -> None:
+            self._tokens = tokens
+
+        def tokens(self, order: int) -> int:
+            return self._tokens
+
+    null.check_against(_Model(2_510_850))  # the model it was measured on: fine
+
+    with pytest.raises(ValueError, match="mis-flag every span"):
+        null.check_against(_Model(1_000_000))
+
+    # ...and the check can be made at the door, so a caller cannot forget it.
+    with pytest.raises(ValueError, match="mis-flag every span"):
+        RegisterNull.load(artifact, scripture=_Model(1_000_000))
+
+
+def test_a_register_null_with_no_recorded_model_says_so_rather_than_passing(
+    tmp_path: Path,
+) -> None:
+    """An artifact written before the field existed cannot be checked, and "cannot say"
+    must not read as "fine" -- that is how the unstamped lexicon went six folds unnoticed."""
+    import json
+
+    from biblereference.emphasis import FOLD_VERSION
+    from biblereference.register import RegisterNull
+
+    artifact = tmp_path / "old.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "schema": "biblereference-register-null/1",
+                "fold_version": FOLD_VERSION,
+                "window": 12,
+                "stride": 6,
+                "order": 3,
+                "replicates": 400,
+                "bands": {"500": {"0.95": 9.9}},
+            }
+        ),
+        "utf-8",
+    )
+
+    null = RegisterNull.load(artifact)
+    assert null.scripture_tokens is None
+
+    class _Model:
+        def tokens(self, order: int) -> int:
+            return 2_510_850
+
+    with pytest.raises(ValueError, match="does not record which scripture model"):
+        null.check_against(_Model())

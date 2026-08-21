@@ -114,12 +114,21 @@ def test_a_v2_field_activates_only_when_the_artifact_carries_it(tmp_path: Path) 
     assert v2.score(0, 0, 0, 15.0, formula=False) == 2.5
 
 
-def test_a_wrong_schema_is_refused_and_a_stale_fold_warned_about(tmp_path: Path) -> None:
+def test_a_wrong_schema_and_a_stale_fold_are_both_refused(tmp_path: Path) -> None:
+    """Both refuse, and the fold one used to only warn.
+
+    `serve --composite` loads the artifact at startup so that a bad file refuses rather
+    than failing on the ten-thousandth scan. A warning does not refuse: the server came up
+    clean and mis-zoned every match for the life of the process, behind a message Python
+    filters by default. `bits` is surprisal over this library's lemma index and the bin
+    edges are fixed, so weights fitted under another fold put every match in the wrong bin
+    -- a wrong E-value, not a degraded one.
+    """
     bad = tmp_path / "bad.json"
     bad.write_text(json.dumps({"schema": "something-else/9"}), "utf-8")
     with pytest.raises(ValueError, match="not a composite artifact"):
         Composite.load(bad)
-    with pytest.warns(UserWarning, match="different normalisation"):
+    with pytest.raises(ValueError, match="different normalisation"):
         Composite.load(write_artifact(tmp_path, fold_version=FOLD_VERSION - 1))
 
 

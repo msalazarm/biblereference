@@ -78,9 +78,9 @@ class RegisterSpan:
         }
 
 
-def _windows(text: str, language: str | None, window: int, stride: int) -> Iterator[
-    tuple[int, int, list[str]]
-]:
+def _windows(
+    text: str, language: str | None, window: int, stride: int
+) -> Iterator[tuple[int, int, list[str]]]:
     """(char start, char end, folded tokens) per window, offsets from the text as written.
 
     Tokens are folded word by word rather than the text being folded whole, which gives
@@ -97,9 +97,7 @@ def _windows(text: str, language: str | None, window: int, stride: int) -> Itera
         yield (chunk[0][1], chunk[-1][2], [token for token, _, _ in chunk])
 
 
-def _evidence(
-    tokens: list[str], scripture: NgramModel, father: NgramModel, order: int
-) -> float:
+def _evidence(tokens: list[str], scripture: NgramModel, father: NgramModel, order: int) -> float:
     """Summed per-gram ``log2( rate_scripture / rate_father )``, add-half smoothed.
 
     **The rate, not the count.** The first version of this compared raw counts, centred so
@@ -175,9 +173,7 @@ class DeltaMarkers:
     scale: tuple[float, ...]
 
 
-def delta_markers(
-    scripture: NgramModel, father: NgramModel, limit: int = 150
-) -> DeltaMarkers:
+def delta_markers(scripture: NgramModel, father: NgramModel, limit: int = 150) -> DeltaMarkers:
     """Marker words from the father's commonest order-1 grams -- the top of any word
     list is function words -- kept only where scripture's table also has a rate, so a
     marker never scores on pruning silence."""
@@ -227,7 +223,20 @@ class RegisterNull:
     """The Monte-Carlo max-scan null, loaded from the artifact `tools/register_null.py`
     writes: the distribution of the MAXIMUM window LLR over control replicates, banded
     by document length, because scanning more windows raises the maximum chance gets to
-    reach. Per-window p-values are exactly what this exists to refuse."""
+    reach. Per-window p-values are exactly what this exists to refuse.
+
+    **A null is only meaningful against the scripture model it was measured on.**
+    :func:`_evidence` divides by ``scripture.tokens(order)`` and sets its smoothing floor
+    from ``max(scripture_total, father_total)``, so the whole LLR scale is a function of
+    that model's size. Applying these bands to a differently-sized model over- or
+    under-flags every span, silently and by a constant factor.
+
+    The artifact has always recorded which model it was measured against; nothing read it
+    back, so the one field that could catch the mismatch sat unused while a mirrored null
+    and a locally rebuilt model were exactly the combination being recommended. Pass
+    ``scripture=`` to :meth:`load`, or call :meth:`check_against`, wherever both are in
+    hand.
+    """
 
     def __init__(
         self,
@@ -237,6 +246,8 @@ class RegisterNull:
         order: int,
         replicates: int,
         fold_version: int,
+        scripture_tokens: int | None = None,
+        scripture_path: str | None = None,
     ) -> None:
         self.bands = bands
         self.window = window
@@ -244,9 +255,35 @@ class RegisterNull:
         self.order = order
         self.replicates = replicates
         self.fold_version = fold_version
+        self.scripture_tokens = scripture_tokens
+        """Order-1 token count of the scripture model these bands were measured against,
+        or ``None`` for an artifact written before it was recorded."""
+        self.scripture_path = scripture_path
+
+    def check_against(self, scripture: NgramModel) -> None:
+        """Refuse a scripture model these bands were not measured against.
+
+        :raises ValueError: the model's size differs from the recorded one, or the
+            artifact never recorded one and so cannot say.
+        """
+        if self.scripture_tokens is None:
+            raise ValueError(
+                "this register null does not record which scripture model it was measured "
+                "against, so it cannot be checked. Re-run tools/register_null.py."
+            )
+        held = scripture.tokens(1)
+        if held != self.scripture_tokens:
+            raise ValueError(
+                f"register null was measured against a scripture model of "
+                f"{self.scripture_tokens:,} tokens and this one holds {held:,}. The LLR "
+                f"scale is a function of that size -- `_evidence` divides by it and takes "
+                f"its smoothing floor from it -- so these bands would mis-flag every span "
+                f"by a constant factor. Re-run tools/register_null.py against this model, "
+                f"or use the model it was measured on."
+            )
 
     @classmethod
-    def load(cls, path: str | Path) -> RegisterNull:
+    def load(cls, path: str | Path, *, scripture: NgramModel | None = None) -> RegisterNull:
         raw = json.loads(Path(path).read_text("utf-8"))
         schema = str(raw.get("schema", ""))
         if not schema.startswith("biblereference-register-null/1"):
@@ -256,7 +293,8 @@ class RegisterNull:
                 f"register null was measured under fold {raw['fold_version']}; this "
                 f"library folds at {FOLD_VERSION}. Re-run tools/register_null.py."
             )
-        return cls(
+        recorded = raw.get("scripture") or {}
+        null = cls(
             bands={
                 int(words): {float(level): float(value) for level, value in table.items()}
                 for words, table in raw["bands"].items()
@@ -266,7 +304,14 @@ class RegisterNull:
             order=int(raw["order"]),
             replicates=int(raw["replicates"]),
             fold_version=int(raw["fold_version"]),
+            scripture_tokens=(
+                int(recorded["tokens"]) if recorded.get("tokens") is not None else None
+            ),
+            scripture_path=(str(recorded["path"]) if recorded.get("path") is not None else None),
         )
+        if scripture is not None:
+            null.check_against(scripture)
+        return null
 
     def threshold(self, words: int, level: float = 0.95) -> float:
         """The max-LLR a document of this length clears by chance with probability
