@@ -8,6 +8,8 @@ coordinates the Greek is held in, and only *verbal* parallels survive the build.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from biblereference.lemmata import Lexicon
@@ -148,3 +150,38 @@ def test_a_match_carries_its_family() -> None:
     ethiopian = next(m for m in found if m.passage.book in ("ACT", "ISA"))
     other = "ISA 53:7" if ethiopian.passage.book == "ACT" else "ACT 8:32"
     assert other in ethiopian.family
+
+
+def test_the_families_table_records_the_fold_that_verified_it(tmp_path: Path) -> None:
+    """Every pair here cleared a surprisal floor read off the folded lemma index, so the
+    table is fold-dependent -- and it carried no way to say so.
+
+    That cost something real. Six fold bumps ran in two days and not one rebuilt this table,
+    because every rebuild script listed the lemma steps and went straight to profiles.
+    `build_profiles` takes its anchors from here, so `profiles.sqlite` was rebuilt at each
+    fold and stamped honestly at fold 8 while its anchors came from a table six folds old.
+    A true stamp on an artifact built from a stale input: a stamp only covers what the
+    builder knew, and this is what the builder did not.
+    """
+    import sqlite3
+
+    from biblereference.emphasis import FOLD_VERSION
+    from biblereference.parallels import parallels_fold
+    from biblereference.store import DataHome
+
+    home = DataHome(tmp_path)
+    # Nothing built: "cannot say", never "fine".
+    assert parallels_fold(home) is None
+
+    home.prepare()
+    with sqlite3.connect(home.database) as db:
+        db.execute(
+            "CREATE TABLE parallel_family_state ("
+            " built_at TEXT NOT NULL, fold_version INTEGER NOT NULL,"
+            " pairs INTEGER NOT NULL, resolved INTEGER NOT NULL, verified INTEGER NOT NULL)"
+        )
+        db.execute(
+            "INSERT INTO parallel_family_state VALUES (?, ?, ?, ?, ?)",
+            ("2026-08-21T00:00:00+00:00", FOLD_VERSION - 3, 100, 90, 80),
+        )
+    assert parallels_fold(home) == FOLD_VERSION - 3, "a stale fold must be readable as stale"

@@ -1218,6 +1218,27 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     # `allusions()` just returns fewer entities and says nothing.
     from .entities import Entities
 
+    # The parallel families are fold-dependent too -- every pair cleared a surprisal floor
+    # read off the folded lemma index -- and that table went six fold bumps without a rebuild
+    # because every script listed the lemma steps and jumped to profiles. `build_profiles`
+    # takes its anchors from it, so the profiles were stamped honestly and built from a stale
+    # input the whole time.
+    from .parallels import parallels_fold
+
+    families = parallels_fold(home)
+    if families is None:
+        _say(
+            "\nparallel families: built before the fold was recorded, so whether the pairs "
+            f"still clear this library's fold {FOLD_VERSION} is unknown "
+            "-- `biblereference rebuild --step 'parallel families'` to settle it"
+        )
+    elif families != FOLD_VERSION:
+        _say(
+            f"\nparallel families: verified at fold {families}, library folds at "
+            f"{FOLD_VERSION} -- `biblereference rebuild --step 'parallel families'`, then "
+            f"`--step 'verse profiles'`, which reads them"
+        )
+
     entities = Entities(home.root / "db" / "entities.sqlite")
     if entities.held and entities.stale:
         if entities.fold_version is None:

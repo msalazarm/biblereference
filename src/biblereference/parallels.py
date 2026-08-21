@@ -27,18 +27,28 @@ from __future__ import annotations
 import sqlite3
 import zipfile
 from collections.abc import Callable
+from contextlib import closing
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
 from .canon import AmbiguousBookError, UnknownBookError, resolve_book
+from .emphasis import FOLD_VERSION
 from .licences import get
 from .refs import VerseRange, VerseRef
 from .sources import BuiltCorpus, RemoteFile, Source
 from .store import DataHome
 from .versification import Versification, VersificationError
 
-__all__ = ["BITS_FLOOR", "CHAIN_FLOOR", "SOURCE", "Parallels", "build_parallels"]
+__all__ = [
+    "BITS_FLOOR",
+    "CHAIN_FLOOR",
+    "SOURCE",
+    "Parallels",
+    "build_parallels",
+    "parallels_fold",
+]
 
 #: What a pair must chain against itself to count as a *verbal* parallel. Conservative on
 #: purpose: the index exists to stop true findings being scored as misses, and a topical
@@ -160,9 +170,7 @@ def build_parallels(
     from .lemmata import Lexicon
     from .search import LemmaWeights, Reading, _tokens, lemma_chain, lemma_readings
 
-    archive = max(
-        (home.sources / SOURCE.id).iterdir(), key=lambda path: path.name, default=None
-    )
+    archive = max((home.sources / SOURCE.id).iterdir(), key=lambda path: path.name, default=None)
     if archive is None:
         raise FileNotFoundError(
             f"no archive for {SOURCE.id}; run `biblereference parallels` to fetch it"
@@ -224,18 +232,62 @@ def build_parallels(
         " vrs_b TEXT, book_b TEXT, chapter_b INTEGER, verse_b INTEGER,"
         " chain INTEGER, bits REAL, votes INTEGER)"
     )
-    connection.executemany(
-        "INSERT INTO parallel_family VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows
-    )
+    connection.executemany("INSERT INTO parallel_family VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows)
     connection.execute(
         "CREATE INDEX parallel_family_a ON parallel_family(book_a, chapter_a, verse_a)"
     )
     connection.execute(
         "CREATE INDEX parallel_family_b ON parallel_family(book_b, chapter_b, verse_b)"
     )
+    # Stamped, and stamped late enough to be worth explaining. Every pair here cleared
+    # `chained.bits < BITS_FLOOR`, and those bits come from `LemmaWeights(home).of("grc")` --
+    # surprisal over the lemma index, which is folded. So this table is fold-dependent and
+    # carried no way to say so.
+    #
+    # It cost something. Six fold bumps ran in two days and not one of them rebuilt this
+    # table -- every rebuild script listed the lemma steps and went straight to profiles,
+    # the same omission a setup guide made and a reader caught. `build_profiles` takes its
+    # anchors from here, so `profiles.sqlite` was rebuilt at each fold and stamped honestly
+    # at fold 8 while its anchors came from a table six folds old. A true stamp on an
+    # artifact built from a stale input: the stamp only ever covers what the builder knew.
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS parallel_family_state ("
+        " built_at TEXT NOT NULL, fold_version INTEGER NOT NULL,"
+        " pairs INTEGER NOT NULL, resolved INTEGER NOT NULL, verified INTEGER NOT NULL)"
+    )
+    connection.execute("DELETE FROM parallel_family_state")
+    connection.execute(
+        "INSERT INTO parallel_family_state "
+        "(built_at, fold_version, pairs, resolved, verified) VALUES (?, ?, ?, ?, ?)",
+        (
+            datetime.now(UTC).isoformat(timespec="seconds"),
+            FOLD_VERSION,
+            pairs,
+            resolved,
+            len(rows),
+        ),
+    )
     connection.commit()
     connection.close()
     return ParallelsResult(pairs=pairs, resolved=resolved, verified=len(rows))
+
+
+def parallels_fold(home: DataHome) -> int | None:
+    """The fold that built ``parallel_family``, or ``None`` where it cannot say.
+
+    ``None`` for a table built before the stamp existed. Treating that as current is how it
+    went six folds unnoticed, so callers must read it as "unknown", never as "fine".
+    """
+    import sqlite3
+
+    if not home.database.exists():
+        return None
+    with closing(sqlite3.connect(f"file:{home.database}?mode=ro", uri=True)) as connection:
+        try:
+            row = connection.execute("SELECT fold_version FROM parallel_family_state").fetchone()
+        except sqlite3.OperationalError:
+            return None
+    return int(row[0]) if row else None
 
 
 class Parallels:
