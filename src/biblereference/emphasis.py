@@ -445,6 +445,9 @@ def _dative_not_the_island(marks: int) -> bool:
     So a perispomeni alone refuses; a perispomeni with a subscript is the dative and expands.
     Without this, *τῷ ἰδίῳ λόγῳ τῷ κω ἡμῶν ἰῦ χῷ* splits in the dative exactly as the genitive
     formula split before ``κυ`` came back.
+
+    A bare ``κω`` expands, and 9 of the 851 bare forms are line-break fragments -- see
+    :func:`_not_broken_across_a_line` for the measured rate and why it is worth taking.
     """
     return not marks & _PERISPOMENI or bool(marks & _YPOGEGRAMMENI)
 
@@ -459,6 +462,18 @@ def _not_broken_across_a_line(marks: int) -> bool:
     the same fault as the ``θυ γατέρας`` and ``κυ κλώσουσιν`` splits that cost us fold 5.
 
     A perispomeni refuses, which covers the pig and the fragments together.
+
+    **A bare form still expands, and that is a measured cost rather than an assumption.**
+    churchfathers read all 851 unmarked occurrences: 11 are fragments no mark can betray --
+    9 of ``κω`` and 2 of ``υσ``, splitting κωφοί, κωλυόμενον, ἐπιόρκῳ, σάκκῳ and ἐλέγχους --
+    against 840 genuine contractions. 1.3%, taken knowingly.
+
+    Taken because the two errors are not alike. Expanding a *collision* replaces a word that
+    was correctly there, which is how ἔσται became ἐσταύρωται 4,412 times. Expanding a
+    *fragment* replaces half a word in a region already broken: `καὶ κω φοὶ` becomes
+    `και κυριω φοι`, and its neighbours are garbage too, so no run of matching words can form
+    around it. A spurious κυρίῳ inside a broken line is inert in a way a spurious ἐσταύρωται
+    in good text is not.
     """
     return not marks & _PERISPOMENI
 
