@@ -24,36 +24,29 @@ system, not estimated.
 
 ---
 
-## 0. Read this first — a `git clone` will NOT give you the current state
+## 0. Where the code lives
+
+Everything is on `origin/main` as of 2026-08-21. `git clone` gives you the current state — the
+whole of the fold-8 work, the witness-map fix and this document included.
 
 ```
-biblereference branch  slavonic-closeout
-  exists on GitHub?    NO  (git ls-remote --heads origin slavonic-closeout -> 0 matches)
-  upstream configured? NO
-  commits not on origin/main:  42
-  origin/main is at    17a6e8a   ("Calibrate the Slavonic…")
-  local HEAD is at     3abb1a1   ("Read Judith 16 whole…")
+origin/main   3b003ed   Write SETUP.md: pulling, porting and mirroring the library
 ```
 
-**Cloning from GitHub lands you on `17a6e8a`, which is the state from before 2026-08-20.**
-That means no fold 8, no witness-map fix, none of the guards, neither handoff document.
-
-Pick one before you do anything else:
-
-**Option A — push first (recommended; it is also a backup)**
+*Historical note, in case you meet an older checkout:* this work sat on a local-only branch
+`slavonic-closeout` for a day, with no upstream, while `origin/main` was still at `17a6e8a`
+("Calibrate the Slavonic…"). During that window a clone gave you the state from **before**
+2026-08-20 — no fold 8, no witness fix, no guards — and looked entirely healthy while doing it.
+The branch has since been fast-forwarded into `main` and pushed, so this no longer applies. If
+you are ever unsure a checkout is current, the cheap check is:
 
 ```bash
-# on the SOURCE machine
-cd ~/biblereference
-git push -u origin slavonic-closeout
+git log --oneline -1            # compare against origin/main
+git ls-remote --heads origin    # what actually exists upstream
 ```
 
-Then the new box can clone normally. Do this only if you are happy for the branch to be on
-GitHub — it is currently local-only, which may be deliberate.
-
-**Option B — copy the repo directly, `.git` included**
-
-Covered in §3 below. Nothing is published; the new box gets a full clone-equivalent.
+**The general lesson is worth keeping even though the specific problem is gone:** a clone that
+succeeds tells you nothing about whether the branch you wanted was ever pushed.
 
 ---
 
@@ -107,16 +100,18 @@ ssh marcoadmin@10.0.0.182 'echo ok'
 
 ## 3. Get the code
 
-**If you pushed (Option A):**
+**Clone it — this is the normal path now:**
 
 ```bash
 # on the NEW box
 git clone https://github.com/msalazarm/biblereference.git ~/biblereference
 cd ~/biblereference
-git checkout slavonic-closeout
+git log --oneline -1
+# expect: 3b003ed Write SETUP.md: pulling, porting and mirroring the library
 ```
 
-**If you did not (Option B) — copy it, excluding the venv:**
+**Alternative — copy it directly**, if the box has no internet or you have local commits that
+are not upstream. Exclude the venv:
 
 ```bash
 # on the SOURCE machine
@@ -124,14 +119,9 @@ rsync -avh --progress --exclude venv/ --exclude '__pycache__/' --exclude '.pytes
   ~/biblereference/ marcoadmin@10.0.0.182:~/biblereference/
 ```
 
-`.git` comes with it, so the new box has the full history and can push later.
-
-Confirm on the new box:
-
-```bash
-cd ~/biblereference && git log --oneline -1
-# expect: 3abb1a1 Read Judith 16 whole, and stop one decision short of writing it
-```
+`.git` comes with it, so the new box has the full history and can push later. Before doing this,
+check you are not silently copying unpushed work — `git log --oneline origin/main..main` should
+be empty.
 
 ---
 
@@ -372,14 +362,11 @@ derived artifacts (§5b) do **not** rebuild themselves — `doctor` naming them 
 
 ## 9. Quick reference — the whole port in one block
 
-Assumes you chose Option B (copy the repo) and Route 1 (copy the artifacts).
+Assumes you clone the code (§3) and copy the artifacts (Route 1, §5b).
 
 ```bash
 # --- on the SOURCE machine ---
 ssh-copy-id marcoadmin@10.0.0.182
-
-rsync -avh --progress --exclude venv/ --exclude '__pycache__/' --exclude '.pytest_cache/' \
-  ~/biblereference/ marcoadmin@10.0.0.182:~/biblereference/
 
 rsync -avh --progress ~/.local/share/biblereference/sources/ \
   marcoadmin@10.0.0.182:~/.local/share/biblereference/sources/
@@ -393,6 +380,7 @@ rsync -avh --progress \
 
 # --- on the NEW box ---
 sudo apt update && sudo apt install -y git rsync curl
+git clone https://github.com/msalazarm/biblereference.git ~/biblereference
 cd ~/biblereference
 python3 -m venv venv
 venv/bin/pip install --upgrade pip
