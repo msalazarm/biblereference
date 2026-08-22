@@ -20,7 +20,7 @@ import json
 import os
 import sys
 import traceback
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -181,6 +181,15 @@ def _listed(params: dict[str, list[str]], name: str) -> list[str] | None:
     return values or None
 
 
+def search_options_accepted(extra: Iterable[str] = ()) -> set[str]:
+    """Every parameter a caller may set on a search, for `/api/library` to advertise.
+
+    Split out of `search_options` so the answer cannot drift from the check: a server that
+    advertises one set and enforces another is worse than one that advertises nothing.
+    """
+    return set(_SCORES) | _FILTERS | _OTHER | set(extra)
+
+
 def search_options(
     params: dict[str, list[str]], extra: frozenset[str] = frozenset()
 ) -> dict[str, Any]:
@@ -191,7 +200,7 @@ def search_options(
     tell the two apart. So an unknown name, an unreadable value and an out-of-range one are
     all 400s, and only the parameters actually applied are accepted.
     """
-    allowed = set(_SCORES) | _FILTERS | _OTHER | set(extra)
+    allowed = search_options_accepted(extra)
     unknown = set(params) - allowed
     if unknown:
         raise ValueError(

@@ -312,6 +312,27 @@ def test_the_opt_in_tiers_and_the_debt_ledger_are_reachable_over_the_wire() -> N
     assert serve.search_options({"itacised": ["1"]}) == {"itacised": True}
     assert serve.search_options({"covering_rivals": ["1"]}) == {"covering_rivals": True}
     assert serve.search_options({"gate_first": ["yes"]}) == {"gate_first": True}
+
+
+def test_the_library_advertises_what_a_search_will_accept() -> None:
+    """So a caller finds out before asking, not from a 400 halfway through a sweep.
+
+    A consumer added `gate_first` to its Greek tuning the hour this library gained it. The
+    local server had it and the remote one was an older build, so the request was refused
+    and a 2,869-witness sweep stopped at 1,131 with part of the corpus already measured
+    under the old arbitration. `search_options` is drawn from the same set the check
+    enforces, so the two cannot drift.
+    """
+    from biblereference.web.catalogue import api_library
+
+    advertised = set(api_library({})["search_options"])
+    assert advertised == serve.search_options_accepted()
+    #  on the wire; a local searcher spells it  and  renames
+    # it, which is why  never offers  for dropping.
+    # `gate` on the wire; a local searcher spells it `gates` and `remote._encode` renames
+    # it on the way out, which is why `remote.supported_options` never offers it for
+    # dropping -- a server that accepts `gate` has not refused `gates`.
+    assert {"gate_first", "covering_rivals", "inflected", "gate"} <= advertised
     assert serve.search_options({"debts": ["true"]}) == {}
     with pytest.raises(ValueError, match="true or false"):
         serve.search_options({"itacised": ["sometimes"]})

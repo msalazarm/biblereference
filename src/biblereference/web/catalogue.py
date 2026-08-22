@@ -61,6 +61,10 @@ def _licence(terms: Licence | None) -> dict[str, Any]:
 
 def api_library(params: dict[str, list[str]]) -> Any:
     """Every built corpus, with what it holds and what may be done with it."""
+    # Imported here rather than at module scope: `server` imports this module, so the
+    # other direction has to be lazy or neither loads.
+    from .server import search_options_accepted
+
     _nothing_asked(params)
     held = library()
     inventory = held.chapters
@@ -117,6 +121,18 @@ def api_library(params: dict[str, list[str]]) -> Any:
 
     return {
         "data_home": str(home().root),
+        # What a remote caller may actually set on a search. Advertised because the
+        # alternative is discovering it from a 400 mid-sweep: a consumer added `gate_first`
+        # to its Greek tuning the day this library gained it, and the search server it swept
+        # against was an older build that refused the request. Their run stopped at 1,131 of
+        # 2,869 witnesses, and part of the corpus had already been swept under the old
+        # arbitration -- two measurements where there should have been one.
+        #
+        # A client that reads this can drop what a server does not know and say so, which is
+        # the honest degradation. `search_options` still refuses an unknown name, because a
+        # parameter quietly ignored is the fault this whole module is built against; this is
+        # how a caller finds out *before* asking.
+        "search_options": sorted(search_options_accepted()),
         "totals": {
             "corpora": len(rows),
             "searchable": len(searchable),
