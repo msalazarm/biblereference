@@ -88,6 +88,12 @@ LANGUAGES: Final[Mapping[str, str]] = {
     "ar": "ar",
     "ara": "ar",
     "arabic": "ar",
+    # Ge'ez, for the Ethiopic Enoch and Jubilees -- the only complete witnesses either text
+    # has. `gez` is the ISO code; `ethiopic` is what a reader is likelier to type, and
+    # naming the script rather than the language is close enough to be worth accepting.
+    "gez": "gez",
+    "geez": "gez",
+    "ethiopic": "gez",
 }
 
 #: The old private name, kept because this module's own parser uses it.

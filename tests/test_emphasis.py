@@ -85,6 +85,39 @@ def test_a_hebrew_span_keeps_its_pointing_inside_the_markers() -> None:
     assert "הָרָה**֙" not in out
 
 
+#: 1 Enoch 1:1 as the Ethiopian Orthodox Bible prints it, wordspaces and all.
+GEEZ_ENOCH = "ቃለ፡ በረከት፡ ዘሄኖክ፡ ዘከመ፡ ባረከ፡ ኅሩያነ፡ ወጻድቃነ።"
+
+
+def test_the_ethiopic_wordspace_separates_words_rather_than_joining_them() -> None:
+    """Ge'ez writes a mark between every pair of words, and it is not part of either.
+
+    Without this the token is `ቃለ፡` and never meets `ቃለ` anywhere else in the corpus --
+    which is the whole of what a fold is for.
+    """
+    assert fold(GEEZ_ENOCH, "gez") == "ቃለ በረከት ዘሄኖክ ዘከመ ባረከ ኅሩያነ ወጻድቃነ"
+
+
+def test_the_geez_fold_does_nothing_else() -> None:
+    """Deliberately the least it can do.
+
+    Ethiopic is a syllabary with no case and precomposed characters, so the lowercasing and
+    the NFD mark-strip are both no-ops on it. What is *not* done is the orthographic tier --
+    manuscripts confuse ሀ/ሐ/ኀ and አ/ዐ the way Greek ones confuse ι/ει/η -- and those letters
+    must still be distinct until that is measured rather than guessed.
+    """
+    assert fold("ሀሐኀ", "gez") == "ሀሐኀ"
+    assert fold("አዐ", "gez") == "አዐ"
+
+
+def test_adding_ethiopic_marks_changed_no_other_language() -> None:
+    """`_WORD_SEPARATORS` is not language-scoped, so this had to be checked rather than
+    assumed. Of the 1,642,720 verses held when the marks were added, zero contained one."""
+    assert fold("Ἰησοῦς", "grc") == "ιησουσ"
+    assert fold("Jesus justitia", "la") == "iesus iustitia"
+    assert fold("ܡܪܝܐ܂", "syc") == "ܡܪܝܐ"
+
+
 def test_text_outside_the_span_is_untouched() -> None:
     out = apply_spans(GREEK_LUKE, [bold("δωδεκα", "δωδεκα")])
     assert out.replace("**", "") == GREEK_LUKE

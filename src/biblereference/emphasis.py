@@ -74,11 +74,38 @@ _SYRIAC_PUNCTUATION: Final = {
     "܌",
 }
 
+#: Ethiopic punctuation. The wordspace is the load-bearing one: Ge'ez writes `ቃለ፡ በረከት፡`,
+#: and without this the token is `ቃለ፡` and never meets `ቃለ` anywhere else in the corpus.
+#:
+#: **Deliberately the whole of what the Ge'ez fold does.** The script is a syllabary with no
+#: case, and its characters are precomposed, so the lowercasing and the NFD mark-strip below
+#: are both no-ops on it -- stripping punctuation is the entire rule. What is *not* done here
+#: is the orthographic part: Ge'ez manuscripts confuse ሀ/ሐ/ኀ and አ/ዐ the way Greek ones
+#: confuse ι/ει/η, and that is the Ethiopic analogue of the itacism tier. It wants measuring
+#: against real manuscript variation before it is applied, exactly as `_ITACISM` did, and
+#: until then this fold does the least it can rather than guessing.
+_ETHIOPIC_PUNCTUATION: Final = {
+    "፡",  # wordspace, U+1361 -- between every pair of words
+    "።",  # full stop
+    "፣",  # comma
+    "፤",  # semicolon
+    "፥",  # colon
+    "፦",  # preface colon
+    "፧",  # question mark
+    "፨",  # paragraph separator
+}
+
 #: Ligatures NFD does not decompose. The Clementine writes *flammæ*, an anchor will not.
 _LIGATURES: Final[dict[str, str]] = {"æ": "ae", "œ": "oe", "ﬁ": "fi", "ﬂ": "fl"}
 
 #: Everything that separates one word from the next without being part of either.
-_WORD_SEPARATORS: Final = _HEBREW_PUNCTUATION | _SYRIAC_PUNCTUATION
+#:
+#: This set is not language-scoped, so adding to it changes the fold for every language at
+#: once. Adding the Ethiopic marks did **not** require a `FOLD_VERSION` bump, and that is
+#: measured rather than assumed: of the 1,642,720 verses held when they were added, **zero**
+#: contained any of them. Nothing already indexed folds differently, so nothing needs
+#: rebuilding. A future addition to this set wants the same check before it is made.
+_WORD_SEPARATORS: Final = _HEBREW_PUNCTUATION | _SYRIAC_PUNCTUATION | _ETHIOPIC_PUNCTUATION
 
 #: Latin only. The Clementine writes *Jesus*, *justitia*, *ejus*; the Nova Vulgata writes
 #: *Iesus*, *iustitia*, *eius*. The letters are the same letters -- j and v are late
