@@ -818,31 +818,56 @@ two-bit tie window, and both projects have already refused promoting it to a gen
 
 ---
 
-## 8. False-positive control
+## 8. False-positive control — measured, and the prediction was right
 
 The standing rule is unchanged: **a change that materially raises the false-positive rate on
 pre-Christian Greek is refused whatever it recalls.**
 
-Beyond that, this work's specific exposure is devotional and formulaic repetition, and Marco
-named the terrain: **rote prayers in Esther and Maccabees, and the logistics-of-war passages
-in the historical books** — muster lists, spoil inventories, siege narrative — which share
-rare-ish nouns freely without anyone quoting anyone.
+**`gate_first` costs nothing.** 971 passages of classical, pre-Christian and pre-Septuagint
+Greek — 122,699 words, capped at six per cent per person so no single author becomes the
+control:
 
-So the measurement is not only the control corpus. It is a **named-terrain suite**: run every
-change in this document over Esther, 1-4 Maccabees, and the war material in Joshua, Judges,
-Samuel, Kings and Chronicles, and report the proposal rate there *beside* golden-set recall
-in the same table. A method that buys Boyce's misses and lights up the muster rolls has not
-earned its place.
+| | matches | per 1,000 words |
+|---|---|---|
+| today | 25 | 0.20 |
+| `gate_first` | **25** | **0.20** |
+| `gate_first + covering_rivals` | **25** | **0.20** |
 
-This applies to §5 as much as to §7. Reporting two claims per span where one was reported
-before is a recall change and a precision change at once, and the named terrain is where the
-precision cost will show.
+Not merely the same rate — **the same matches, book for book**. That is the expected result
+rather than a lucky one, and the reason is worth stating: gate-first only reorders rivals
+*within a contested span*, and a span with two rivals is already a span where something was
+found. On text nobody was quoting there is usually nothing to arbitrate.
 
-Two structural defences, both already in the codebase's idiom: `_may_not_seed`
+**Where the 25 fall is the finding.** Marco named the terrain before any of this was built —
+*"we will likely see the most false positives in esther and the maccabees with rote prayers,
+and the history books in the sections where it talks about logistics of war"*:
+
+```
+ESG  15      1MA  2      ACT  2      4MA  1
+ROM   1      2MA  1      1CO  1      DAG  1
+```
+
+**Nineteen of twenty-five are Esther and Maccabees — 76%, with Greek Esther alone at 60%.**
+The prediction was made from knowing the corpus and is confirmed to the book.
+
+That matters beyond this measurement. §6.4's family proposal fails in the same terrain and
+for the same reason — regnal formulae, prophetic stock phrases, festival refrains — and
+these two results are the same phenomenon seen from opposite ends: **formulaic Greek
+generates matches wherever it is compared to anything, including itself.** A defence built
+for one is a defence for both, which is an argument for building it once, properly, rather
+than tuning a threshold twice.
+
+**What remains unmeasured**, and is named rather than left as an absence: the named-terrain
+suite proper — running each change over Esther, 1-4 Maccabees and the war material in
+Joshua, Judges, Samuel, Kings and Chronicles and reporting the proposal rate beside recall.
+The control corpus above is the veto and it is a *different* question: it asks whether we
+find scripture where there is none, not whether we find one formulaic verse when we mean
+another. Nothing in this document turns on it, and §6.4 does.
+
+Two structural defences remain the right shape for that work: `_may_not_seed`
 (search.py:2294) already denies low-complexity spans the right to nominate, and the same
-principle extends to conjunctions whose terms are jointly common; and every proposal carries
-its own term list as evidence, so a hand check is one line of output rather than a
-re-derivation.
+principle extends to conjunctions and to family proposals whose shared terms are jointly
+common; and every proposal carries its own term list, so a hand check is one line of output.
 
 ---
 

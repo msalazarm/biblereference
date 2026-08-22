@@ -91,6 +91,26 @@ them, so it is offered rather than shipped. `Searcher(gate_first=True)`, `?gate_
 `"gate_first": True` in your `GREEK` mapping — which is the one-line change on your side, and
 it is already committed on `quotes2-gate-first`.
 
+### The standing veto: measured, and it costs nothing
+
+971 passages of pre-Christian Greek, 122,699 words, capped per author so no one writer
+becomes the control:
+
+| | matches | per 1,000 words |
+|---|---|---|
+| today | 25 | 0.20 |
+| `gate_first` | **25** | **0.20** |
+| `gate_first + covering_rivals` | **25** | **0.20** |
+
+The same matches, book for book — not merely the same rate. Gate-first reorders rivals
+*within a contested span*, and on text nobody was quoting there is usually nothing to
+arbitrate.
+
+Where the 25 fall is the interesting part: **ESG 15, 1MA 2, ACT 2, 4MA 1, ROM 1, 2MA 1,
+1CO 1, DAG 1**. Nineteen of twenty-five are Esther and Maccabees. Marco predicted that
+terrain before any of this was built, and it is confirmed to the book — which is also where
+§6.4's family proposal fails, for the same reason.
+
 ### The Greek lexicon, assembled from two upstreams
 
 CLTK's Greek file is a **one-lemma-per-form map** — 949,453 entries, zero lists — and where a
