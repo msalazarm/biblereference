@@ -91,3 +91,119 @@ def test_nothing_the_library_finds_today_is_lost(minimum: int = 40) -> None:
             assert before <= after, f"lost {before - after} from {text[:40]!r}"
             checked += len(before)
     assert checked, "nothing was found either way, so nothing was actually compared"
+
+
+#: Nominative against an oblique case of the same noun, all common in scripture.
+#:
+#: Thirteen of these eighteen failed before the Greek lexicon was assembled from two sources
+#: (`lemmata.LEXICONS`). Morpheus keeps one analysis per spelling and it is very often the
+#: verb, so `θεοῦ` -- the commonest genitive in the corpus, 1,747 occurrences -- resolved to
+#: θεάομαι alone and shared no lemma with `θεός`. A quotation naming God in the genitive
+#: could not chain to the same verse naming him in the nominative.
+#:
+#: Known residual: `θεοσ/θεων` still does not meet, and is left out rather than skipped so
+#: that this list is a list of things that work.
+PRINCIPAL_PARTS = [
+    ("θεοσ", "θεου"),
+    ("θεοσ", "θεοισ"),
+    ("κυριοσ", "κυριον"),
+    ("κυριοσ", "κυριοισ"),
+    ("κυριοσ", "κυριων"),
+    ("λογοσ", "λογου"),
+    ("λογοσ", "λογων"),
+    ("λογοσ", "λογουσ"),
+    ("ναοσ", "ναον"),
+    ("ημερα", "ημερασ"),
+    ("ημερα", "ημερων"),
+    ("φωνη", "φωνησ"),
+    ("σκηνη", "σκηνησ"),
+    ("δουλοσ", "δουλουσ"),
+    ("λιθοσ", "λιθουσ"),
+    ("αγγελοσ", "αγγελων"),
+    ("ειρηνη", "ειρηνησ"),
+    ("αυλη", "αυλησ"),
+]
+
+
+@pytest.mark.parametrize(("nominative", "oblique"), PRINCIPAL_PARTS)
+def test_a_noun_meets_its_own_cases(nominative: str, oblique: str) -> None:
+    """Two spellings of one word must share a lemma, or no chain can cross between them."""
+    lexicon = Lexicon(REAL)
+    theirs = lexicon.lemmas(nominative, "grc") or frozenset()
+    ours = lexicon.lemmas(oblique, "grc") or frozenset()
+    assert theirs, f"{nominative} has no reading at all"
+    assert ours, f"{oblique} has no reading at all"
+    assert theirs & ours, (
+        f"{nominative} -> {sorted(theirs)} and {oblique} -> {sorted(ours)} share no lemma, "
+        f"so a quotation using one cannot chain to a verse using the other"
+    )
+
+
+def test_a_paradigm_does_not_lose_its_own_cases() -> None:
+    """A ceiling on the whole defect, not eighteen named instances of it.
+
+    Group lemmas by their last two characters; learn each class's core endings from the
+    lemmas with a full paradigm; then ask how many corpus forms a well-attested lemma
+    *predicts* and yet does not analyse to. Those are paradigm slots orphaned from their own
+    word, and the matcher cannot bridge them.
+
+    Measured on this library: **4.6% before the second source was added, 1.5% after.** The
+    ceiling is set at 2% so that the fix holds with headroom and the defect fails hard.
+
+    `predicted >= 2500` is the guard that matters most. Without it a half-built or wrongly
+    folded table predicts almost nothing, orphans almost nothing, and passes -- which is the
+    shape of the fault that let this survive as long as it did.
+    """
+    import sqlite3
+    from collections import defaultdict
+
+    with sqlite3.connect(f"file:{REAL.database}?mode=ro", uri=True) as connection:
+        forms_of: dict[str, set[str]] = defaultdict(set)
+        readings: dict[str, set[str]] = defaultdict(set)
+        for form, lemma in connection.execute(
+            "SELECT form, lemma FROM lemma_form WHERE language = 'grc'"
+        ):
+            forms_of[str(lemma)].add(str(form))
+            readings[str(form)].add(str(lemma))
+        common = {
+            str(term)
+            for (term,) in connection.execute(
+                "SELECT token FROM search_df WHERE docs >= 10"
+            )
+        }
+
+    classes: dict[str, list[str]] = defaultdict(list)
+    for lemma in forms_of:
+        if len(lemma) > 2:
+            classes[lemma[-2:]].append(lemma)
+
+    predicted = orphans = 0
+    for ending, lemmas in classes.items():
+        exemplars = [one for one in lemmas if len(forms_of[one]) >= 8]
+        if len(lemmas) < 200 or len(exemplars) < 50:
+            continue
+        seen: dict[str, int] = defaultdict(int)
+        for lemma in exemplars:
+            stem = lemma[: -len(ending)]
+            for form in forms_of[lemma]:
+                if form.startswith(stem):
+                    seen[form[len(stem) :]] += 1
+        core = {suffix for suffix, n in seen.items() if n >= len(exemplars) // 2}
+        for lemma in exemplars:
+            stem = lemma[: -len(ending)]
+            for suffix in core:
+                word = stem + suffix
+                if word not in common or word == lemma:
+                    continue
+                predicted += 1
+                if lemma not in readings.get(word, ()):
+                    orphans += 1
+
+    assert predicted >= 2500, (
+        f"only {predicted} paradigm slots were checked; the lexicon or the index is too "
+        f"thin for this measurement to mean anything"
+    )
+    assert orphans / predicted <= 0.020, (
+        f"{orphans}/{predicted} = {orphans / predicted:.1%} of paradigm slots are orphaned "
+        f"from the lemma that predicts them"
+    )

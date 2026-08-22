@@ -194,7 +194,12 @@ CREATE TABLE IF NOT EXISTS lemma_form_state (
     built_at     TEXT    NOT NULL,
     fold_version INTEGER NOT NULL,
     forms        INTEGER NOT NULL,
-    readings     INTEGER NOT NULL
+    readings     INTEGER NOT NULL,
+    -- Which upstreams it was assembled from. The fold stamp says the forms are spelled
+    -- currently and cannot say they are *all here*: a Greek table built from Morpheus alone
+    -- carries a current fold and is missing the noun reading of `θεοῦ`. Nullable, meaning
+    -- built before this column existed.
+    sources      TEXT
 ) WITHOUT ROWID;
 
 -- Unstemmed on purpose. `porter` is an English stemmer; on Greek it is noise, and the
@@ -413,6 +418,10 @@ _ADDED_COLUMNS: Final = (
     # `source_verses`: an index built before this column can only say "unknown".
     ("search_state", "fold_version", "INTEGER"),
     ("lemma_state", "fold_version", "INTEGER"),
+    # See the column's comment in LEMMA_SCHEMA. Nullable for the same reason as the two
+    # above: a table built before this existed can only say "unknown", and a NULL here must
+    # not be read as "assembled from nothing".
+    ("lemma_form_state", "sources", "TEXT"),
 )
 
 

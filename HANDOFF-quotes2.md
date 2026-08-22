@@ -14,25 +14,39 @@ idea; the first sixteen were being found and thrown away, in two places, one on 
 
 Both leaks are now closed. Measured on your nine works with a forked copy of your harness:
 
-| | found | gated | unseen | Boyce's 19 Greek negatives |
+| | found | gated | unseen | Boyce's 19 Greek `Potential` rows |
 |---|---|---|---|---|
 | where we started | 75 | 38 | 96 | 2 |
 | you: `alternates` read | 77 | 46 | 86 | 2 |
 | us: `gate_first` | 81 | 38 | 90 | 2 |
-| **both together** | **83** | 45 | **81** | **4** |
+| **both together** | **83** | 45 | **81** | 4 *(not errors — see below)* |
 
-**+8 citations for one false locus.** `gate_first` alone costs nothing on the negatives — two
-before, the same two after. The combination costs two *rows*, which are one question written
-twice: Didache 2.2 → MAT 19:18 at slots `2:2a` and `2:2b`, the same duplicate-row shape your
-positives have (19 negative rows, 18 independent questions).
+**+8 citations, and the fourth column is not a cost.** I first reported this as "+8 for one
+false locus" and that was wrong — the correction matters more than the number.
 
-That one locus is worth looking at before you decide it is an error. It is matched through
-`ROM 13:9`'s alternates holding `MAT 19:18`. Didache 2.2 is the commandment list — οὐ
-φονεύσεις, οὐ μοιχεύσεις — and Romans 13:9 and Matthew 19:18 both recite it. The wording
-genuinely matches; Boyce's judgement is that the Didache quotes the Decalogue rather than
-Matthew. That is the case `alternates` exists to express. We count it against ourselves
-anyway, because grading your own errors leniently is how a false-positive rate stops
-meaning anything.
+`golden-boyce.json` keys Boyce's Potential rows as `negatives`, and `docs/helpinghand.md`
+describes them as loci "he judged were **not** quotations, so a gate that finds them is too
+loose". Your own `build_boyce_golden.py` had already withdrawn that reading; the cheat sheet
+is stale relative to it. The paper agrees with the builder: **Boyce tabulates Direct,
+Indirect, Partial and Potential in one table and totals all four** (Didache 18/7/19/5,
+Polycarp 30/10/10/5). Potential is his weakest confidence tier.
+
+At the loci this change touches, his footnotes say the *address* is undecidable, not that the
+wording is absent:
+
+* **Didache 2:2** — `Matthew 19:18` potential beside `Exodus 20:13-14; Deuteronomy 5:17-18`,
+  footnote 4: *"It is impossible to know if the writer(s) were referencing Exodus,
+  Deuteronomy, or Matthew. All three read identically."* We return `ROM 13:9` with
+  `MAT 19:18` as an alternate — the same judgement, in the field built for it.
+* **Polycarp 7:1** — `2 John 7` as the citation, `1 John 4:2-3` potential. We return
+  `2JN 1:7`, his primary attribution.
+* **Didache 1:4d** — `Luke 6:29` with `Matthew 5:40` potential. We return `MAT 5:39-42`
+  spanning it, keeping `LUK 6:29` as the alternate.
+
+Three suggestions, none urgent: `helpinghand.md` §"The measure" should follow the builder;
+the JSON key `negatives` has outgrown its name; and the Potential rows have the same
+duplicate-question shape as the positives — Didache 2:2a and 2:2b are one question written
+twice, so 19 rows are 18 questions.
 
 ---
 

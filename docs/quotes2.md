@@ -27,8 +27,8 @@ because the order they came in is the argument.*
 > winner by something unrelated to it, so **a match that would clear the gate is deleted for
 > one that will not**, and the span is then discarded by the gate that would have kept it.
 > Letting the gate-clearing match win takes **found from 75 to 81, and to 83 once alternates
-> are read.** Gate-first alone costs nothing on Boyce's own non-quotations; the combination
-> costs **one** of them, so the trade is eight citations for one false locus.
+> are read**, at no measured cost in precision — §4.3 explains why the column that looked
+> like a cost is not one, and corrects my own reporting of it.
 
 ---
 
@@ -436,23 +436,36 @@ arbitration can be told what the gate will say.
 | **gate-first** | **81** | 38 | **90** | **2 of 19** |
 | **gate-first, alternates read** | **83** | 45 | **81** | **4 of 19** |
 
-That last column is Boyce's own `potential` entries — loci he judged were *not* quotations,
-so recall bought by finding them is not recall. **Gate-first alone costs nothing there: two
-before, the same two after.** The combined row does move, and it is the one number in this
-document that goes the wrong way, so it is worth stating exactly.
+That last column counts Boyce's **Potential** rows, and it is *not* a false-positive column.
+I reported it as one and was wrong; the correction is worth the space because it changes
+what the whole table means.
 
-**The cost is one locus, not two.** Both new rows are Didache 2.2 → MAT 19:18, and they are
-the same question written twice — slots `2:2a` and `2:2b`, the duplicate-row problem §2.5
-found among the positives, present among the negatives too (19 rows, 18 independent
-questions). So the trade is **eight citations for one false locus.**
+`golden-boyce.json` stores them under the key `negatives`, and churchfathers'
+`docs/helpinghand.md` describes them as loci "he judged were **not** quotations, so a gate
+that finds them is too loose". I took both at face value. Their own `build_boyce_golden.py`
+had already withdrawn that reading — *"Potential entries are neither positives nor
+negatives; their author did not believe they were quotations, they went in because a
+supervisor wanted them"* — and the paper settles it.
 
-**And that locus is the honest kind.** It is matched through `ROM 13:9`'s alternates holding
-`MAT 19:18`. Didache 2.2 is the commandment list — οὐ φονεύσεις, οὐ μοιχεύσεις — and Romans
-13:9 and Matthew 19:18 both recite it. The words genuinely match; what Boyce is judging is
-that the Didache is quoting the Decalogue rather than Matthew. That is precisely the case
-`alternates` exists to express, and counting it as a false positive is a statement about
-addresses rather than about wording. It is still counted here, because grading one's own
-errors leniently is how a false-positive rate stops meaning anything.
+**Boyce tabulates four columns — Direct, Indirect, Partial, Potential — and totals all four
+together** (Didache 18/7/19/5; Polycarp 30/10/10/5). Potential is his weakest confidence
+tier, not a rejection. And at the loci this change touches, his own footnotes say the
+*address* is undecidable rather than the wording absent:
+
+* **Didache 2:2** files `Matthew 19:18` as potential beside `Exodus 20:13-14; Deuteronomy
+  5:17-18`, with footnote 4: *"It is impossible to know if the writer(s) were referencing
+  Exodus, Deuteronomy, or Matthew. **All three read identically.**"* Our match is `ROM 13:9`
+  — the same commandment list again — carrying `MAT 19:18` as an alternate. That is not an
+  error; it is the same judgement, expressed in the field built to express it.
+* **Polycarp 7:1** files `2 John 7` as the citation and `1 John 4:2-3` as potential. Our
+  match is `2JN 1:7`, which is his primary attribution.
+* **Didache 1:4d** files `Luke 6:29` with `Matthew 5:40` potential. Gate-first returns
+  `MAT 5:39-42`, which spans it, and keeps `LUK 6:29` as the alternate.
+
+So the honest reading is **+8 citations at no measured precision cost**, and three of the
+four "potential" hits are arguably correct answers to a question Boyce recorded as open.
+The number is still reported, because a column that only ever moves in your favour is one
+nobody is checking.
 
 Didache 1.4 under the shipped option:
 

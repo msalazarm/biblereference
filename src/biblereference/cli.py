@@ -866,9 +866,15 @@ def cmd_lemmata(args: argparse.Namespace) -> int:
 
     for language in wanted:
         spec = LEXICONS[language]
-        _say(f"\n{language}: {spec.source.label}")
-        _say(f"  terms: {spec.source.license}")
-        fetch_source(spec.source, home, report=_say, force=args.force)
+        # One language, several upstreams: Greek reads Morpheus for its inventory and
+        # Diorisis for what a lemmatiser actually assigned, because the inventory keeps one
+        # analysis per spelling and it is often the verb. Each part's terms are printed, so
+        # a build says what it is redistributing nothing of.
+        _say(f"\n{language}: {len(spec.parts)} source(s)")
+        for part in spec.parts:
+            _say(f"  {part.source.label}")
+            _say(f"    terms: {part.source.license}")
+            fetch_source(part.source, home, report=_say, force=args.force)
         build_lexicon(home, language, report=_say)
 
     held = lexicon_coverage(home)

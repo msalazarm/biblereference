@@ -104,24 +104,37 @@ def main() -> int:
         rows.append({**one, "locus": where, "status": status,
                      "match": found or suppressed or gated})
 
-    # Boyce's `potential` entries: loci he judged were *not* quotations. A change that buys
-    # recall by finding these has not bought recall. churchfathers' `docs/helpinghand.md`:
-    # "a gate that finds them is too loose. They are not scored as misses."
-    negatives = 0
+    # Boyce's fourth column. Stored in `golden-boyce.json` under the key `negatives`, which
+    # is a name the file has outgrown: `build_boyce_golden.py` withdrew that reading --
+    # "Potential entries are neither positives nor negatives ... they went in because a
+    # supervisor wanted them" -- and the paper itself agrees. Boyce tabulates Direct,
+    # Indirect, Partial and Potential in one table and totals all four together (Didache
+    # 18/7/19/5; Polycarp 30/10/10/5), so Potential is his weakest confidence tier and not
+    # a rejection.
+    #
+    # Read the loci and it is sharper than that. At Didache 2:2 he files Matthew 19:18 as
+    # potential beside Exodus 20:13-14, and says why: "It is impossible to know if the
+    # writer(s) were referencing Exodus, Deuteronomy, or Matthew. All three read
+    # identically." That is a statement about which *address* to print for words that are
+    # certainly being quoted -- the same thing `alternates` exists to say.
+    #
+    # So this is counted and reported, and it is not subtracted from anything. A match here
+    # is agreement with the supervisor rather than an error.
+    potentials = 0
     for one in gold.get("negatives", ()):
         if one.get("language", "grc") != "grc":
             continue
         for locus in one["loci"]:
             section = sweep.get(f'{one["work"]}|{locus}', {})
             if best_for([m for m in section.get("kept", ()) if admitted(m)], one["targets"]):
-                negatives += 1
+                potentials += 1
                 break
 
     tally = Counter(r["status"] for r in rows)
     print(f"  {len(rows)} Greek citations in the golden set")
-    print(f"    NEGATIVES matched  {negatives:>4}   of "
+    print(f"    potential matched  {potentials:>4}   of "
           f"{sum(1 for o in gold.get('negatives', ()) if o.get('language', 'grc') == 'grc')}"
-          f"   (Boyce's non-quotations; lower is better)")
+          f"   (Boyce's fourth column, not errors -- see the note in this file)")
     for name in ("found", "suppressed", "gated", "unseen"):
         print(f"    {name:<12} {tally[name]:>4}")
     print()
