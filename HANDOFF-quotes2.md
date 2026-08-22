@@ -19,11 +19,20 @@ Both leaks are now closed. Measured on your nine works with a forked copy of you
 | where we started | 75 | 38 | 96 | 2 |
 | you: `alternates` read | 77 | 46 | 86 | 2 |
 | us: `gate_first` | 81 | 38 | 90 | 2 |
-| **both together** | **83** | 45 | **81** | **2** |
+| **both together** | **83** | 45 | **81** | **4** |
 
-**+8 citations, and the negatives column does not move.** None of that recall is bought from
-precision: the twenty loci Boyce marked as *not* quotations are matched exactly as often as
-before, and they are the same two.
+**+8 citations for one false locus.** `gate_first` alone costs nothing on the negatives — two
+before, the same two after. The combination costs two *rows*, which are one question written
+twice: Didache 2.2 → MAT 19:18 at slots `2:2a` and `2:2b`, the same duplicate-row shape your
+positives have (19 negative rows, 18 independent questions).
+
+That one locus is worth looking at before you decide it is an error. It is matched through
+`ROM 13:9`'s alternates holding `MAT 19:18`. Didache 2.2 is the commandment list — οὐ
+φονεύσεις, οὐ μοιχεύσεις — and Romans 13:9 and Matthew 19:18 both recite it. The wording
+genuinely matches; Boyce's judgement is that the Didache quotes the Decalogue rather than
+Matthew. That is the case `alternates` exists to express. We count it against ourselves
+anyway, because grading your own errors leniently is how a false-positive rate stops
+meaning anything.
 
 ---
 
@@ -120,6 +129,16 @@ frequent noun in the corpus.
 **Profiles are built and unread.** 34,658 profiles, 1,074,060 readings, and `profile_chain`
 has no caller in `src/`. They carry family members as witnesses, so they inherit the gap
 above.
+
+**`score_boyce_now.py` could not see `GREEK`** — fixed on the branch. It spelled the Greek
+settings out twice, once for the local searcher and once for the remote one, so `GREEK` was
+where the tuning was *described* and that function was where it was *applied*. Adding
+`gate_first` to `GREEK` reached neither branch: a setting that exists and cannot be switched
+on, which is the same fault we spent the night finding three of on our side. `_TUNING`'s own
+comment is the argument against it — *"named rather than inlined so that a choice is a
+statement in one place instead of an absence in two."* Both branches now build from `GREEK`;
+`--floor` and `--concave` still override, since those are the tool's questions rather than
+the language's.
 
 **Your denominator is sound** — details in `review/filing-and-parts-2026-08-19.md`. 226 rows,
 209 Greek, 17 Latin; two pairs are duplicate questions, so 209 rows and 207 independent ones.

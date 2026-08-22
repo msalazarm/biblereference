@@ -27,7 +27,8 @@ because the order they came in is the argument.*
 > winner by something unrelated to it, so **a match that would clear the gate is deleted for
 > one that will not**, and the span is then discarded by the gate that would have kept it.
 > Letting the gate-clearing match win takes **found from 75 to 81, and to 83 once alternates
-> are read — with Boyce's own twenty non-quotations matched exactly as often as before.**
+> are read.** Gate-first alone costs nothing on Boyce's own non-quotations; the combination
+> costs **one** of them, so the trade is eight citations for one false locus.
 
 ---
 
@@ -433,13 +434,25 @@ arbitration can be told what the gate will say.
 | `-coverage` (§4.1) | 69 | 44 | 96 | 2 of 19 |
 | `covering_rivals` (§4.2) | 75 | 38 | 96 | 2 of 19 |
 | **gate-first** | **81** | 38 | **90** | **2 of 19** |
-| **gate-first, alternates read** | **83** | 45 | **81** | **2 of 19** |
+| **gate-first, alternates read** | **83** | 45 | **81** | **4 of 19** |
 
-**Six citations from the arbitration alone, eight with the consumer reading `alternates`,
-and the false-positive column does not move.** That last column is Boyce's own `potential`
-entries — twenty loci he judged were *not* quotations, so a change that bought recall by
-finding them would have bought nothing. It matches two before and two after, and they are
-the same two.
+That last column is Boyce's own `potential` entries — loci he judged were *not* quotations,
+so recall bought by finding them is not recall. **Gate-first alone costs nothing there: two
+before, the same two after.** The combined row does move, and it is the one number in this
+document that goes the wrong way, so it is worth stating exactly.
+
+**The cost is one locus, not two.** Both new rows are Didache 2.2 → MAT 19:18, and they are
+the same question written twice — slots `2:2a` and `2:2b`, the duplicate-row problem §2.5
+found among the positives, present among the negatives too (19 rows, 18 independent
+questions). So the trade is **eight citations for one false locus.**
+
+**And that locus is the honest kind.** It is matched through `ROM 13:9`'s alternates holding
+`MAT 19:18`. Didache 2.2 is the commandment list — οὐ φονεύσεις, οὐ μοιχεύσεις — and Romans
+13:9 and Matthew 19:18 both recite it. The words genuinely match; what Boyce is judging is
+that the Didache is quoting the Decalogue rather than Matthew. That is precisely the case
+`alternates` exists to express, and counting it as a false positive is a statement about
+addresses rather than about wording. It is still counted here, because grading one's own
+errors leniently is how a false-positive rate stops meaning anything.
 
 Didache 1.4 under the shipped option:
 
