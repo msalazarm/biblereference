@@ -119,7 +119,17 @@ _NT: Final = (
     "2PE 1JN 2JN 3JN JUD REV"
 ).split()
 
-_APPENDIX: Final = "1ES 2ES MAN 3MA 4MA PS2 PSS ODA ENO JUB EZA JSA JDB TBS SST BLT DNT".split()
+# `JSA` was removed 2026-08-22. Joshua A is Rahlfs' Alexandrinus column, printed against
+# Vaticanus for the place-name lists in Joshua 15/18/19 -- not a freestanding book. It held
+# zero verses, no corpus mapped to it, it had no alias, and Swete's own versification file
+# carries zero `Jsa` references, while `lxx`/`org`/`eng` each declared it as a full
+# 24-chapter Joshua because the Paratext standard clones the shape of `JOS`. A declaration
+# nothing can fill is a gap someone will keep trying to close.
+#
+# `ODS` is the Odes of Solomon, a first- or second-century hymn collection surviving mainly
+# in Syriac. It is *not* `ODA`, which is the biblical Odae -- the canticles a Greek Psalter
+# appends -- and the two are separate texts that a shared code would silently conflate.
+_APPENDIX: Final = "1ES 2ES MAN 3MA 4MA PS2 PSS ODA ODS ENO JUB EZA JDB TBS SST BLT DNT".split()
 
 _CANON_OF: Final[dict[str, Canon]] = {
     **{c: Canon.HEBREW for c in _HEBREW},
@@ -135,7 +145,7 @@ CANONICAL_ORDER: Final[tuple[str, ...]] = tuple(
     "2MA JOB PSA PRO ECC SNG WIS SIR ISA JER LAM BAR LJE EZK DAN DAG S3Y SUS BEL HOS JOL "
     "AMO OBA JON MIC NAM HAB ZEP HAG ZEC MAL MAT MRK LUK JHN ACT ROM 1CO 2CO GAL EPH PHP "
     "COL 1TH 2TH 1TI 2TI TIT PHM HEB JAS 1PE 2PE 1JN 2JN 3JN JUD REV 1ES 2ES MAN 3MA 4MA "
-    "PS2 PSS ODA ENO JUB EZA JSA JDB TBS SST BLT DNT".split()
+    "PS2 PSS ODA ODS ENO JUB EZA JDB TBS SST BLT DNT".split()
 )
 
 _ORDER_INDEX: Final[dict[str, int]] = {c: i for i, c in enumerate(CANONICAL_ORDER)}
@@ -241,10 +251,12 @@ _TITLES: Final[dict[str, str]] = {
     "PS2": "Additional Psalms",
     "PSS": "Psalms of Solomon",
     "ODA": "Odes",
+    # The canticles a Greek Psalter appends, above; Solomon's hymn collection, here. Two
+    # different texts, and the near-identical codes are the reason the titles say so.
+    "ODS": "Odes of Solomon",
     "ENO": "Enoch",
     "JUB": "Jubilees",
     "EZA": "4 Ezra (Apocalypse)",
-    "JSA": "Joshua A",
     "JDB": "Judges B",
     "TBS": "Tobit (Sinaiticus)",
     "SST": "Susanna (Theodotion)",
@@ -425,6 +437,10 @@ _COMMON: Final[dict[str, str]] = _expand(
         "Psalm 151|Ps151|Ps 151|Ps2": "PS2",
         "Psalms of Solomon|Pss Sol|Pss": "PSS",
         "Odes|Oda|Ode": "ODA",
+        # Spelled out in full, and no bare `Ods`. "Odes" alone already means the biblical
+        # Odae above, and a reader who writes it means the canticles far more often than
+        # Solomon's hymns; an alias that guessed the other way would be wrong silently.
+        "Odes of Solomon|Ode of Solomon|Odes Sol": "ODS",
         "Enoch|1 Enoch|Eno": "ENO",
         "Jubilees|Jub": "JUB",
         "Daniel Theodotion|Theodotion Daniel|Dnt": "DNT",

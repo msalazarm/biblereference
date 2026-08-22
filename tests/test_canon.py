@@ -11,6 +11,7 @@ from biblereference.canon import (
     UnknownBookError,
     book_canon,
     book_title,
+    is_known,
     normalize_book,
     resolve_book,
 )
@@ -177,8 +178,30 @@ def test_the_additional_psalms_are_no_longer_a_single_chapter() -> None:
 
 def test_every_ordered_book_has_a_title_and_a_canon() -> None:
     for book in CANONICAL_ORDER:
-        assert book_title(book) != book or book in {"EZA", "JSA"}
+        assert book_title(book) != book, f"{book} has no title and so prints as its code"
         assert isinstance(book_canon(book), Canon)
+
+
+def test_the_two_odes_are_different_books() -> None:
+    """`ODA` is the biblical Odae -- the canticles a Greek Psalter appends -- and `ODS` is
+    Solomon's hymn collection. The codes are one letter apart and the texts are unrelated,
+    so the aliases must not drift into each other: plain "Odes" means the canticles, which
+    is what a reader writing it almost always means."""
+    assert resolve_book("Odes") == "ODA"
+    assert resolve_book("Ode") == "ODA"
+    assert resolve_book("Odes of Solomon") == "ODS"
+    assert book_title("ODA") != book_title("ODS")
+
+
+def test_joshua_a_is_not_a_book_this_library_knows() -> None:
+    """Removed 2026-08-22. Joshua A is Rahlfs' Alexandrinus column for the place-name lists
+    in Joshua 15/18/19, not a freestanding book: it held zero verses, no corpus mapped to
+    it, it had no alias, and Swete's own versification file carries zero `Jsa` references --
+    while three systems declared it as a full 24-chapter Joshua because the standard clones
+    the shape of `JOS`. Those upstream declarations remain, which is fine: the vendored data
+    models more books than this library does, exactly as it does for `LAO` and `6EZ`."""
+    assert not is_known("JSA")
+    assert "JSA" not in CANONICAL_ORDER
 
 
 # --------------------------------------------------------------------------------------
