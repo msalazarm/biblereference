@@ -96,10 +96,14 @@ _OTHER: Final = {
     # switched on answering as though it had been.
     "inflected",
     "gate",
-    # The two opt-in tiers, by the same reasoning: both exist to be *priced* by a caller
+    # The opt-in tiers, by the same reasoning: each exists to be *priced* by a caller
     # on their own corpus, and a tier nobody can switch on from the network cannot be.
     "concave",
     "itacised",
+    # `covering_rivals` fills `alternates` with a rival explaining as much of the span as
+    # the winner. The caller who most needs it sweeps over this API, so leaving it local
+    # would be the fault above rather than caution.
+    "covering_rivals",
     "seed_mask",
     "recovered",
     "ppmi",
@@ -219,6 +223,8 @@ def search_options(
         options["concave"] = _flag("concave", params["concave"][0])
     if params.get("itacised"):
         options["itacised"] = _flag("itacised", params["itacised"][0])
+    if params.get("covering_rivals"):
+        options["covering_rivals"] = _flag("covering_rivals", params["covering_rivals"][0])
     if params.get("seed_mask"):
         options["seed_mask"] = _flag("seed_mask", params["seed_mask"][0])
     if params.get("recovered"):

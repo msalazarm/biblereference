@@ -649,10 +649,21 @@ def test_a_span_follows_the_verse_over_a_word_the_quotation_omits() -> None:
     assert _matched_span(query, _tokens(ARCHAIC["JHN 3:16"])) == (0, 11)
 
 
-def _match(passage: str, span: tuple[int, int], similarity: float) -> Match:
+def _match(
+    passage: str, span: tuple[int, int], similarity: float, *, coverage: float | None = None
+) -> Match:
     return Match(
         parse_reference(passage),
-        (Witness("archaic", "Archaic", "", similarity, 1611, similarity),),
+        (
+            Witness(
+                "archaic",
+                "Archaic",
+                "",
+                similarity,
+                1611,
+                similarity if coverage is None else coverage,
+            ),
+        ),
         span=span,
         quoted="",
     )
@@ -671,6 +682,47 @@ def test_two_readings_of_the_same_words_are_one_record_with_an_alternate() -> No
     (only,) = kept
     assert str(only.passage) == "PSA 14:1"
     assert [str(p) for p in only.alternates] == ["PSA 53:1"]
+
+
+def test_a_rival_covering_more_is_kept_though_it_scores_lower_on_similarity() -> None:
+    """Didache 1.4, and the reason `_TIE` alone was the wrong gate for keeping a rival.
+
+    The father strings four sayings together. `MAT 5:39-42` answers the whole span at a
+    ten-word run; `LUK 6:29` answers two thirds of it in four words. Similarity is
+    symmetric, so the four-verse passage is marked down for the three verses he did not
+    quote and lands 0.093 below -- outside the tie window, and so deleted without even
+    becoming an alternate. The citation Boyce marked went with it.
+
+    Coverage asks what is actually being asked. The winner does not change: `LUK 6:29`
+    still sorted first and is still what this reports.
+    """
+    winner = _match("LUK 6:29", (72, 123), 0.387, coverage=0.667)
+    covers_more = _match("MAT 5:39-42", (68, 123), 0.294, coverage=1.0)
+    (only,) = _without_overlaps([winner, covers_more], covering_rivals=True)
+    assert str(only.passage) == "LUK 6:29"
+    assert [str(p) for p in only.alternates] == ["MAT 5:39-42"]
+
+
+def test_the_covering_rival_is_not_kept_unless_it_is_asked_for() -> None:
+    """Opt-in, because it fills a field a default scan leaves empty."""
+    winner = _match("LUK 6:29", (72, 123), 0.387, coverage=0.667)
+    covers_more = _match("MAT 5:39-42", (68, 123), 0.294, coverage=1.0)
+    (only,) = _without_overlaps([winner, covers_more])
+    assert str(only.passage) == "LUK 6:29"
+    assert only.alternates == ()
+
+
+def test_a_rival_covering_less_and_scoring_lower_is_still_dropped() -> None:
+    """The other side of it, so the rule is a rule and not an amnesty.
+
+    A rival that neither scores within the tie window nor explains as much of the span is
+    what the suppression exists to remove, and it is still removed.
+    """
+    winner = _match("LUK 6:29", (72, 123), 0.9, coverage=0.9)
+    weaker = _match("MAT 5:39-42", (68, 123), 0.4, coverage=0.5)
+    (only,) = _without_overlaps([winner, weaker], covering_rivals=True)
+    assert str(only.passage) == "LUK 6:29"
+    assert only.alternates == ()
 
 
 def test_one_passage_read_as_two_barely_overlapping_spans_is_one_record() -> None:

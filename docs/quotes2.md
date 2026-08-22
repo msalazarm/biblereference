@@ -1,14 +1,15 @@
 # The quotations we already found
 
-*A design for the second generation of quotation detection, 2026-08-21. Companion to
-`quotes.md`, which remains the standing design; this document corrects one of its premises
-and adds one retrieval channel.*
+*A design for the second generation of quotation detection, 2026-08-21/22. Companion to
+`quotes.md`, which remains the standing design; this document corrects one of its premises,
+retires three of its own proposals, and adds one retrieval channel.*
 
 *Every number below was measured on this machine against the live library at fold 8, and
 each names the command or file it came from. Where a measurement in `quotes.md`, in
 `churchfathers/boycesofar.md`, or in an earlier pass of my own is contradicted here, the
-contradiction is stated rather than quietly fixed — §1 and §10 both correct measurements I
-made myself and reported before checking them.*
+contradiction is stated rather than quietly fixed. §1, §4 and §10 each correct something I
+measured, reported, or proposed and then had to withdraw; the withdrawals are left in place
+because the order they came in is the argument.*
 
 > **The finding.** This document was commissioned to design a new way to retrieve 96
 > citations that `boycesofar.md` reports as never retrieved. Swept and counted, **the 96 is
@@ -19,6 +20,12 @@ made myself and reported before checking them.*
 > last group needs a new retrieval idea. **The new channel is still worth building — it is no
 > longer the first thing to build, and nothing should be measured until the accounting is
 > fixed, or it will take credit for work the library already does.**
+>
+> **On how to fix the first group I was wrong three times, and §4 records all three.** The
+> answer is not a better statistic for picking the winner, nor keeping the loser, nor reading
+> the loser downstream. It is that overlap suppression runs *before* the gate and picks its
+> winner by something unrelated to it, so **a match that would clear the gate is deleted for
+> one that will not**, and the span is then discarded by the gate that would have kept it.
 
 ---
 
@@ -58,12 +65,13 @@ least ten more are demonstrably reported and never read (§2.2, measured on chur
 own shipped file). So before designing anything new, §2 asks a different question: **when
 the library finds the verse and the ledger says `unseen`, where does the answer go?**
 
-It turns out to go to two different places, one in each project, and neither of them is the
-matcher.
+It turns out to go to three different places — one in our matcher, one in their scorer, and
+one in an index neither project reads at the moment it would matter — and none of the three
+is a failure to retrieve.
 
 ---
 
-## 2. P0 — the answer is found and then discarded, twice
+## 2. P0 — the answer is found, and then three things lose it
 
 ### 2.1 Our side: overlap suppression deletes the best answer
 
@@ -107,6 +115,12 @@ This is the failure family the project keeps meeting, and `SETUP.md` already has
 for it: **"a measurement that returned a confident answer to a question it was not actually
 asking."** Nothing errors here either. A value is produced, it is plausible, and the right
 answer is deleted to make room for it.
+
+**Read §4.1 before acting on this section.** The obvious remedy — arbitrate on coverage
+instead — was implemented, swept over all nine works, and **lost six citations that are
+credited today**. Similarity is the wrong statistic for the question and it is still the
+better one to pick a winner with, because *every* choice of winner deletes a loser, and the
+deletion is the actual defect. The diagnosis here stands; the remedy it suggests does not.
 
 ### 2.2 Their side: `alternates` is emitted and never read
 
@@ -236,7 +250,7 @@ Asked to verify the 209, I checked it and it holds up better than expected.
   and always move together. **209 rows, 207 independent questions.** The pair is also graded
   differently (`direct` and `partial`), which distorts the by-grade table slightly.
 * **The versification is already handled, and handled well.** 14 of the 256 distinct targets
-  name a verse absent from every Greek corpus we hold — twelve Psalms in Hebrew numbering
+  name a verse absent from every Greek corpus we hold — eleven Psalms in Hebrew numbering
   (`PSA 51:17`, `PSA 22:7-9`, …), Esther, and two cross-chapter ranges. Every one of the ten
   affected rows *also* names the Greek equivalent alongside it — `PSA 50:19` beside
   `PSA 51:17`, `ESG 4:15-16` beside `EST 4:15-16` — and `best_for` accepts any listed
@@ -287,94 +301,180 @@ still the largest single class, and it is now the only one that needs a new idea
 
 ---
 
-## 4. The fix for P0
+## 4. The fix for P0 — and the constraint that decides its shape
 
-Three changes, each small, each independently testable.
+There are two ways to stop deleting the right answer, and the choice between them is not
+ours alone to make. `tests/test_regression.py` states the standing agreement:
 
-**4.1 Arbitrate on the question being asked.** `_without_overlaps` has no comparison step to
-adjust: it is first-come-wins over whatever order it is handed, and the winner is therefore
-decided entirely by the sort one line above it —
+> *"The consumer this exists for holds **513,047 findings** resting on the present
+> behaviour, and asked for one thing above every feature: that a change improving recall
+> **must not alter a single existing match**, because discovering what moved would mean
+> re-adjudicating half a million records."*
+
+That rules on the two options directly.
+
+### 4.1 Change the winner — proposed, measured, and refused
+
+`_without_overlaps` has no comparison step to adjust: it is first-come-wins over whatever
+order it is handed, so the winner is decided entirely by the sort one line above it —
 
 ```python
 matches.sort(key=lambda m: (-m.similarity, m.span or (0, 0)))   # search.py:2877
 return self._decorate(_without_overlaps(matches), ...)
 ```
 
-So the change is to that key: rank by coverage first, similarity second. The match
-accounting for more of the father's words then wins the span. This is not a new statistic —
-`coverage` is already computed, already carried on `Match`, already documented as the
-measure of *whether this is a quotation*, and already used for exactly this purpose one
-function away in `_grow` ("Growth is judged on coverage, not similarity", search.py:2464).
+Rank by coverage first and the match accounting for more of the father's words takes the
+span. On Didache 1.4 that is plainly better: `MAT 5:39-42` wins, `LUK 6:29` becomes its
+alternate, and the locus goes from crediting three of Boyce's five targets to four.
 
-**4.2 Demote rather than delete.** A rival at *different coordinates* that explains the
-words at least as well as the winner is recorded as an alternate regardless of the
-similarity gap. The `alternates` machinery, the `_merge_passages` call and the `to_dict`
-field all exist; only the `_TIE` cutoff stands between them and this case. A fixed
-similarity window cannot be the right gate here anyway, because similarity gaps are not
-comparable across targets of different length — which is the same length bias as §2.1,
-appearing a second time.
+**Swept over all nine works, it is worse.** Both orderings, same passages, same gate:
 
-**4.3 Say so downstream.** `alternates` already ships. churchfathers consults it (§9).
+| sort key | found | suppressed | found + suppressed | gated | unseen |
+|---|---|---|---|---|---|
+| `-similarity` — today | **75** | 13 | 88 | 37 | 84 |
+| `-coverage` — this proposal | **69** | 19 | 88 | 37 | 84 |
 
-**4.1, measured on the case rather than predicted.** Re-sorting by coverage and rescanning
-Didache 1.4:
+Coverage-first **loses six citations that are credited today**, and they land in the
+suppressed column rather than disappearing: the same six are still generated, still deleted,
+just deleted the other way round. Didache 1.4 was a real gain and an unrepresentative one.
 
-| | what the scan reports | Boyce's five credited |
-|---|---|---|
-| today, `-similarity` | LUK 6:29 · MAT 5:40-41 · LUK 6:29-30 | **3 of 5** |
-| `-coverage` | **MAT 5:39-42** (alternate: LUK 6:29) · MAT 5:40-41 · LUK 6:29-30 | **4 of 5** |
+**The identity in the third column is the finding.** `found + suppressed` is 88 under both
+orderings, and `gated` and `unseen` do not move at all. **The sort key does not change what
+the matcher can reach. It changes only which of the reachable it destroys** — and the
+symmetric similarity it uses today happens to destroy six fewer of Boyce's than coverage
+does.
 
-MAT 5:39-42 takes the span, and LUK 6:29 — the match that used to delete it — is preserved
-as its alternate, so **nothing is lost to gain it**. The locus goes from crediting three of
-Boyce's targets to four; only 1PE 2:11 is left, and that one is visible at the floor. The
-same three matches are still reported, and one of them is now the better answer.
+So the instinct behind §2.1 was right about the diagnosis and wrong about the remedy. The
+defect is not that the wrong statistic picks the winner. **The defect is that picking a
+winner deletes the loser at all**, and no choice of statistic fixes that, because 88 are
+reachable and only 75 can be first.
 
-**How 4.1 and 4.2 relate.** On this case 4.1 subsumes 4.2: the rival is retained
-automatically, because with MAT 5:39-42 as winner the similarity gap runs the *other* way
-and falls inside `_TIE`. 4.2 is what covers the case where it does not — two passages of
-similar coverage and dissimilar length — and it should be written only after 4.1 is measured
-across the whole set, since 4.1 may leave little for it to do.
+This also settles a question §4.2 would otherwise have had to negotiate. Changing the sort
+would have moved reported matches under an agreement that forbids it — and it turns out
+there was nothing on the other side of that trade worth asking for.
 
-**The risk 4.1 carries.** Coverage as the primary sort key is a global behaviour change,
-touching every span where two passages compete, not only the catenae. That is what
-`tests/data/scan-golden.json` exists to catch, and it is why 4.1 ships alone and measured
-before 4.2 or anything in §5 is written. The sweep in §10 runs both orderings over all nine
-works so the change is priced on the full set and on the control corpus, not on one locus.
+### 4.2 Keep the loser — implemented, swept, and it buys nothing
 
-**What must not move.** `tests/data/scan-golden.json` is the guard: this change may add
-alternates and may reorder rivals within a span, and may not change which passages are
-reported for any case already correct. Any movement there is a regression and stops the
-change.
+If the sort cannot be improved (§4.1), the deletion itself is what to change. A rival at
+different coordinates covering at least as much of the span as the winner is kept as an
+alternate whatever their similarities look like — `_explains_as_well`, one line:
+`match.coverage >= winner.coverage`. The winner does not change, so no reported passage
+moves and `tests/data/scan-golden.json` passes untouched.
+
+It ships opt-in — `Searcher(covering_rivals=True)`, and `?covering_rivals=` over HTTP —
+because two tests failed on the first attempt and the important one says why:
+
+> `test_alternates_stay_empty_when_the_feature_was_not_asked_for` — *"Filling a field that
+> has always been empty changes what every existing scan returns, and half a million
+> findings downstream rest on that not happening by surprise."*
+
+Not moving a reported passage is not the same as not changing what a scan returns, and "it
+only adds" is an argument this project has already considered and refused.
+
+**Swept over all nine works, it recovers nothing.**
+
+| | found | gated | unseen | alternates emitted |
+|---|---|---|---|---|
+| today, alternates unread | 75 | 38 | 96 | 90 |
+| today, alternates read | 77 | 38 | 94 | 90 |
+| **tier on, alternates read** | **77** | **38** | **94** | **284** |
+
+The tier triples the alternates — 90 to 284, on 120 matches instead of 71 — and **not one of
+the new ones is a citation Boyce marked.** It does exactly what it was written to do and
+that turns out not to be the thing worth doing.
+
+### 4.3 Why — and the defect all three attempts were circling
+
+Didache 1.4 with the tier on, which is the case §2.1 was built from:
+
+```
+LUK 6:29      run=4  bits=15.8   admitted=False   alternates=['MAT 5:39-42']
+MAT 5:40-41   run=6  bits=50.2   admitted=True    alternates=[]
+LUK 6:29-30   run=3  bits=43.2   admitted=True    alternates=[]
+```
+
+The tier worked: `MAT 5:39-42` is on the alternate list. **And it is on the alternate list of
+a match the gate throws away.** `LUK 6:29` carries four words and 15.8 bits and clears none
+of the three gates. `MAT 5:39-42` carries ten words and 35.3 bits and clears the first one
+outright.
+
+So the sequence is:
+
+1. suppression picks a winner on **similarity**, a statistic with no relation to the gate;
+2. it deletes `MAT 5:39-42` — which would have passed — in favour of `LUK 6:29`, which will
+   not;
+3. the gate then discards `LUK 6:29`, and everything hanging off it goes too.
+
+**A gate-passing match is deleted for a gate-failing one, and the span ends up empty.** That
+is the defect, and it is why none of the three attempts reached it: §4.1 changed the
+statistic, §4.2 changed what happens to the loser, §2.2 changed who reads the loser — and
+all three left the winner being chosen by something that does not predict survival.
+
+It also explains §4.1's six lost citations. Coverage-first reshuffled winners with no more
+regard for the gate than similarity had, so it traded six survivors for none.
+
+**The change this implies** is that a match clearing the gate should win a contested span
+over one that does not, before either similarity or coverage is consulted. Suppression runs
+before gating and `Gate.admits` needs only the four axes every `Match` already carries, so
+the arbitration can be told what the gate will say.
+
+**One wrinkle, and it decides whose change this is.** `LUK 6:29` is an *exact* match, and
+the library does not gate exact matches — `self._gates` is consulted inside `_score_cluster`
+for graded ones only (search.py:2831), so a graded match failing the gate never reaches
+suppression at all, while an exact one always does. The gate that kills `LUK 6:29` is
+churchfathers' own `admits`, applied after the fact and deliberately: *"Nineteen of the
+twenty errors measured in Boyce's nine works were exact matches"*, including a liturgical
+doxology worth 16.8 bits that no run threshold can refuse.
+
+So the library cannot simply prefer "the match that will clear the gate", because on its own
+terms `LUK 6:29` clears everything — it is exact. What it can do is prefer, among rivals for
+one span, the one that would clear the gates *it was configured with*, applied to exact and
+graded alike. That is a real option with a real argument behind it and it is not today's
+behaviour, which is why it is measured before it is proposed.
+
+**Nothing in this section should be acted on until that number is in**, including the tier,
+which is written, shipped opt-in, and currently earns its place only as the instrument that
+found this.
 
 ---
 
-## 5. Class B — more than one citation in one span
+## 5. Class B — more than one citation in one span, and it is 17
 
-The suppression fix recovers the case where the rivals are *different passages over the same
-words*. It does not recover the case where a father quotes MAT 5:39 **and** MAT 5:41 in one
-breath, because those are two spans and the scan returns the better one.
+§4 recovers the case where two *different passages* answer the same words. It does not
+recover the case where a father quotes MAT 5:39 **and** MAT 5:41 in one breath, because
+those are two spans and the scan returns the better one. Measured, that is **17 of 209**:
+loci where the scan reports an admitted match and Boyce names a second citation there that
+it never reaches. 1 Clement 65.2 wants both 2CO 13:13 and JUD 1:25; Polycarp 2.1 wants both
+1PE 1:21 and 2TI 4:1; 1 Clement 60.3 wants three verses of Psalms at once.
 
-The instrument for this already exists and is not used: `_claims` distinguishes *the same
+The instrument for this already exists and is half-used. `_claims` distinguishes *the same
 passage read as two spans* (one result) from *two quotations written one after another*
-(two results) by asking whether a different passage claims **most** of the shorter span.
-The threshold is `shared * 2 > min(length)` — a bare majority. For an interleaved catena the
-shared fraction sits just over half and the second citation is deleted as a duplicate.
+(two results) by asking whether a different passage claims **most** of the shorter span —
+`shared * 2 > min(length)`, a bare majority. Its own docstring names the case it is
+protecting: *"Two quotations written one after another. Neighbours, not rivals. They share
+the space between them and sometimes a word, and a bare interval intersection — which this
+used to be — deleted the second of them for it."* That fix was made for quotations that
+**adjoin**. A catena interleaves them instead, the shared fraction lands just over half, and
+the second citation is deleted as a duplicate by the very test written to save it.
 
-**Proposal.** Where two matches are at different coordinates *and both clear the gate on
-their own axes*, the majority test is not sufficient grounds to delete one. Report both,
-each with its own span, and let the consumer decide. This is the two-stage doctrine the
-project already follows: the retriever proposes, the gate disposes, and deletion inside the
-retriever is a decision taken in the wrong place.
+**Proposal.** Where two matches are at different coordinates *and each clears the gate on
+its own axes*, a bare majority overlap is not sufficient grounds to delete one. Report both,
+each with its own span, and let the consumer dispose. This is the two-stage doctrine the
+project already follows: the retriever proposes, the gate disposes, and a deletion inside
+the retriever is a decision taken in the wrong place.
 
-Priced in §8 like everything else — this necessarily raises the number of claims per span,
-and the control corpus decides whether it may ship.
+**But it is not shippable the way §4.2 is.** Reporting two matches where one was reported
+adds a finding rather than a field, so it moves what a consumer holds — the same agreement
+that governs §4.1 governs this. It must be offered, measured on the control corpus and on
+§8's named terrain first, and it is the change most exposed to both: a catena rule that
+fires on Esther's rote prayers will fire often.
 
 ---
 
 ## 6. Class C — the diagnosis, and four prerequisites
 
-For the residue that returns nothing, `quotes.md`'s analysis stands and this section only
-adds measurements. The one-line diagnosis:
+For the **47** that produce no candidate at all, `quotes.md`'s analysis stands and this
+section only adds measurements. The one-line diagnosis:
 
 **The terms carrying the surprisal in a retelling live in a different index from the terms
 the matcher searches, and the index that holds them is one form deep in a language that
@@ -615,17 +715,25 @@ Sent at the end of this work, not before — but recorded now so it is not lost.
 
 1. **Consult `alternates` in `best_for`.** Measured on their own shipped file: 96 → 86
    unseen, 75 → 77 found, 38 → 46 gated. Four lines. It is the highest-value change in this
-   document that costs nobody any new computation, and it is entirely on their side.
-2. **`parts()` mis-parses cross-chapter ranges.** `EXO 14:26-15:5` → `EXO 14:26-155`. Inert
+   document that costs nobody any new computation, and it is entirely on their side. Paired
+   with §4.2 on ours — an opt-in tier they switch on in the sweep — it reaches more of
+   class A still, and **neither half moves a reported match**. The 513,047 findings they
+   asked us to protect are untouched by both.
+2. **Add `"covering_rivals": True` to `GREEK` in `scan.py`** when they want the §4.2 tier.
+   It travels: their `_encode` passes an unrecognised boolean straight through as Python's
+   `True`, and the server's `_flag` lowercases before comparing, so no special-casing is
+   needed the way `inflected` has one. Off by default, so their present sweep is unaffected
+   until they ask for it.
+3. **`parts()` mis-parses cross-chapter ranges.** `EXO 14:26-15:5` → `EXO 14:26-155`. Inert
    today because every affected row carries a correctly parsed alternative; a latent false
    positive.
-3. **Two golden rows are duplicate questions** (Didache 1.3a/1.3c, 2.7a/2.7b). Worth a note
+4. **Two golden rows are duplicate questions** (Didache 1.3a/1.3c, 2.7a/2.7b). Worth a note
    in the ledger so 209 and 207 are both explicable.
-4. **The Latin 17 are excluded silently.** Worth stating in `boycesofar.md`, since the file
+5. **The Latin 17 are excluded silently.** Worth stating in `boycesofar.md`, since the file
    holds 226 rows and the page reports 209.
 
-None of the four is a matcher change and none needs anything from us first. Item 1 can ship
-the day they read this; the other three are bookkeeping. Everything else in this document is
+None of the five is a matcher change, and only item 2 needs anything from us — the tier,
+which is written. Item 1 can ship the day they read this; items 3-5 are bookkeeping. Everything else in this document is
 ours to do, and §11's last refusal governs the order.
 
 ---
@@ -642,8 +750,10 @@ a bug in the fork. Two things are ours and not theirs:
   deleted, which their sweep cannot see because it observes `scan()`'s return value, and
   deletion happens inside it;
 * a **`--coverage-first`** switch, which is §4.1: the suppression is first-come-wins over
-  its input, so re-sorting that input *is* the change, and both orderings can be swept
-  without touching the library.
+  its input, so re-sorting that input *is* the change, and both orderings could be swept
+  without touching the library at all. That is what let §4.1 be refuted before it was
+  written, rather than after it shipped;
+* a **`--covering-rivals`** switch for the tier §4.2 adds.
 
 A note on the fork's own instrument, since this document is about instruments that answer
 the wrong question. The first version told kept from deleted with `id()`, and
@@ -672,10 +782,12 @@ Didache 1.4), §2.2 (96 → 86 on churchfathers' shipped file), §2.3 (**the ful
 priced), §2.5 (the denominator), §4.1 (3 of 5 → 4 of 5 on one locus), §6.1 (8,132 forms and
 the distribution behind them), §6.2 (73 pairs, 3 broken), §6.3 (no caller).
 
-**Pending:** the coverage-first sweep, which prices §4.1 across all nine works rather than
-one locus; and the span-level split of the remaining 81 into classes B and C. Neither
-changes what P0 is worth — that is now measured — but the second is what tells Stratum 5 how
-large its own share is, and §11's last refusal says nothing new is built until it lands.
+Also measured, and it changed the plan: **§4.1 swept over all nine works and lost six
+credited citations**, which is why §4 recommends the tier and abandons the sort change.
+
+**Pending:** the `covering_rivals` sweep, which prices §4.2 across all nine works rather than
+one locus. Nothing else in this document waits on it, and §11's last refusal says nothing
+new is built until P0 is settled and re-scored.
 
 ---
 
@@ -690,12 +802,26 @@ Unchanged from `quotes.md` §13, at Marco's direction:
 * **No promotion of PPMI to a generator** — and Stratum 5 makes it unnecessary, since the
   conjunction supplies the prior PPMI was being asked for.
 
-And one refusal this document adds:
+And four refusals this document adds, three of them learned the hard way:
 
 * **No new retrieval channel is built until P0 ships and the golden set is re-scored.**
   Otherwise a new method takes credit for citations the library already found, and is
   measured against a denominator that is wrong in its favour. The order is not negotiable
   and it is the main finding here.
+* **No change that moves a reported match ships without being offered first.**
+  `tests/test_regression.py` records why, and 513,047 findings is the number behind it. §4.1
+  would have moved them; it was measured before being offered and turned out to be worse, so
+  there was nothing to offer. Measuring first is what made that a non-conversation instead of
+  a bad trade.
+* **No field a default scan leaves empty is filled by default.** Learned the same day, from
+  a test that already said so.
+* **No fix is described as a fix before it is swept.** Three remedies for one defect were
+  proposed here and all three were wrong: a better statistic (§4.1, lost six citations), a
+  kept loser (§4.2, gained none), and a downstream reader (§2.2, the only one that helped —
+  ten citations out of `unseen`, though only two of them all the way to `found`). Each was
+  plausible, each was argued from the code, and the sweep refused two outright and cut the
+  third down. §4.3 is the fourth and is being swept before it is written up as anything but
+  a hypothesis.
 
 ---
 

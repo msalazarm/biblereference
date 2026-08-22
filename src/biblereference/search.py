@@ -1951,6 +1951,7 @@ class Searcher:
         seed_mask: bool = False,
         recovered: bool = False,
         ppmi: bool = False,
+        covering_rivals: bool = False,
         min_grade: str | None = None,
         gates: Sequence[Gate] | None = None,
         min_lemma_run: int | None = None,
@@ -2040,6 +2041,15 @@ class Searcher:
         #: reports mean the same things, but a wall refused what a cost now weighs, and
         #: what that admits on pre-Christian Greek is a measurement nobody has made yet.
         self._concave = concave
+        #: Keep a rival that covers at least as much of the span as the winner, however
+        #: far apart their similarities are. Opt-in for one reason only: it fills
+        #: `alternates` where a default scan leaves it empty, and
+        #: `test_alternates_stay_empty_when_the_feature_was_not_asked_for` says in as many
+        #: words that filling a field which has always been empty changes what every
+        #: existing scan returns. It does not move a reported passage -- but "it only adds"
+        #: is the argument this project has already refused once, and refused correctly.
+        #: See :func:`_explains_as_well`.
+        self._covering_rivals = covering_rivals
         #: The itacised second tier: spellings the lexicon does not know, re-read through
         #: the classes scribes wrote by ear. Opt-in and flagged on every match that used
         #: it, for the same pricing discipline as `concave`.
@@ -2876,7 +2886,7 @@ class Searcher:
 
         matches.sort(key=lambda m: (-m.similarity, m.span or (0, 0)))
         return self._decorate(
-            _without_overlaps(matches),
+            _without_overlaps(matches, covering_rivals=self._covering_rivals),
             windows=float(len(_offsets(len(tokens), window, stride))),
         )
 
@@ -3910,7 +3920,9 @@ def _original(words: Sequence[tuple[str, int, int]], low: int, high: int) -> str
     return " ".join(word for word, _, _ in words[low:high])
 
 
-def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
+def _without_overlaps(
+    matches: Sequence[Match], *, covering_rivals: bool = False
+) -> list[Match]:
     """Keep the best match wherever two claim the same words, recording near-ties.
 
     A sermon quoting one verse produces several overlapping candidates -- the same words
@@ -3920,6 +3932,13 @@ def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
     But a loser that scored nearly as well is not a duplicate; it is a genuine rival
     reading, and it is kept as an alternate rather than dropped. Which case it is depends
     only on how close the scores are.
+
+    With ``covering_rivals`` it also depends on how much of the span each explains, which
+    is the axis "how close are the scores" cannot see: similarity is symmetric, so a long
+    passage answering a short quotation scores low for the words the writer did not quote
+    and is dropped for a shorter rival that explains less. Off by default, because filling
+    ``alternates`` where a default scan leaves it empty is itself a change to what every
+    scan returns. See :func:`_explains_as_well`.
 
     Two quotations that merely *touch* are neither. See :func:`_claims`.
     """
@@ -3937,7 +3956,9 @@ def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
             kept.append(match)
             continue
         winner = kept[claimed]
-        if winner.similarity - match.similarity > _TIE:
+        if winner.similarity - match.similarity > _TIE and not (
+            covering_rivals and _explains_as_well(winner, match)
+        ):
             continue
         # Compared on coordinates, not on the VerseRange: a passage found in two
         # versifications that agree there is one passage, and comparing the objects made
@@ -3963,6 +3984,30 @@ def _without_overlaps(matches: Sequence[Match]) -> list[Match]:
         for index, m in enumerate(kept)
     ]
     return sorted(resolved, key=lambda m: m.span or (0, 0))
+
+
+def _explains_as_well(winner: Match, match: Match) -> bool:
+    """Whether a losing rival accounts for the quoted words at least as well as the winner.
+
+    `_TIE` alone was the wrong gate for keeping a rival, and it was wrong in one direction
+    only. It compares similarities, and similarity is symmetric -- the measure of how alike
+    two texts are, which is what names an edition. A four-verse passage answering a
+    one-clause quotation is marked down for the three verses the father did not quote, so a
+    long correct reading loses to a short one and falls outside the window on its way out.
+
+    Didache 1.4 is the case. `MAT 5:39-42` covers the whole span at a ten-word run and was
+    deleted, without becoming an alternate, in favour of `LUK 6:29` -- four words, a third
+    of the span unexplained, and 0.093 higher on symmetric similarity.
+
+    Coverage asks the question actually being asked here: *how much of what he wrote does
+    this passage account for*. A rival covering at least as much is not a duplicate of the
+    winner, whatever their similarities look like, so it is kept as an alternate.
+
+    Only the alternate list is affected. The winner is still whichever match sorted first,
+    every reported passage stands exactly as it stood, and a consumer holding findings
+    against the old behaviour finds none of them moved.
+    """
+    return match.coverage >= winner.coverage
 
 
 def _claims(winner: Match, match: Match) -> bool:

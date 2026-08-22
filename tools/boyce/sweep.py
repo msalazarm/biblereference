@@ -56,6 +56,17 @@ def main() -> int:
     parser.add_argument("--out", default="review/boyce-suppressed.json")
     parser.add_argument("--floor", action="store_true", help="collect at the floor gate")
     parser.add_argument("--workers", type=int, default=6)
+    parser.add_argument("--covering-rivals", action="store_true",
+                        help="ask the searcher for the opt-in tier that keeps a rival "
+                             "covering at least as much of the span as the winner "
+                             "(quotes2.md 4.2). Adds alternates; moves no reported passage")
+    parser.add_argument("--gate-first", action="store_true",
+                        help="let a match that clears the gate win a contested span over "
+                             "one that does not, before either similarity or coverage is "
+                             "consulted. quotes2.md 4.3: suppression runs before the gate "
+                             "and arbitrates on a statistic unrelated to it, so a "
+                             "gate-passing match is deleted for a gate-failing one and the "
+                             "span is then thrown away by the gate that would have kept it")
     parser.add_argument("--coverage-first", action="store_true",
                         help="arbitrate overlapping claims on coverage rather than on the "
                              "symmetric similarity, which is quotes2.md 4.1. Implemented "
@@ -85,12 +96,26 @@ def main() -> int:
         """
         return (str(match.passage), match.span)
 
-    def spy(matches: Any) -> Any:
+    def spy(matches: Any, **rest: Any) -> Any:
+        # `**rest` rather than a named parameter: this stands in for a library function
+        # whose signature is not this tool's to know, and the last time it was spelled out
+        # the sweep died on the first passage when an option was added.
         before = list(matches)
+        if arguments.gate_first:
+            def clears(one: Any) -> bool:
+                axes = (one.run, one.lemma_run, one.chain, one.bits)
+                if not any(axes):
+                    return True
+                return any(
+                    all(need <= have for need, have in zip(gate, axes, strict=True) if need)
+                    for gate in GATES)
+
+            before = sorted(
+                before, key=lambda m: (not clears(m), -m.similarity, m.span or (0, 0)))
         if arguments.coverage_first:
             before = sorted(
                 before, key=lambda m: (-m.coverage, -m.similarity, m.span or (0, 0)))
-        after = original(before)
+        after = original(before, **rest)
         surviving = {identity(one) for one in after}
         seen.dropped = [one for one in before if identity(one) not in surviving]
         return after
@@ -110,7 +135,8 @@ def main() -> int:
         if searcher is None:
             searcher = Searcher(
                 DataHome(), languages=["grc"], coverage=0.5,
-                min_run=lambda n: max(4, min(6, n // 2)), inflected=True, gates=gates)
+                min_run=lambda n: max(4, min(6, n // 2)), inflected=True, gates=gates,
+                covering_rivals=arguments.covering_rivals)
             local.searcher = searcher
         seen.dropped = []
         kept = searcher.scan(text)
@@ -131,6 +157,8 @@ def main() -> int:
     destination.write_text(json.dumps({
         "gates": [list(one) for one in (FLOOR if arguments.floor else GATES)],
         "coverage_first": bool(arguments.coverage_first),
+        "gate_first": bool(arguments.gate_first),
+        "covering_rivals": bool(arguments.covering_rivals),
         "sections": out,
     }, ensure_ascii=False), encoding="utf-8")
     total_kept = sum(len(v["kept"]) for v in out.values())
