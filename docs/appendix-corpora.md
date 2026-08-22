@@ -136,6 +136,13 @@ resolves, and a mistake there is silent. That is a decision to take deliberately
 the Ge'ez and Swete shapes in front of you — both of which are recorded above — and not one
 to slip in beside a corpus import at four in the morning.
 
+**Infrastructure note, 2026-08-22.** Both local search servers were restarted on the current
+library and now advertise `search_options` and accept `gate_first`. **The box at 10.0.0.182 is
+a different machine** — this one is 10.0.0.170 — and refuses ssh from here, so it still runs an
+older build; churchfathers' sweeps should use `127.0.0.1:8000` until someone with access
+updates it. The Greek corpus sweep was restarted clean under `gate_first`, setting 30,797
+findings aside into `citation_superseded`, so the language is one measurement rather than two.
+
 **The order that follows from this:**
 
 1. `PS2` → `PSA 151`, and the `S3Y` → Daniel 3 bridge. Both are mapping faults over text
