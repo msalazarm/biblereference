@@ -38,11 +38,19 @@ GATES = ((3, 0, 0, 35.0), (0, 6, 0, 25.0), (0, 0, 8, 40.0))
 _W: dict[str, Any] = {}
 
 
-def _setup(options: dict[str, bool]) -> None:
+def _setup(options: dict[str, bool], gates: tuple = GATES) -> None:
+    """Per-process state. **`gates` is a parameter and must stay one.**
+
+    The pool starts by `forkserver`, so a child re-imports this module and sees the constant
+    below rather than anything `main` assigned to it. A first version of `--gate` set a
+    module-level global in the parent and printed the new gate confidently while every
+    worker went on applying the old one -- three runs of the strict gate, reported as a
+    measurement of a relaxed one. `initargs` is the only thing that crosses.
+    """
     from biblereference.search import Gate, Searcher
     from biblereference.store import DataHome
 
-    _W["gates"] = [Gate(*one) for one in GATES]
+    _W["gates"] = [Gate(*one) for one in gates]
     _W["searcher"] = Searcher(
         DataHome(),
         languages=["grc"],
@@ -69,10 +77,24 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--words", type=int, default=120_000)
     parser.add_argument("--workers", type=int, default=14)
+    parser.add_argument("--gate", action="append", default=[],
+                        help="run:lemma_run:chain:bits, repeatable. Replaces GATES for this "
+                             "run. A gate is the consumer's to set, and the price of moving "
+                             "one is ours to measure -- relaxing the lemma-run arm from 6 to "
+                             "4 reaches eight golden citations, and this says what it costs "
+                             "on Greek nobody was quoting")
     arguments = parser.parse_args()
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from calibrate_inflected import control_text
+
+    gates_wanted = GATES
+    if arguments.gate:
+        gates_wanted = tuple(
+            tuple(float(x) if i == 3 else int(x) for i, x in enumerate(one.split(":")))
+            for one in arguments.gate
+        )
+    print(f"gates: {gates_wanted}", flush=True)
 
     passages, words = control_text(arguments.words)
     print(f"{len(passages):,} control passages, {words:,} words, "
@@ -88,7 +110,7 @@ def main() -> int:
         books: Counter = Counter()
         done = 0
         with ProcessPoolExecutor(
-            max_workers=arguments.workers, initializer=_setup, initargs=(options,)
+            max_workers=arguments.workers, initializer=_setup, initargs=(options, gates_wanted)
         ) as pool:
             for claimed in pool.map(_scan, passages, chunksize=8):
                 books.update(claimed)
