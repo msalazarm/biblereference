@@ -18,8 +18,11 @@ from __future__ import annotations
 
 import argparse
 import sys
+import threading
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
 
 GATES = ((3, 0, 0, 35.0), (0, 6, 0, 25.0), (0, 0, 8, 40.0))
 
@@ -27,6 +30,12 @@ GATES = ((3, 0, 0, 35.0), (0, 6, 0, 25.0), (0, 0, 8, 40.0))
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--words", type=int, default=200_000)
+    parser.add_argument("--workers", type=int, default=8,
+                        help="threads. A searcher holds a sqlite connection and sqlite "
+                             "refuses cross-thread use, so each thread builds its own -- "
+                             "the same pattern sweep.py uses. Single-threaded this had not "
+                             "finished one of three passes over 971 passages in half an "
+                             "hour, which is long enough that the veto stops being run")
     arguments = parser.parse_args()
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -45,24 +54,41 @@ def main() -> int:
         ("gate_first", {"gate_first": True}),
         ("gate_first + covering_rivals", {"gate_first": True, "covering_rivals": True}),
     ):
-        found = 0
         books: Counter = Counter()
-        with Searcher(
-            DataHome(),
-            languages=["grc"],
-            coverage=0.5,
-            min_run=lambda n: max(4, min(6, n // 2)),
-            inflected=True,
-            gates=gates,
-            **options,
-        ) as searcher:
-            for text in passages:
-                for match in searcher.scan(text):
-                    axes = (match.run, match.lemma_run, match.chain, match.bits)
-                    if any(axes) and not any(one.admits(*axes) for one in gates):
-                        continue  # the consumer gates exact matches too; so does this
-                    found += 1
-                    books[match.passage.book] += 1
+        lock = threading.Lock()
+        local = threading.local()
+
+        # `options` and `local` bound as defaults rather than closed over: the pool below
+        # finishes inside this iteration so closing over them would be safe today, and
+        # would silently stop being safe the moment anything here became lazy.
+        def searcher_here(local: Any = local, options: Any = options) -> Searcher:
+            got = getattr(local, "searcher", None)
+            if got is None:
+                got = Searcher(
+                    DataHome(),
+                    languages=["grc"],
+                    coverage=0.5,
+                    min_run=lambda n: max(4, min(6, n // 2)),
+                    inflected=True,
+                    gates=gates,
+                    **options,
+                )
+                local.searcher = got
+            return got
+
+        def consider(text: str, books: Counter = books, lock: Any = lock) -> int:
+            here: Counter = Counter()
+            for match in searcher_here().scan(text):
+                axes = (match.run, match.lemma_run, match.chain, match.bits)
+                if any(axes) and not any(one.admits(*axes) for one in gates):
+                    continue  # the consumer gates exact matches too; so does this
+                here[match.passage.book] += 1
+            with lock:
+                books.update(here)
+            return sum(here.values())
+
+        with ThreadPoolExecutor(max_workers=arguments.workers) as pool:
+            found = sum(pool.map(consider, passages))
         rates[label] = (found, books)
         print(f"  {label:<30} {found:>5} matches   "
               f"{found / (words / 1000):.2f} per 1,000 words", flush=True)

@@ -60,6 +60,14 @@ def main() -> int:
                         help="ask the searcher for the opt-in tier that keeps a rival "
                              "covering at least as much of the span as the winner "
                              "(quotes2.md 4.2). Adds alternates; moves no reported passage")
+    parser.add_argument("--scan-chapters", type=int, default=0,
+                        help="override `search._SCAN_CHAPTERS`, the number of chapters a "
+                             "document sweep scores in full. Its own comment says to raise "
+                             "it if a long document is losing quotations, and all 18 "
+                             "class-B loci hit it at 40 -- six of the citations they miss "
+                             "are nominated at ranks 84 to 163. Swept rather than changed, "
+                             "because the cost lands on every query in the library and the "
+                             "control corpus is what prices it")
     parser.add_argument("--library-gate-first", action="store_true",
                         help="ask the searcher itself for gate-first arbitration, rather "
                              "than simulating it by re-sorting. The check that the shipped "
@@ -82,6 +90,11 @@ def main() -> int:
     from biblereference import search as module
     from biblereference.search import Gate, Searcher
     from biblereference.store import DataHome
+
+    if arguments.scan_chapters:
+        # Read at call time inside `_sweep`, so setting it here reaches every searcher this
+        # process builds without the library carrying an option it has not earned yet.
+        module._SCAN_CHAPTERS = arguments.scan_chapters
 
     gates = [Gate(*one) for one in (FLOOR if arguments.floor else GATES)]
 
@@ -163,6 +176,7 @@ def main() -> int:
         "gates": [list(one) for one in (FLOOR if arguments.floor else GATES)],
         "coverage_first": bool(arguments.coverage_first),
         "gate_first": bool(arguments.gate_first),
+        "scan_chapters": arguments.scan_chapters or module._SCAN_CHAPTERS,
         "covering_rivals": bool(arguments.covering_rivals),
         "sections": out,
     }, ensure_ascii=False), encoding="utf-8")

@@ -695,29 +695,86 @@ to say about LUK 6:29, for exactly the reason the family table has nothing to sa
 **P3 depends on P4**, and the two must land in that order or P3 is measured on a table
 missing 29 books and the antitheses both.
 
-### 6.4 P4 — propose families from the text, not only from a Protestant seed list
+### 6.4 P4 — scripture quoting scripture, found the way the fathers' quotations are found
 
-§2.4's finding, scoped. `parallel_family` verifies seeds and never proposes them, so 29
-books and ~19,000 Greek verses can hold no family however alike their verses are.
+**Marco's framing, and it is the better one.** This was scoped as "propose pairs instead of
+verifying a seed list", which is the mechanism. What it actually is: **the same problem this
+library already solves for the fathers, run on scripture against itself.** Nehemiah quotes
+Deuteronomy, Chronicles quotes Kings, the Odes quote Samuel, Sirach quotes Exodus, the
+gospels quote each other. A verse family is a quotation found inside the corpus, and we own
+a quotation finder.
 
-**The change.** Add a proposal pass beside the seed pass: for each Greek verse, retrieve
-candidate parallels from the lemma index and admit a pair on the *same* `CHAIN_FLOOR = 4`
-and `BITS_FLOOR = 25.0` the seed pass already applies. The verification gate does not
-change; only the source of candidates does. That keeps the index's meaning identical — a
-family member is still a pair verified on the Greek — and removes the canon restriction
-that was never intentional.
+Doing it that way removes the canon restriction as a side effect rather than as a goal.
+`parallel_family` verifies OpenBible.info cross-references of Treasury of Scripture Knowledge
+lineage, so **29 of 93 books hold no family row at all** — the whole deuterocanon, ~19,000
+Greek verses. `1SA 2:10 ‖ ODA 3:10` are the same sixty words differing in three, and they are
+not a family because the Odes are not in a Protestant reference work. Nothing about the
+*text* was ever the problem.
 
-**Why it is safe to widen here and not elsewhere.** This index is not a match gate. A pair
-admitted here makes a finding *creditable at a second address*; it cannot invent a finding.
-The floors that keep it honest are already in place and already tuned.
+**Same language, and that is not incidental.** A family is evidence that two verses say the
+same thing in the words their own tradition used; an English translation of Sirach beside an
+English translation of Exodus tells you about the translators. This is the rule the
+versification work already established for witnesses, applied here.
 
-**Cost.** ~31,000 Greek verses retrieved against the lemma index, once, at build time. It
-belongs as a `pipeline.py` step beside the existing `parallels` step, and it must carry the
-fold stamp like every other artifact — which is exactly the omission that let
-`parallel_family` sit six folds stale earlier this month.
+#### It works — measured on a prototype
 
-**Priced: 6 of 209 golden rows directly (all currently `unseen`), and the FP terrain of §8
-gains a family defence it has never had.**
+* **`1SA 2:10 ‖ ODA 3:10` is admitted at 73 links / 265.72 bits** against floors of 4 and 25,
+  in both directions. It is the highest-scoring pair in the Odes slice. The pair was never
+  missing for want of evidence, only for want of a seed row.
+* **It reproduces what the seed list already gives us**: 27/27 of Jonah's stored pairs,
+  and 198 of 200 on a random sample once both retrieval directions are counted.
+* **Scale**: 12,641 pairs → **~43,000**. Verses carrying a family 27% → 52%.
+* **Cost**: ~160 ms/verse, ~1.6 h single-threaded over 36,705 Greek verses, shardable by
+  book. A prefilter with provable upper bounds on both chain length and bits cuts candidates
+  **10.7×** and was verified to change no result on Jonah — identical keys, identical
+  `(chain, bits)`.
+
+#### And at today's floors it is 35-40% wrong
+
+A blind read of 16 random proposal-only pairs: **6 clear false positives, 4 borderline, 6
+right.** The failure modes are the terrain Marco named at the outset of this work — rote
+formulae and logistics — arriving exactly as predicted:
+
+```
+2CH 13:2 ‖ 2KI 23:36   the regnal formula: "reigned N years in Jerusalem,
+                        and his mother's name was ..."   different kings
+EZK 13:2 ‖ EZK 21:33   Ezekiel's stock "son of man, prophesy and say"
+2SA 3:18 ‖ EZK 38:17   "by the hand of my servant"
+DEU 19:5 ‖ JDG 9:48    both men swing an axe at a tree
+ACT 7:16 ‖ GEN 34:2    Shechem and Hamor, the names alone
+```
+
+And the litany blow-up: of the Odes' 1,896 proposed pairs, **1,001 are Ode 8 matching
+itself** — the Benedicite's antiphon, 32 verses against 31.
+
+**The cause is a reused threshold, which is this document's recurring shape.**
+`CHAIN_FLOOR = 4` and `BITS_FLOOR = 25` were calibrated for *verifying* a pair a human editor
+had already proposed. The seed was doing the work of excluding regnal formulae, silently and
+for free, so the floors never had to. Discovery inherits no such filter, and the floors go on
+returning a confident value for a question nobody calibrated them against.
+
+#### What it therefore needs before it ships
+
+1. **Its own gate, calibrated on discovery rather than inherited from verification.** The
+   existing floors are a starting point and not a standard.
+2. **A formula defence.** `_may_not_seed` (search.py:2294) already denies low-complexity
+   spans the right to nominate; a family proposal wants the same idea against spans whose
+   shared terms are jointly common. The regnal and Ezekiel cases are exactly that.
+3. **Bidirectional admission, which is also a live bug.** `lemma_chain` is asymmetric —
+   `span_gap=8` against `verse_gap=2` — and which verse lands on the left is decided by the
+   *seed's From/To column*, an editorial accident. Five stored pairs were checked and **all
+   five would have been refused had the seed listed them the other way round**
+   (`JON 3:10 ‖ JER 25:5`: 10/14.5 one way, 14/29.0 the other). A proposal pass has no From/To
+   column, so it must admit if either direction clears — and the existing table is
+   arbitrarily thinner than its own floors imply.
+4. **Same-language sharding**, per the rule above, and a fold stamp like every other
+   artifact — the omission that let `parallel_family` sit six folds stale earlier this month.
+
+**Priced honestly against Boyce: it does not move recall.** Six of the 209 name a target in a
+no-family book; three of those are unreachable anyway (Daniel is held as `DNT`, not
+`DAN`/`DAG`), and the prototype gives the remaining three no family under any floor. This is
+worth doing for the corpus and for §6.3 — profiles carry family members as witnesses, so P3
+inherits whatever this leaves — and **not** for the golden set. Saying so is the point.
 
 ---
 
