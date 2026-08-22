@@ -14,25 +14,28 @@ idea; the first sixteen were being found and thrown away, in two places, one on 
 
 Both leaks are now closed. Measured on your nine works with a forked copy of your harness:
 
-| | found | gated | unseen | Boyce's 19 Greek `Potential` rows |
-|---|---|---|---|---|
-| where we started | 75 | 38 | 96 | 2 |
-| you: `alternates` read | 77 | 46 | 86 | 2 |
-| us: `gate_first` | 81 | 38 | 90 | 2 |
-| **both together** | **83** | 45 | **81** | 4 *(not errors — see below)* |
+| configuration | found | gated | unseen |
+|---|---|---|---|
+| where we started | 75 | 38 | 96 |
+| you: `alternates` read | 77 | 46 | 86 |
+| + `gate_first` | 83 | 45 | 81 |
+| + the Greek lexicon assembled from two upstreams | 86 | 45 | 78 |
+| **+ `_claims` measured against the match's own span** | **87** | 44 | **78** |
 
-**+8 citations, and the fourth column is not a cost.** I first reported this as "+8 for one
-false locus" and that was wrong — the correction matters more than the number.
+**75 → 87 found, 96 → 78 unseen.** All four changes are in; three are ours and one is the
+`alternates` reader you already shipped.
 
-`golden-boyce.json` keys Boyce's Potential rows as `negatives`, and `docs/helpinghand.md`
-describes them as loci "he judged were **not** quotations, so a gate that finds them is too
-loose". Your own `build_boyce_golden.py` had already withdrawn that reading; the cheat sheet
-is stale relative to it. The paper agrees with the builder: **Boyce tabulates Direct,
-Indirect, Partial and Potential in one table and totals all four** (Didache 18/7/19/5,
-Polycarp 30/10/10/5). Potential is his weakest confidence tier.
+**On Boyce's fourth column.** I first reported this as costing a false positive and that was
+wrong — the correction matters more than the number. `golden-boyce.json` keys the `Potential`
+rows as `negatives`, and `docs/helpinghand.md` described them as loci "he judged were **not**
+quotations, so a gate that finds them is too loose". Your own `build_boyce_golden.py` had
+already withdrawn that reading; the cheat sheet was stale relative to it, and I scored
+against the document you had retracted.
 
-At the loci this change touches, his footnotes say the *address* is undecidable, not that the
-wording is absent:
+The paper is with the builder. **Boyce tabulates Direct, Indirect, Partial and Potential in
+one table and totals all four** (Didache 18/7/19/5 p. 162, Polycarp 30/10/10/5 p. 223). And
+where he explains a Potential he is judging *which address to print*, not whether the words
+are quoted:
 
 * **Didache 2:2** — `Matthew 19:18` potential beside `Exodus 20:13-14; Deuteronomy 5:17-18`,
   footnote 4: *"It is impossible to know if the writer(s) were referencing Exodus,
@@ -40,13 +43,11 @@ wording is absent:
   `MAT 19:18` as an alternate — the same judgement, in the field built for it.
 * **Polycarp 7:1** — `2 John 7` as the citation, `1 John 4:2-3` potential. We return
   `2JN 1:7`, his primary attribution.
-* **Didache 1:4d** — `Luke 6:29` with `Matthew 5:40` potential. We return `MAT 5:39-42`
-  spanning it, keeping `LUK 6:29` as the alternate.
 
-Three suggestions, none urgent: `helpinghand.md` §"The measure" should follow the builder;
-the JSON key `negatives` has outgrown its name; and the Potential rows have the same
-duplicate-question shape as the positives — Didache 2:2a and 2:2b are one question written
-twice, so 19 rows are 18 questions.
+Three notes, none urgent: `helpinghand.md` §"The measure" is corrected on the branch to
+follow the builder; the JSON key `negatives` has outgrown its name; and the Potential rows
+carry the same duplicate-question shape as the positives — Didache `2:2a` and `2:2b` are one
+question written twice, so 19 rows are 18 questions.
 
 ---
 
@@ -89,6 +90,44 @@ present behaviour and asked that recall changes never move an existing match. Th
 them, so it is offered rather than shipped. `Searcher(gate_first=True)`, `?gate_first=1`, and
 `"gate_first": True` in your `GREEK` mapping — which is the one-line change on your side, and
 it is already committed on `quotes2-gate-first`.
+
+### The Greek lexicon, assembled from two upstreams
+
+CLTK's Greek file is a **one-lemma-per-form map** — 949,453 entries, zero lists — and where a
+spelling could be a noun's case or a verb's form it kept one analysis, very often the verb.
+`θεοῦ`, the commonest genitive in scripture at 1,747 occurrences, resolved only to θεάομαι
+and shared no lemma with `θεός`. `ἡμέρα` has no entry at all: every one of the 2,798 tokens
+in its paradigm resolved to ἥμερος, "tame".
+
+I first reported this as one bug found by hand — `κύριον → κυρέω` — and called it rare. A
+reflexive test, a dictionary form is always an inflection of itself, finds **348 of 4,240
+lemmas analysed only as some other word**. I understated it by an order of magnitude.
+
+Filtering cannot fix it: every orphan fails because the right lemma is *absent*, so deleting
+the wrong one leaves the form with nothing. The fix is a second source. Diorisis — 10.2M
+words of lemmatised Greek, already fetched for the PPMI vectors — carries what a lemmatiser
+assigned in running text. Readings are unioned; neither upstream wins.
+
+Named principal parts that meet each other: **5 of 18 before, 18 of 18 after.** Paradigm
+slots orphaned from their own lemma: **11.0% → 5.6%**, and in the second declension where
+the test method is sound, **12.7% → 4.0%**.
+
+**Read the recall effect carefully.** The union takes primary `found` from 81 to **79** and
+alternates-read `found` from 83 to **86**. More candidates change which match wins a
+contested span, so citations move between the primary slot and the alternates list. It is
+worth three citations to a consumer who reads `alternates` and costs two to one who does
+not — which is an argument for reading them, not against the union.
+
+### `_claims` measured against the match's own span
+
+`_claims` asks whether a rival "has already accounted for what `match` found" and then
+tested the overlap against the *shorter* of the two spans. At 1 Clement 46.8 that deleted a
+166-character `MAT 18:6-9` — a citation Boyce marked — for a 65-character `MRK 14:21` sitting
+inside it, on 65 shared characters that are all of the winner and two fifths of the loser.
+Against the match's own span both are reported. Where the loser is the shorter of the two the
+rules are identical, so Psalm 14 against Psalm 53 is still one result with an alternate.
+
+Worth +1 citation, and it also promotes `1JN 4:2-3` at Polycarp 7.1 from alternate to match.
 
 ### `covering_rivals` — kept, and honest about earning nothing
 
