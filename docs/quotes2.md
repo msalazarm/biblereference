@@ -877,8 +877,33 @@ of, and it is far below what `_candidates` already hands them. The choice betwee
 and 48 at 46-per-query is a calibration question for the control corpus, not a design
 question — which is the right shape for it to have.
 
-Both figures are measured on the naive lemma intersection alone. Entity ids, which are rarer
-than lemmas and which §6.1 shows are barely registered, are **not** in either number.
+**Two corrections to the table above, both from re-running it.**
+
+*The null is small, not zero.* The 0.00% rows are one draw of 4,000 pairs. A second draw,
+with a different random sample of verses, puts `bits ≥ 25, df ≤ 100` at **0.15% — about 55
+spurious verses per query, not none**. Reporting a single sample of a rare event as zero is
+the same error as reading one clean run as a rate; the honest statement is that the rate is
+under a fifth of a per cent and the sampling noise at 4,000 draws is comparable to it.
+
+*Entities discriminate and are too thin to carry it.* Adding entity overlap to the same
+measurement, on the index as it stands (641 Greek forms):
+
+| gate | null | false per query | reached |
+|---|---|---|---|
+| bits ≥ 25, df ≤ 100 | 0.15% | 55 | 23 |
+| bits ≥ 25, df ≤ 200 | 0.22% | 83 | 48 |
+| bits ≥ 25, (df ≤ 100 **or** shares an entity) | 0.70% | 257 | 32 |
+| bits ≥ 25, (df ≤ 200 **and** shares an entity) | 0.00% | 0 | 8 |
+| bits ≥ 40, (df ≤ 200 **or** entity attested in ≤ 50 verses) | 0.10% | 37 | 34 |
+
+**Only 14 of the 102 citations share a registered entity with their verse at all, against 2%
+of unrelated pairs.** So the signal is real — a seven-fold enrichment — and the index is too
+sparse for it to matter: requiring an entity costs 40 of the 48 reachable citations, and
+merely allowing one multiplies the null by five.
+
+That is the argument for §6.1's harvest stated as a number rather than an intuition, and it
+is also why §6.1 defers it: the entity channel would have to roughly triple its coverage
+before it changed this table, and the same effort spent on the df ceiling moved 9 to 48.
 
 **Disposition.** This channel **proposes only**. The composite scores it, `verify` may check
 it, families report rivals, and the existing gate disposes. That two-stage split is the
