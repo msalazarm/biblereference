@@ -104,8 +104,24 @@ def main() -> int:
         rows.append({**one, "locus": where, "status": status,
                      "match": found or suppressed or gated})
 
+    # Boyce's `potential` entries: loci he judged were *not* quotations. A change that buys
+    # recall by finding these has not bought recall. churchfathers' `docs/helpinghand.md`:
+    # "a gate that finds them is too loose. They are not scored as misses."
+    negatives = 0
+    for one in gold.get("negatives", ()):
+        if one.get("language", "grc") != "grc":
+            continue
+        for locus in one["loci"]:
+            section = sweep.get(f'{one["work"]}|{locus}', {})
+            if best_for([m for m in section.get("kept", ()) if admitted(m)], one["targets"]):
+                negatives += 1
+                break
+
     tally = Counter(r["status"] for r in rows)
     print(f"  {len(rows)} Greek citations in the golden set")
+    print(f"    NEGATIVES matched  {negatives:>4}   of "
+          f"{sum(1 for o in gold.get('negatives', ()) if o.get('language', 'grc') == 'grc')}"
+          f"   (Boyce's non-quotations; lower is better)")
     for name in ("found", "suppressed", "gated", "unseen"):
         print(f"    {name:<12} {tally[name]:>4}")
     print()

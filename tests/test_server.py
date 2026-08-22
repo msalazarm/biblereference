@@ -311,6 +311,7 @@ def test_the_opt_in_tiers_and_the_debt_ledger_are_reachable_over_the_wire() -> N
     assert serve.search_options({"concave": ["true"]}) == {"concave": True}
     assert serve.search_options({"itacised": ["1"]}) == {"itacised": True}
     assert serve.search_options({"covering_rivals": ["1"]}) == {"covering_rivals": True}
+    assert serve.search_options({"gate_first": ["yes"]}) == {"gate_first": True}
     assert serve.search_options({"debts": ["true"]}) == {}
     with pytest.raises(ValueError, match="true or false"):
         serve.search_options({"itacised": ["sometimes"]})

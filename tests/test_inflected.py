@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from biblereference.emphasis import FOLD_VERSION
 from biblereference.search import (
     DIRECT,
     INDIRECT,
@@ -29,7 +30,6 @@ from biblereference.search import (
     build_index,
     build_lemma_index,
 )
-from biblereference.emphasis import FOLD_VERSION
 from biblereference.store import DataHome, SourceMeta, open_store, write_corpus
 from test_regression import GREEK, _filler
 

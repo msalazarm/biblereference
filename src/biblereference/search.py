@@ -1952,6 +1952,7 @@ class Searcher:
         recovered: bool = False,
         ppmi: bool = False,
         covering_rivals: bool = False,
+        gate_first: bool = False,
         min_grade: str | None = None,
         gates: Sequence[Gate] | None = None,
         min_lemma_run: int | None = None,
@@ -2041,6 +2042,22 @@ class Searcher:
         #: reports mean the same things, but a wall refused what a cost now weighs, and
         #: what that admits on pre-Christian Greek is a measurement nobody has made yet.
         self._concave = concave
+        #: Let a match that clears this searcher's gates win a contested span over one that
+        #: does not, before similarity is consulted at all.
+        #:
+        #: Overlap suppression runs *before* anything is gated and picks its winner on
+        #: similarity, which says how alike two texts are and nothing about whether the
+        #: match will survive. So a ten-word run worth 35 bits is deleted for a four-word
+        #: one worth 16, and the gate then refuses the survivor -- the span reports nothing,
+        #: having had something the whole time. Measured on Boyce's nine works this is worth
+        #: six citations on its own and eight with the consumer reading `alternates`.
+        #:
+        #: Opt-in because it changes which passage is reported, and `tests/test_regression`
+        #: records the agreement that such a change is offered rather than shipped. Applied
+        #: to exact matches as well as graded ones, which is deliberate: the library does
+        #: not gate exact matches, the consumer does, and arbitrating a span on a gate one
+        #: end of the wire ignores is how this defect stayed invisible.
+        self._gate_first = gate_first
         #: Keep a rival that covers at least as much of the span as the winner, however
         #: far apart their similarities are. Opt-in for one reason only: it fills
         #: `alternates` where a default scan leaves it empty, and
@@ -2886,7 +2903,11 @@ class Searcher:
 
         matches.sort(key=lambda m: (-m.similarity, m.span or (0, 0)))
         return self._decorate(
-            _without_overlaps(matches, covering_rivals=self._covering_rivals),
+            _without_overlaps(
+                matches,
+                covering_rivals=self._covering_rivals,
+                gates=self._gates if self._gate_first else (),
+            ),
             windows=float(len(_offsets(len(tokens), window, stride))),
         )
 
@@ -3921,7 +3942,10 @@ def _original(words: Sequence[tuple[str, int, int]], low: int, high: int) -> str
 
 
 def _without_overlaps(
-    matches: Sequence[Match], *, covering_rivals: bool = False
+    matches: Sequence[Match],
+    *,
+    covering_rivals: bool = False,
+    gates: Sequence[Gate] = (),
 ) -> list[Match]:
     """Keep the best match wherever two claim the same words, recording near-ties.
 
@@ -3942,6 +3966,13 @@ def _without_overlaps(
 
     Two quotations that merely *touch* are neither. See :func:`_claims`.
     """
+    # Before anything is compared, put the matches that will survive gating in front of the
+    # ones that will not. The loop below is first-come-wins, so this *is* the arbitration:
+    # nothing further down needs to know about it. Empty `gates` leaves the order alone,
+    # which is the default and the behaviour every existing finding rests on.
+    if gates:
+        matches = sorted(matches, key=lambda m: not _clears(m, gates))
+
     kept: list[Match] = []
     rivals: dict[int, list[VerseRange]] = {}
     for match in matches:
@@ -3984,6 +4015,19 @@ def _without_overlaps(
         for index, m in enumerate(kept)
     ]
     return sorted(resolved, key=lambda m: m.span or (0, 0))
+
+
+def _clears(match: Match, gates: Sequence[Gate]) -> bool:
+    """Whether this match would survive `gates` -- asked while it can still be acted on.
+
+    A match reporting nothing on every axis is admitted, which is the same reading the
+    consumer's own sweep takes: silence is not evidence against, and an exact match found
+    before any of these axes existed still means what it meant.
+    """
+    axes = (match.run, match.lemma_run, match.chain, match.bits)
+    if not any(axes):
+        return True
+    return any(gate.admits(*axes) for gate in gates)
 
 
 def _explains_as_well(winner: Match, match: Match) -> bool:

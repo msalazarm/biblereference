@@ -21,6 +21,7 @@ from biblereference.search import (
     COVERAGE,
     IDENTIFIED,
     QUOTATION,
+    Gate,
     IndexIncomplete,
     Match,
     ScaledRun,
@@ -650,7 +651,13 @@ def test_a_span_follows_the_verse_over_a_word_the_quotation_omits() -> None:
 
 
 def _match(
-    passage: str, span: tuple[int, int], similarity: float, *, coverage: float | None = None
+    passage: str,
+    span: tuple[int, int],
+    similarity: float,
+    *,
+    coverage: float | None = None,
+    run: int = 0,
+    bits: float = 0.0,
 ) -> Match:
     return Match(
         parse_reference(passage),
@@ -666,6 +673,8 @@ def _match(
         ),
         span=span,
         quoted="",
+        run=run,
+        bits=bits,
     )
 
 
@@ -701,6 +710,46 @@ def test_a_rival_covering_more_is_kept_though_it_scores_lower_on_similarity() ->
     (only,) = _without_overlaps([winner, covers_more], covering_rivals=True)
     assert str(only.passage) == "LUK 6:29"
     assert [str(p) for p in only.alternates] == ["MAT 5:39-42"]
+
+
+def test_a_match_that_clears_the_gate_wins_the_span_from_one_that_does_not() -> None:
+    """The defect three other fixes circled, and the one that answers it.
+
+    Suppression runs before anything is gated and picks its winner on similarity, which
+    says how alike two texts are and nothing about whether the match will survive. At
+    Didache 1.4 that deleted `MAT 5:39-42` -- ten words, 35.3 bits, over the gate -- for
+    `LUK 6:29`, four words and 15.8 bits, under it. The span then reported nothing, having
+    had the answer the whole time.
+
+    Measured over Boyce's nine works: 75 citations found becomes 81, and 83 once the
+    consumer reads `alternates` too.
+    """
+    gates = [Gate(3, 0, 0, 35.0)]
+    under = _match("LUK 6:29", (72, 123), 0.387, coverage=0.667, run=4, bits=15.8)
+    over = _match("MAT 5:39-42", (68, 123), 0.294, coverage=1.0, run=10, bits=35.3)
+    (only,) = _without_overlaps([under, over], gates=gates)
+    assert str(only.passage) == "MAT 5:39-42"
+    assert [str(p) for p in only.alternates] == ["LUK 6:29"]
+
+
+def test_without_gates_the_similarity_order_still_decides() -> None:
+    """Opt-in, because it changes which passage is reported and half a million findings
+    rest on that not happening by surprise."""
+    under = _match("LUK 6:29", (72, 123), 0.387, coverage=0.667, run=4, bits=15.8)
+    over = _match("MAT 5:39-42", (68, 123), 0.294, coverage=1.0, run=10, bits=35.3)
+    (only,) = _without_overlaps([under, over])
+    assert str(only.passage) == "LUK 6:29"
+
+
+def test_two_matches_that_both_clear_the_gate_keep_their_old_order() -> None:
+    """The tier reorders across the gate boundary and nowhere else, so a span where both
+    rivals pass is arbitrated exactly as it is today."""
+    gates = [Gate(3, 0, 0, 35.0)]
+    strong = _match("PSA 14:1", (0, 40), 0.9, coverage=0.9, run=9, bits=60.0)
+    weaker = _match("PSA 53:1", (2, 38), 0.88, coverage=0.88, run=8, bits=55.0)
+    (only,) = _without_overlaps([strong, weaker], gates=gates)
+    assert str(only.passage) == "PSA 14:1"
+    assert [str(p) for p in only.alternates] == ["PSA 53:1"]
 
 
 def test_the_covering_rival_is_not_kept_unless_it_is_asked_for() -> None:

@@ -101,9 +101,12 @@ _OTHER: Final = {
     "concave",
     "itacised",
     # `covering_rivals` fills `alternates` with a rival explaining as much of the span as
-    # the winner. The caller who most needs it sweeps over this API, so leaving it local
-    # would be the fault above rather than caution.
+    # the winner. `gate_first` lets a match that clears the caller's own gates win a
+    # contested span over one that does not. The caller who most needs both sweeps over
+    # this API, so leaving them local would be the fault above rather than caution -- and
+    # `gate_first` is doubly so, since the gates it arbitrates on arrive over the wire too.
     "covering_rivals",
+    "gate_first",
     "seed_mask",
     "recovered",
     "ppmi",
@@ -225,6 +228,8 @@ def search_options(
         options["itacised"] = _flag("itacised", params["itacised"][0])
     if params.get("covering_rivals"):
         options["covering_rivals"] = _flag("covering_rivals", params["covering_rivals"][0])
+    if params.get("gate_first"):
+        options["gate_first"] = _flag("gate_first", params["gate_first"][0])
     if params.get("seed_mask"):
         options["seed_mask"] = _flag("seed_mask", params["seed_mask"][0])
     if params.get("recovered"):

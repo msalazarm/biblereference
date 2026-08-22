@@ -60,6 +60,10 @@ def main() -> int:
                         help="ask the searcher for the opt-in tier that keeps a rival "
                              "covering at least as much of the span as the winner "
                              "(quotes2.md 4.2). Adds alternates; moves no reported passage")
+    parser.add_argument("--library-gate-first", action="store_true",
+                        help="ask the searcher itself for gate-first arbitration, rather "
+                             "than simulating it by re-sorting. The check that the shipped "
+                             "option does what the simulation predicted")
     parser.add_argument("--gate-first", action="store_true",
                         help="let a match that clears the gate win a contested span over "
                              "one that does not, before either similarity or coverage is "
@@ -136,7 +140,8 @@ def main() -> int:
             searcher = Searcher(
                 DataHome(), languages=["grc"], coverage=0.5,
                 min_run=lambda n: max(4, min(6, n // 2)), inflected=True, gates=gates,
-                covering_rivals=arguments.covering_rivals)
+                covering_rivals=arguments.covering_rivals,
+                gate_first=arguments.library_gate_first)
             local.searcher = searcher
         seen.dropped = []
         kept = searcher.scan(text)

@@ -26,6 +26,8 @@ because the order they came in is the argument.*
 > the loser downstream. It is that overlap suppression runs *before* the gate and picks its
 > winner by something unrelated to it, so **a match that would clear the gate is deleted for
 > one that will not**, and the span is then discarded by the gate that would have kept it.
+> Letting the gate-clearing match win takes **found from 75 to 81, and to 83 once alternates
+> are read — with Boyce's own twenty non-quotations matched exactly as often as before.**
 
 ---
 
@@ -414,27 +416,54 @@ It also explains §4.1's six lost citations. Coverage-first reshuffled winners w
 regard for the gate than similarity had, so it traded six survivors for none.
 
 **The change this implies** is that a match clearing the gate should win a contested span
-over one that does not, before either similarity or coverage is consulted. Suppression runs
-before gating and `Gate.admits` needs only the four axes every `Match` already carries, so
-the arbitration can be told what the gate will say.
+over one that does not, before similarity is consulted at all. Suppression runs before
+gating and `Gate.admits` needs only the four axes every `Match` already carries, so the
+arbitration can be told what the gate will say.
 
-**One wrinkle, and it decides whose change this is.** `LUK 6:29` is an *exact* match, and
-the library does not gate exact matches — `self._gates` is consulted inside `_score_cluster`
-for graded ones only (search.py:2831), so a graded match failing the gate never reaches
+**Swept, and it is the fix.** All nine works, same passages, same gate:
+
+| arbitration | found | gated | unseen | Boyce's negatives matched |
+|---|---|---|---|---|
+| today, `-similarity` | 75 | 38 | 96 | 2 of 19 |
+| `-coverage` (§4.1) | 69 | 44 | 96 | 2 of 19 |
+| `covering_rivals` (§4.2) | 75 | 38 | 96 | 2 of 19 |
+| **gate-first** | **81** | 38 | **90** | **2 of 19** |
+| **gate-first, alternates read** | **83** | 45 | **81** | **2 of 19** |
+
+**Six citations from the arbitration alone, eight with the consumer reading `alternates`,
+and the false-positive column does not move.** That last column is Boyce's own `potential`
+entries — twenty loci he judged were *not* quotations, so a change that bought recall by
+finding them would have bought nothing. It matches two before and two after, and they are
+the same two.
+
+Didache 1.4 under the shipped option:
+
+```
+MAT 5:39-42   run=10  bits=35.3  admitted=True   alternates=['LUK 6:29']
+MAT 5:40-41   run=6   bits=50.2  admitted=True
+LUK 6:29-30   run=3   bits=43.2  admitted=True
+```
+
+`MAT 5:39-42` takes the span because it clears the gate, and `LUK 6:29` — the match that used
+to delete it — survives as its alternate. Four of Boyce's five, from a locus scoring one.
+
+**One wrinkle, and it decides whose change this is.** `LUK 6:29` is an *exact* match, and the
+library does not gate exact matches — `self._gates` is consulted inside `_score_cluster` for
+graded ones only (search.py:2831), so a graded match failing the gate never reaches
 suppression at all, while an exact one always does. The gate that kills `LUK 6:29` is
 churchfathers' own `admits`, applied after the fact and deliberately: *"Nineteen of the
 twenty errors measured in Boyce's nine works were exact matches"*, including a liturgical
 doxology worth 16.8 bits that no run threshold can refuse.
 
-So the library cannot simply prefer "the match that will clear the gate", because on its own
-terms `LUK 6:29` clears everything — it is exact. What it can do is prefer, among rivals for
-one span, the one that would clear the gates *it was configured with*, applied to exact and
-graded alike. That is a real option with a real argument behind it and it is not today's
-behaviour, which is why it is measured before it is proposed.
+So the library cannot prefer "the match that will clear the gate" on its own terms, because
+`LUK 6:29` is exact and clears everything. What it does instead is prefer, among rivals for
+one span, the one that clears **the gates this searcher was configured with**, applied to
+exact and graded alike. A caller who passes no gates gets today's behaviour exactly.
 
-**Nothing in this section should be acted on until that number is in**, including the tier,
-which is written, shipped opt-in, and currently earns its place only as the instrument that
-found this.
+**Opt-in, and over HTTP.** `Searcher(gate_first=True)` and `?gate_first=`. It changes which
+passage is reported, so `tests/test_regression.py`'s agreement applies and it is offered
+rather than defaulted — but unlike §4.1 there is now something worth offering, and unlike
+§4.2 it is worth something on its own.
 
 ---
 
