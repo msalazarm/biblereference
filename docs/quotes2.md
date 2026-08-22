@@ -905,6 +905,36 @@ That is the argument for §6.1's harvest stated as a number rather than an intui
 is also why §6.1 defers it: the entity channel would have to roughly triple its coverage
 before it changed this table, and the same effort spent on the df ceiling moved 9 to 48.
 
+### 7.1 Retrieved, not simulated
+
+Everything above asks whether the gate *would admit the verse we already know is right*. It
+does not ask what the channel actually returns when it is pointed at the corpus, and the
+false-per-query figures were extrapolated from a null rather than counted. So the channel was
+built — postings over all 36,705 Greek verses, query on the father's lemmas whose document
+frequency is 200 or under, admit on 25 bits with a rare shared term — and run over 40 of the
+102 unreached citations:
+
+```
+correct verse retrieved at all      18 of 40
+proposals per query                 median 21, p90 110, max 230
+rank of the correct verse           median 2   (8 first, 12 in the top 5, 14 in the top 20)
+no rare term to query with           3 of 40
+```
+
+**The extrapolation was pessimistic and the direction matters.** It predicted ~46 spurious
+verses per query from the null's 0.12%; the channel actually proposes a median of 21, because
+retrieval only ever visits verses that share a rare term while the null compared against
+everything. A median rank of 2 among 21 candidates is a working retriever, not a hopeful one.
+
+Scaled to the full 102 that is around 46 citations reached, which agrees with the
+gate-simulation's 48 — two routes to the same number, one of which could have been wrong
+without the other noticing.
+
+**What it does not yet show.** The 40 are the first 40 of the 102, not a random sample; the
+run does not apply containment, fragmentation or the composite, so the ranking is bits alone;
+and no false-positive price has been paid on the control corpus or on §8's named terrain.
+This is evidence that the channel retrieves, not that it may ship.
+
 **Disposition.** This channel **proposes only**. The composite scores it, `verify` may check
 it, families report rivals, and the existing gate disposes. That two-stage split is the
 doctrine the project already follows, and it is what keeps a loose retriever from becoming a
