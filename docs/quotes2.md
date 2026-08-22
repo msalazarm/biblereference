@@ -573,111 +573,98 @@ section only adds measurements. The one-line diagnosis:
 the matcher searches, and the index that holds them is one form deep in a language that
 declines.**
 
-### 6.1 P1 — the proper nouns are registered in one case only
+### 6.1 P1 — one form per entity, and 23 of them unmatchable
 
-`entity_form` holds **5,084 forms over 4,068 entities — 1.25 forms each**. Split by
-language:
+`entity_form` holds 5,084 forms over 4,068 entities. Only **708 rows are Greek, covering 576
+entities**, so seven entities in eight have no Greek form at all and are invisible to a Greek
+search by construction. For those that do, the inventory is one case: Sodom's whole Greek
+registration is `σοδομα`, and 1 Clement 11.1 writes `Σοδόμων`. The lemma channel cannot
+rescue it either — proper nouns have no lemma at all.
 
-| language | forms | entities | depth |
-|---|---|---|---|
-| he | 4,376 | 3,679 | 1.19 |
-| **grc** | **708** | **576** | **1.23** |
+**A bug found on the way, and fixed.** TIPNR writes variant spellings comma-separated —
+`G1138=Δαυείδ, Δαυίδ, Δαβίδ` — and this folded the whole tail into one form. David's entire
+Greek registration was the single string `δαυειδ, δαυιδ, δαβιδ`, **which no verse can
+contain**, so `by_form` matched David nowhere at all. Twenty-three Greek entities were
+registered that way, David, Zeus and Judas Iscariot among them. Splitting on the comma —
+and not on the space, since `Ἄρειος Πάγος` is genuinely two words — fixes every one.
 
-The figure that matters is not 708 but **576 of 4,068**: seven entities in eight have **no
-Greek form at all**, and are invisible to a Greek search by construction. For those that do,
-the inventory is one case — Sodom's entire Greek registration is `σοδομα`, Lot's is `λωτ`.
-Greek declines, so 1 Clement 11.1's `Σοδόμων` matches nothing.
+That is worth more than it sounds: a name is high-surprisal, and losing the three commonest
+spellings of the most-named person in scripture is not a rounding error.
 
-And the lemma channel cannot rescue it, because **proper nouns have no lemma at all**:
-`σοδομα`, `σοδομων` and `λωτ` all return NONE from the lexicon. The word is invisible to
-both channels at once.
+**The harvest itself is smaller than this section first claimed.** An earlier figure of
+8,132 new forms was a *hit* count — (entity, form, verse) triples — not distinct forms.
+Measured properly, a stem-prefix rule yields **~510 to 950** distinct forms depending on the
+minimum length, and a closed-paradigm rule (strip a recognised nominative ending, admit only
+that declension's own suffixes, require the form to occur in a verse already attesting the
+entity) yields **+472 rows over 252 entities**. It correctly proposes nothing for the
+transliterated indeclinables — Ἀβραάμ, Ἰσραήλ, Δαυίδ — which is right, since they do not
+decline.
 
-**The fix needs no new data.** `entity_verse` already records which verses attest each
-entity. If Sodom is attested at a verse containing `σοδομα` and at another containing
-`σοδομων`, both are Sodom's forms. Harvesting the attested surfaces is deterministic.
+**And it is not built here, because it buys little.** `Entities.by_form` has exactly one
+caller in the library: `allusions()` (search.py:3030). Nothing else reads `entity_form`. So
+the harvest widens the allusion pass alone — and §7 records that `allusions()` has no CLI or
+HTTP caller either, and that of 29 register-flagged unseen loci **21 name no individual at
+all**. Wide inflection coverage on a channel nothing invokes is not where the next citation
+comes from. The comma fix ships; the harvest is specified and deferred.
 
-**Measured, with the rule stated.** Take every verse attesting an entity that already has a
-Greek form; admit any folded token in it that shares the known form's stem (the form less
-its last two characters) and is at least four characters long. Over `rahlfs` and `n1904`:
+### 6.2 P2 — the lexicon keeps one analysis per spelling, and it is often the verb
 
-```
-new forms                     8,132
-entities gaining at least one   325 of 576
-Greek forms                     708 -> 8,840
-```
+**Shipped.** The diagnosis in this section was right about the shape and wrong about the
+size and the cause, and both corrections came from measuring rather than reading.
 
-**The mean is a trap and I read it wrongly first.** 8,840 over 576 entities is 15 forms
-each, which looks like runaway over-generation. The distribution says otherwise:
+**The cause is upstream.** CLTK's Greek file is a one-lemma-per-form map: 949,453 entries,
+**zero lists**. Where a spelling could be a noun's case or a verb's form, whatever generated
+it kept one analysis. Two claims in `lemmata.py`'s own docstring were false of the data as
+fetched — that a list is "the ordinary case in Greek", and that `ἄρῃ` is stored as three
+verbs. The multi-reading rows in `lemma_form` are *our own fold* colliding accented
+spellings, not upstream ambiguity.
 
-| forms gained | entities |
-|---|---|
-| 0 | 235 |
-| 1 | 184 |
-| 2 | 68 |
-| 3–9 | 68 |
-| 10+ | **5** |
-
-The median entity gains one form. Five entities — LORD, Egypt, Canaan, Judah, Peter — carry
-the mean, and they do so because they are attested in hundreds of verses and genuinely
-inflect that widely. Spot-checked, the harvest is right: Egypt gains
-`αιγυπτε, αιγυπτια, αιγυπτιαν, αιγυπτιασ, αιγυπτιοι, αιγυπτιοισ, …`; Sidon gains
-`σιδωνα, σιδωνι, σιδωνιοι, σιδωνιων`; Peter gains `πετρον, πετρου, πετρω, σιμωνα, κηφα`.
-These are the paradigms, and they are exactly what a father writing `Σοδόμων` needs.
-
-**The error mode, named.** Two kinds of false form appear. Verb forms sharing a nominal
-stem — `κυριευσουσιν` ("they shall rule") admitted under LORD alongside `κυριε, κυριον,
-κυριου` — and homographs, `πετρα` ("rock") under Peter. Both are refusable by the same
-check: the candidate must not carry a *verb* lemma where the known form carries a nominal
-one. The lexicon already answers that question, so P1 should ship with a lemma-class guard
-rather than on the stem rule alone, and the guard's cost is one lookup per candidate.
-
-**A discriminative filter was tried and is not worth its complexity**: requiring that at
-least half a form's corpus-wide occurrences fall in verses attesting the entity removes
-1,476 of the 8,132 and does not remove `κυριευσουσιν`, because that verb also occurs mostly
-where the LORD is attested. The lemma-class guard is the right instrument; document
-frequency is not.
-
-### 6.2 P2 — the lexicon reads some nouns as verbs, and one of them is κύριος
-
-The case that started this:
+**The size was understated by an order of magnitude.** The audit here found 3 broken pairs
+in 73 and called the defect rare in proportion. It tested one slot pair, and that pair is
+the one where both forms are nominal. A reflexive test — a dictionary form is always an
+inflection of itself — finds **348 of 4,240 lemmas analysed only as some other word**:
 
 ```
-θεῖον   fold=θειον   ->  ['θεαω', 'θεω']
-θείου   fold=θειου   ->  ['θειοσ', 'θειοω']
-θεῖος   fold=θειοσ   ->  ['θειοσ']
+θεοσ 2026 ok | θεου 1747 -> {θεαομαι} | θεοισ 80 -> {θεαω, θεω}
+κυριοσ 3741 ok | κυριον 796 -> {κυρεω}
+λογοσ 313 ok | λογου 68 -> {λογοω} | λογουσ 300 -> {λογοω}
 ```
 
-`θεῖον` — the neuter of θεῖος, "brimstone" — is analysed as a form of θεάω *behold* and θέω
-*run*, and shares **no lemma** with its own genitive. So in 1 Clement 11.1, where the father
-writes `πυρὸς καὶ θείου` against Genesis 19:24's `θεῖον καὶ πῦρ` — the same pair, reversed —
-the two occurrences of *brimstone* cannot match each other.
+`θεοῦ`, the commonest genitive in scripture, meets nothing. Worse, **`ἡμέρα` has no entry at
+all** and all 2,798 tokens of its paradigm resolve to ἥμερος, "tame".
 
-**Audited, because one instance is an anecdote.** Over `rahlfs` and `n1904`, take every
-second-declension pair where the nominative `-ος` and the accusative/neuter `-ον` of the
-same stem each occur at least twenty times and the lexicon analyses both — 73 pairs. **Three
-share no lemma at all**, 4%:
+**Filtering cannot fix it and a curated table cannot be finished.** Every orphan fails
+because the right lemma is *absent*, so deleting the wrong one leaves the form with no
+reading at all. A hand table covering LXX and NT at frequency ≥5 is 158 entries and would
+have to grow with every corpus added.
 
-| nominative | acc./neut. | occurrences | lemmas |
-|---|---|---|---|
-| **κυριοσ** | **κυριον** | **3,388 + 771** | `['κυριοσ']` vs `['κυρεω']` |
-| ειδοσ | ειδον | 26 + 275 | `['ειδοσ', 'οιδα']` vs `['ειδον']` |
-| ναοσ | ναον | 22 + 50 | `['ναυσ']` vs `['ναοσ']` |
+**So: a second source, unioned.** Diorisis — 10.2M words of lemmatised Greek, already
+fetched for the PPMI vectors, already licence-recorded — carries what a lemmatiser assigned
+in running text rather than an inventory's single choice. `LexiconSource` now holds ordered
+`parts` and readings from every part are unioned; neither upstream wins.
 
-**So the defect is rare in proportion and lands on the most frequent noun in the corpus.**
-`κύριον` — *the Lord*, accusative, 771 occurrences — resolves to κυρέω *to happen* and shares
-nothing with κύριος. Every quotation naming the Lord as an object loses its lemma link, in a
-corpus where that is among the commonest things a quotation does. `ναός` is read as ναῦς,
-*ship*.
+| | Morpheus only | ∪ Diorisis |
+|---|---|---|
+| named principal parts that meet | 5 of 18 | **18 of 18** |
+| paradigm slots orphaned from their own lemma | 11.0% | **5.6%** |
+| …in the second declension, where the test is sound | 12.7% | **4.0%** |
+| readings | 865,498 | **896,085** |
 
-This changes P2's standing. It was scoped as one bug found by hand; it is a small class,
-found by audit, whose largest member is likely worth more on its own than the rest of §6
-combined. The audit above is fifteen lines and should be a test, run over whichever lexicon
-is installed, asserting that a noun's principal parts share a lemma.
+**Recall, and it needs reading carefully.** Over the nine works the union takes primary
+`found` **81 → 79** and alternates-read `found` **83 → 86**, with `unseen` 81 → 78. More
+candidates change which match wins a contested span, so citations move between the primary
+slot and the alternates list. For a consumer who reads `alternates` — which churchfathers
+now does — it is worth three citations; for one who does not it costs two. That asymmetry is
+the argument for reading them, not against the union.
 
-**It also removes an instrument P1 wanted.** §6.1 proposed rejecting harvested forms whose
-lemma is a verb where the entity's known form is nominal. That guard would reject `κυριον`
-— a correct form — for the same reason it rejects `κυριευσουσιν`. P2 must land before P1's
-guard can be trusted, which fixes the ordering between them.
+**A stamp the fold version cannot supply.** `lemma_form_state` gains a `sources` column and
+`require_current_lexicon` refuses a table built from fewer parts than the library assembles.
+A Morpheus-only table carries `fold_version = 8` and passes every freshness check while
+missing `θεοῦ`; no fold number can see that.
+
+**Latin has the same defect and this does not fix it** — 241 of 2,582 lemmas analysed only
+as some other word, `anima → animo`, `gloria → glorior`. Diorisis is Greek only. Recorded as
+an absence rather than left as one.
 
 ### 6.3 P3 — the profiles are built and unread, and they inherit §2.4's gap
 
