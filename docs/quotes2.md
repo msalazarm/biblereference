@@ -295,9 +295,21 @@ Two of those rows deserve emphasis because they change what is worth building:
   sentence. That is §5, and it is the same instrument as §2.1 — the difference is only
   whether the rivals overlap or merely adjoin.
 * **The 17 sub-gate rows are a scoring problem misfiled as a retrieval one.** The candidate
-  exists at the right locus; nothing admits it. Added to the 37 already labelled `gated`,
+  exists at the right locus; nothing admits it. Added to those already labelled `gated`,
   **54 of 209 turn on thresholds** — more than twice class A, and reachable by the
   calibration work that already exists rather than by anything new.
+
+  **Priced, 2026-08-22.** Swept on the current build, **22 citations have a candidate that
+  reaches Boyce's target and no gate admits it.** The shortfalls are small: Didache 7.1's
+  `MAT 28:19` is a twelve-word verbatim run — run 12, lemma_run 12, chain 12 — refused by
+  **0.1 bits**. Relaxing the lemma-run arm from `(0,6,0,25)` to `(0,4,0,25)` reaches **8 of
+  the 22**, and costs **3 false positives** on the pre-Christian control, 25 → 28, 0.20 →
+  0.23 per 1,000 words. The three land one each in ACT, JHN and 3MA; **Esther holds at
+  exactly 15 either way**, so the relaxation does not feed the failure mode that already
+  dominates (§8). Eight for three, and the arm stops binding below 4.
+
+  It is churchfathers' threshold and the measurement is in their
+  `review/filing-and-parts-2026-08-19.md`; `tools/boyce/control.py --gate` reproduces it.
 
 Class C is the one `quotes.md` §13 was written about, and its refusals stand. At 47 it is
 still the largest single class, and it is now the only one that needs a new idea.
