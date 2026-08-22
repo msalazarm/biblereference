@@ -1078,6 +1078,51 @@ def _say_derived(home: DataHome) -> None:
             _say(f"  {label:22} {'absent':>10}   build it with `{command}`")
 
 
+def _report_undeclared(home: DataHome) -> None:
+    """What each corpus stores that its own versification cannot account for.
+
+    Counted rather than listed, because 441 of them are the deuterocanon's editions
+    disagreeing with the Copenhagen standard about where verses fall -- a real difference
+    between editions, not a fault in any one of them. What is worth a line is a book stored
+    under a code `canon` does not know, or under a system that does not declare it, because
+    every reference into either raises rather than resolving.
+    """
+    import sqlite3
+
+    from .versification import undeclared_text
+
+    if not home.database.exists():
+        return
+    with sqlite3.connect(f"file:{home.database}?mode=ro", uri=True) as db:
+        systems = dict(db.execute("SELECT corpus, versification FROM source_meta"))
+        held = [
+            (corpus, systems.get(corpus, "org"), book, chapter, highest)
+            for corpus, book, chapter, highest in db.execute(
+                "SELECT corpus, book, chapter, MAX(verse) FROM verse "
+                "GROUP BY corpus, book, chapter"
+            )
+        ]
+    faults = undeclared_text(held)
+    if not faults:
+        _say("\ndeclarations: every corpus stores text its own system accounts for")
+        return
+
+    kinds: dict[str, int] = {}
+    for fault in faults:
+        kinds[fault.kind] = kinds.get(fault.kind, 0) + 1
+    _say(f"\ndeclarations: {len(faults)} verse group(s) a system cannot account for")
+    for kind, count in sorted(kinds.items()):
+        _say(f"  {kind}: {count}")
+    for fault in faults:
+        if fault.kind in {"unknown", "unknown system"}:
+            _say(f"  {fault.describe()}")
+    undeclared = [fault for fault in faults if fault.kind == "undeclared"]
+    for fault in undeclared[:12]:
+        _say(f"  {fault.describe()}")
+    if len(undeclared) > 12:
+        _say(f"  ... and {len(undeclared) - 12} more undeclared")
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Say what is cached, what is missing, and what the texts are."""
     home = _home(args)
@@ -1148,6 +1193,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 )
         elif item.license:
             _say(f"                 licence: {item.license}")
+
+    # Held text against the system it is stored under. Nothing compared the two until
+    # 2026-08-22, and the fault that proved it was needed had already happened: `peshitta-alt`
+    # stored `PS2` chapters 2-5 against a declaration of one chapter of seven, and a person
+    # reading found it. See `versification.undeclared_text`.
+    _report_undeclared(home)
 
     missing = [row.corpus for row in searchable.values() if row.state == "missing"]
     drifted = [row.corpus for row in searchable.values() if row.state == "drifted"]

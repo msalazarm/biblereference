@@ -36,6 +36,7 @@ __all__ = [
     "PIVOT",
     "Correction",
     "Corrections",
+    "UndeclaredText",
     "UnknownVersificationError",
     "VerseOutOfRangeError",
     "Versification",
@@ -44,6 +45,7 @@ __all__ = [
     "VersificationGapError",
     "corrections",
     "fingerprint",
+    "undeclared_text",
 ]
 
 #: The versification everything converts through.
@@ -1098,6 +1100,96 @@ def _iter_books(system: _System) -> Iterator[str]:
 
 
 @cache
+@dataclass(frozen=True, slots=True)
+class UndeclaredText:
+    """Held text a versification system cannot account for.
+
+    Three ways it happens, and the middle one is what this exists to catch:
+
+    * **unknown** -- the corpus stores a book code `canon` does not know, so nothing can
+      title it, order it or convert it;
+    * **undeclared** -- the code is known and the corpus's own system does not declare it,
+      so every reference into it raises rather than resolving;
+    * **out of range** -- the book is declared and the corpus stores verses past the bound,
+      which is the shape that hid for months: `peshitta-alt` held `PS2` chapters 2-5 against
+      a one-chapter declaration and it was found by reading, not by any check.
+
+    The inverse -- a *declaration* with no text -- is deliberately not a fault. The vendored
+    Copenhagen maps model more books than this library does (`LAO` and `6EZ` are declared and
+    unknown here), and that is the standard being broader rather than an error.
+    """
+
+    corpus: str
+    book: str
+    kind: str
+    detail: str
+
+    def describe(self) -> str:
+        return f"{self.corpus}: {self.book} {self.kind} -- {self.detail}"
+
+
+def undeclared_text(
+    held: Iterable[tuple[str, str, str, int, int]],
+    versification: Versification | None = None,
+) -> list[UndeclaredText]:
+    """Every held verse its own system cannot account for. See :class:`UndeclaredText`.
+
+    :param held: ``(corpus, versification, book, chapter, highest verse)`` per corpus-book-
+        chapter -- the shape a ``GROUP BY`` over the verse table gives, so the caller does
+        the counting and this does the judging.
+    """
+    from ..canon import is_known
+
+    vrs = versification or Versification.load()
+    out: list[UndeclaredText] = []
+    seen: set[tuple[str, str, str]] = set()
+    for corpus, system, book, chapter, highest in held:
+        if not is_known(book):
+            key = (corpus, book, "unknown")
+            if key not in seen:
+                seen.add(key)
+                out.append(UndeclaredText(corpus, book, "unknown", "no such book in canon.py"))
+            continue
+        try:
+            declared = vrs.has_book(system, book)
+        except UnknownVersificationError:
+            key = (corpus, book, "system")
+            if key not in seen:
+                seen.add(key)
+                out.append(
+                    UndeclaredText(corpus, book, "unknown system", f"no system named {system!r}")
+                )
+            continue
+        if not declared:
+            key = (corpus, book, "undeclared")
+            if key not in seen:
+                seen.add(key)
+                out.append(
+                    UndeclaredText(
+                        corpus, book, "undeclared", f"{system} declares no {book}"
+                    )
+                )
+            continue
+        chapters = vrs.chapter_count(system, book)
+        if chapter > chapters:
+            out.append(
+                UndeclaredText(
+                    corpus, book, "out of range",
+                    f"stores chapter {chapter}, {system} declares {chapters}",
+                )
+            )
+            continue
+        bound = vrs.max_verse(system, book, chapter)
+        if highest > bound:
+            out.append(
+                UndeclaredText(
+                    corpus, book, "out of range",
+                    f"stores {book} {chapter}:{highest}, {system} declares {chapter}:{bound}",
+                )
+            )
+    return out
+
+
 def fingerprint(systems: Iterable[str] = DEFAULT_SYSTEMS) -> str:
     """A stable digest of the versification data and the corrections applied to it.
 

@@ -8,12 +8,14 @@ ignored, so the assertions double as documentation of what the data claims.
 from __future__ import annotations
 
 import hashlib
+from collections import Counter
 from importlib import resources
 from pathlib import Path
 
 import pytest
 
 from biblereference.refs import VerseRef, parse_reference
+from biblereference.store import DataHome
 from biblereference.versification import (
     AVAILABLE_SYSTEMS,
     DEFAULT_SYSTEMS,
@@ -24,6 +26,11 @@ from biblereference.versification import (
     VersificationGapError,
     fingerprint,
 )
+
+#: The developer's own library, captured at import -- before `conftest`'s session fixture
+#: points `$BIBLEREFERENCE_HOME` at an empty temporary directory. Reaching around it
+#: deliberately: a declaration is only worth checking against the text actually held.
+REAL = DataHome()
 
 
 @pytest.fixture(scope="module")
@@ -1077,3 +1084,55 @@ def test_extending_a_book_the_system_does_not_have_is_refused() -> None:
 def test_an_extension_to_an_empty_chapter_is_refused() -> None:
     with pytest.raises(VersificationDataError, match="not worth declaring"):
         _extend("PS2", {"2": 0})
+
+
+# --------------------------------------------------------------------------------------
+# Declarations against reality
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not REAL.database.exists(), reason="needs a built library")
+def test_no_corpus_stores_text_its_own_system_cannot_account_for() -> None:
+    """The check that did not exist, and the fault that proved it was needed.
+
+    `peshitta-alt` stored `PS2` chapters 2-5 -- 58 verses -- against a declaration of one
+    chapter of seven, and it was found by a person reading rather than by anything running.
+    Nothing in this library compared held text against the system it is stored under.
+
+    **441 is a ratchet, not a target.** Every one of them is an edition whose verse
+    divisions differ from the Copenhagen standard, which is endemic in the deuterocanon:
+    267 are `lxx`, and TOB, SIR, ESG, ODA, PSS and 1ES supply 172 between them. Twelve are
+    books the Greek scheme does not have as books at all -- `lxx` has no NEH because it is
+    2 Esdras there, no DAN because it is DNT, no EST because it is ESG, no S3Y because it is
+    Daniel 3:24-90. Those want mapping, not declaring, and are `quotes2.md`'s bridge work.
+
+    So this pins the number rather than demanding zero: a new corpus or a corrected
+    declaration may move it, and moving it should be a decision somebody wrote down.
+    """
+    import sqlite3
+
+    from biblereference.versification import undeclared_text
+
+    with sqlite3.connect(f"file:{REAL.database}?mode=ro", uri=True) as db:
+        systems = {corpus: vrs for corpus, vrs in db.execute(
+            "SELECT corpus, versification FROM source_meta")}
+        held = [
+            (corpus, systems.get(corpus, "org"), book, chapter, highest)
+            for corpus, book, chapter, highest in db.execute(
+                "SELECT corpus, book, chapter, MAX(verse) FROM verse "
+                "GROUP BY corpus, book, chapter"
+            )
+        ]
+
+    faults = undeclared_text(held)
+    kinds = Counter(fault.kind for fault in faults)
+
+    assert not [f for f in faults if f.kind == "unknown"], (
+        f"a corpus stores a book canon.py does not know: "
+        f"{[f.describe() for f in faults if f.kind == 'unknown'][:5]}"
+    )
+    assert kinds["undeclared"] == 12, "the count moved; add or remove it deliberately"
+    assert len(faults) == 441, "the count moved; add or remove it deliberately"
+
+    # The fault this test was written for, and it stays fixed.
+    assert not [f for f in faults if f.book == "PS2"]
