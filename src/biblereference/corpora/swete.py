@@ -110,7 +110,16 @@ _SKIPPED: Final[dict[str, str]] = {
     "Sus": "Old Greek Susanna (60 verses); Theodotion's 64 are the mapped text",
     "Bel": "Old Greek Bel; Theodotion is the mapped text",
     "Tbs": "Tobit in Codex Sinaiticus, a distinct recension with no verse mapping",
-    "1En": "1 Enoch, outside every canon this library resolves against",
+    # Was "outside every canon this library resolves against", which stopped being true:
+    # `ENO` is a registered appendix code in `canon.py` and `org` declares it. The live
+    # blocker is narrower and is the same one as `Jsa` -- **`lxx.json` does not declare
+    # `ENO` at all**, and this corpus is `lxx`. Swete prints 353 verse references for it
+    # (247 non-empty): chapters 1-32 with 4 an empty stub, 89 at 49 verses, 97 at 5, and
+    # 33-88 and 90-96 present as one-verse stubs. `org` declares 42 chapters with counts
+    # that are a placeholder rather than a description -- chapter 4 at 88 verses, where the
+    # text has one. Importing this wants `ENO` declared in `lxx`, which is an editorial act
+    # on a shipped scheme and is not one to slip in beside a corpus import.
+    "1En": "1 Enoch; `lxx.json` declares no ENO, so there is nothing to map it onto",
     "Jsa": "Joshua A, an alternative recension with no verse mapping",
 }
 
