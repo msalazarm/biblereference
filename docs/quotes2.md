@@ -935,6 +935,47 @@ run does not apply containment, fragmentation or the composite, so the ranking i
 and no false-positive price has been paid on the control corpus or on §8's named terrain.
 This is evidence that the channel retrieves, not that it may ship.
 
+### 7.2 The full set, and the control corpus, which refuses this gate
+
+Run over all 104 rather than the first 40:
+
+```
+retrieved                45 of 104
+proposals per query      median 38, p90 110, max 230
+rank of correct verse    median 5   (11 first, 24 in the top 5, 35 in the top 20)
+```
+
+Then pointed at 311 passages of pre-Christian Greek — the standing veto:
+
+```
+proposals per passage    median 172, p90 921, max 2,823
+                         111,460 proposals over 40,237 words
+                         = 2,770 per 1,000 words
+```
+
+**The current matcher returns 0.20 matches per 1,000 words on the same corpus. This proposes
+2,770.** Four orders of magnitude. At that rate Boyce's nine works — 21,338 words — would
+draw roughly 59,000 candidates for the composite to score. It is not a proposer at these
+settings; it is the corpus.
+
+**And the earlier "median 21 proposals" was an artefact of passage length, not a property of
+the channel.** Boyce's loci average 28 words and the control passages 126; more words means
+more rare lemmas, which means a larger union of postings. §7.1 measured short passages and
+read the answer as a rate. The honest statement is that proposals scale with the query, and
+any gate that does not scale with it will behave differently on a verse-length quotation and
+on a paragraph.
+
+**So `df ≤ 200, bits ≥ 25` is refused**, and the gate-simulation table above should be read
+with that in mind: it counts what a gate *admits* when handed the right verse, which is not
+what a gate *costs* when handed a corpus. Both numbers were needed and only the second
+decides anything.
+
+What the earlier table does still say is where to look: `df ≤ 100` halves the reach, 48 to 23,
+and would cut the control rate by much more than half, since the largest postings are the
+ones being removed. That trade has not been measured and is the next thing to measure. **A
+channel that reaches 23 citations at a defensible false-positive rate is worth building; one
+that reaches 45 by proposing the corpus is not.**
+
 **Disposition.** This channel **proposes only**. The composite scores it, `verify` may check
 it, families report rivals, and the existing gate disposes. That two-stage split is the
 doctrine the project already follows, and it is what keeps a loose retriever from becoming a
