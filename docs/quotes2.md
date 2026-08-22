@@ -848,11 +848,37 @@ verification: **summed term surprisal inflates on a conjunction, and it inflates
 the text is formulaic or merely long.**
 
 That does not refute the channel; it locates the work. Everything the design adds over the
-bare sum — entity ids, which are far rarer than lemmas; containment normalised against the
-shorter unit; a df ceiling requiring at least one genuinely rare term; the composite
-downstream — is not decoration. It is the whole discriminator, and the table above is the
-baseline it has to beat. **Nine citations is what this channel is worth if none of that
-works.**
+bare sum is the discriminator, and the table above is the baseline it has to beat. **Nine
+citations is what this channel is worth if none of that works.**
+
+**The df clause was then measured on its own, and it is what carries the channel.** Same 102
+citations, same 4,000 unrelated pairs, adding this section's own gate — *at least one shared
+term below a document-frequency ceiling*:
+
+| gate | share of unrelated pairs | false proposals per query | citations reached |
+|---|---|---|---|
+| bits ≥ 25, no df clause | 9.05% | 3,321 | 87 |
+| bits ≥ 25, rarest shared lemma in ≤ 500 verses | 0.50% | 184 | 64 |
+| bits ≥ 25, ≤ 200 verses | 0.12% | 46 | 48 |
+| **bits ≥ 25, ≤ 100 verses** | **0.00%** | **0** | **23** |
+| bits ≥ 40, ≤ 200 verses | 0.03% | 9 | 34 |
+| bits ≥ 60, ≤ 500 verses | 0.00% | 0 | 20 |
+
+**At zero measured false proposals the channel reaches 23 of the 102, against 9 for the bare
+sum.** The clause this section already specified — *"not on term count but on the rarity of
+the conjunction: total bits above a floor **and** at least one term below a df ceiling"* — is
+not a refinement of the statistic. It is the statistic; the bits sum only ranks what the
+rarity clause has already admitted.
+
+**And the two-stage doctrine buys more.** At `bits ≥ 25, df ≤ 200` the channel reaches 48 and
+proposes about 46 spurious verses per query. That is not a failure if the channel proposes
+only: 46 candidates per query is well within what the composite and the existing gate dispose
+of, and it is far below what `_candidates` already hands them. The choice between 23 at zero
+and 48 at 46-per-query is a calibration question for the control corpus, not a design
+question — which is the right shape for it to have.
+
+Both figures are measured on the naive lemma intersection alone. Entity ids, which are rarer
+than lemmas and which §6.1 shows are barely registered, are **not** in either number.
 
 **Disposition.** This channel **proposes only**. The composite scores it, `verify` may check
 it, families report rivals, and the existing gate disposes. That two-stage split is the
