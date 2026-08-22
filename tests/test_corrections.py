@@ -61,15 +61,21 @@ def test_every_reason_written_in_the_file_is_reachable() -> None:
     indexed = {correction.reason for correction in corrections().all()}
 
     assert written == indexed, f"unreachable: {sorted(written - indexed)}"
-    # 216 written, 211 distinct: five entries share their prose with a sibling, which is
+    # 219 written, 214 distinct: five entries share their prose with a sibling, which is
     # what a fix explained once and applied twice looks like.
     #
     # 202 -> 216 on 2026-08-20, and the fourteen are one piece of work: the five rso faults
     # the Slavonic judge run found. Three drops (PRO 18:9-25, PSA 139:0-14, PSA 114:0-8) and
     # eleven mappings to replace them, across Proverbs 18, Psalms 139 and 114, Song 6-7 and
     # the transposed ark formulas at Numbers 10:34-36.
-    assert len(occurrences) == 216, "the count moved; add or remove the reason deliberately"
-    assert len(written) == 211
+    #
+    # 216 -> 219 on 2026-08-22, and the three are one piece of work too: 1 Enoch's
+    # declaration, which was a placeholder in `org` with 41 of its 42 chapters wrong and
+    # nothing in `lxx` at all. A `fix_max_verses` for the 41, an `extend_books` for the 66
+    # chapters the declaration stopped short of, and an `add_books` giving `lxx` the shape
+    # Swete actually prints.
+    assert len(occurrences) == 219, "the count moved; add or remove the reason deliberately"
+    assert len(written) == 214
 
 
 def test_every_correction_names_a_system_the_library_knows() -> None:
