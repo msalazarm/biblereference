@@ -385,6 +385,11 @@ The tier triples the alternates — 90 to 284, on 120 matches instead of 71 — 
 the new ones is a citation Boyce marked.** It does exactly what it was written to do and
 that turns out not to be the thing worth doing.
 
+(This table reads alternates on the *gate* pass only, which is why its `gated` column sits at
+38 where §2.2's sits at 46. §2.2 reads them on the floor pass too, and eight citations move
+`unseen → gated` there. Both are true; they answer different questions, and the difference is
+worth naming rather than reconciling silently.)
+
 ### 4.3 Why — and the defect all three attempts were circling
 
 Didache 1.4 with the tier on, which is the case §2.1 was built from:
@@ -814,9 +819,13 @@ the distribution behind them), §6.2 (73 pairs, 3 broken), §6.3 (no caller).
 Also measured, and it changed the plan: **§4.1 swept over all nine works and lost six
 credited citations**, which is why §4 recommends the tier and abandons the sort change.
 
-**Pending:** the `covering_rivals` sweep, which prices §4.2 across all nine works rather than
-one locus. Nothing else in this document waits on it, and §11's last refusal says nothing
-new is built until P0 is settled and re-scored.
+Also measured since: **§4.2 recovers nothing** (284 alternates, no Boyce citation), and
+**§4.3 is worth six citations and eight with `alternates` read, at no cost in Boyce's
+negatives.** P0 is settled.
+
+**Pending:** the pre-Christian control corpus price for `gate_first` (`tools/boyce/control.py`),
+which is the standing veto and the last thing between the tier and a recommendation; and the
+span-level work behind §5-§7, which is where the remaining 81 live.
 
 ---
 
@@ -849,8 +858,8 @@ And four refusals this document adds, three of them learned the hard way:
   kept loser (§4.2, gained none), and a downstream reader (§2.2, the only one that helped —
   ten citations out of `unseen`, though only two of them all the way to `found`). Each was
   plausible, each was argued from the code, and the sweep refused two outright and cut the
-  third down. §4.3 is the fourth and is being swept before it is written up as anything but
-  a hypothesis.
+  third down. §4.3 is the fourth; it was swept before it was written up, and it is the one
+  that works.
 
 ---
 
