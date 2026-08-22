@@ -29,6 +29,7 @@ from biblereference.search import (
     build_index,
     build_lemma_index,
 )
+from biblereference.emphasis import FOLD_VERSION
 from biblereference.store import DataHome, SourceMeta, open_store, write_corpus
 from test_regression import GREEK, _filler
 
@@ -164,6 +165,15 @@ def home(tmp_path: Path) -> DataHome:
         connection.executemany(
             "INSERT OR IGNORE INTO lemma_form (language, form, lemma) VALUES ('grc', ?, ?)",
             [(form, lemma) for form, lemmas in LEXICON.items() for lemma in lemmas],
+        )
+        # Stamped like the real builder stamps it. `build_lemma_index` refuses a lexicon
+        # that cannot say which fold spelled its forms, and a hand-written one is no more
+        # trustworthy than a stale one if it will not say.
+        connection.execute(
+            "INSERT OR REPLACE INTO lemma_form_state "
+            "(language, built_at, fold_version, forms, readings) VALUES (?, ?, ?, ?, ?)",
+            ("grc", "2026-01-01T00:00:00+00:00", FOLD_VERSION, len(LEXICON),
+             sum(len(one) for one in LEXICON.values())),
         )
     build_lemma_index(where)
     return where

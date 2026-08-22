@@ -310,11 +310,30 @@ def build_profiles(
     Witness order per anchor: the anchor's own editions (critical text first), then one
     canonical edition of each family member, by the family's verified chain, descending.
     """
-    from .lemmata import Lexicon
+    from .lemmata import Lexicon, require_current_lexicon
+    from .parallels import parallels_fold
     from .search import _tokens, lemma_readings
     from .store import DataHome
 
     assert isinstance(home, DataHome)
+
+    # The inputs, checked before anything is written. This artifact records its own fold
+    # honestly and did so through six bumps while its anchors came from a `parallel_family`
+    # nobody had rebuilt -- a true stamp over a stale input, which reading the stamp back
+    # could never have caught. The families table now carries a fold; this is the consumer
+    # that was burned by its absence finally reading it.
+    families = parallels_fold(home)
+    if families is not None and families != FOLD_VERSION:
+        raise ValueError(
+            f"the parallel families were verified at fold {families} and this library folds "
+            f"at {FOLD_VERSION}. Every pair in that table cleared a surprisal floor measured "
+            f"over the folded lemma index, so the anchors are stale and any profiles built "
+            f"from them would carry a current stamp over them. Run "
+            f"`biblereference rebuild --step 'parallel families'` first."
+        )
+    for language in PROFILE_LANGUAGES:
+        require_current_lexicon(home, language)
+
     target = out or home.root / "db" / "profiles.sqlite"
     lexicon = Lexicon(home)
     for language in PROFILE_LANGUAGES:

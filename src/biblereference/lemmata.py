@@ -49,6 +49,7 @@ __all__ = [
     "build_lexicon",
     "lexicon_coverage",
     "lexicon_folds",
+    "require_current_lexicon",
 ]
 
 
@@ -228,6 +229,34 @@ def lexicon_folds(home: DataHome) -> dict[str, int | None]:
         except sqlite3.OperationalError:
             stamped = {}
     return {language: stamped.get(language) for language in sorted(held)}
+
+
+def require_current_lexicon(home: DataHome, language: str) -> None:
+    """Refuse to build *from* a lexicon folded under a rule this library no longer applies.
+
+    The stamp was added when `lemma_form` was found six folds stale; for a day afterwards
+    only ``doctor`` read it, which is the same fault one level up — a stamp nobody consults
+    cannot stop anything. Every builder that looks a form up here now asks first, so a
+    stale lexicon cannot quietly become a freshly stamped index, family table or profile
+    set. That is exactly how `profiles.sqlite` came to record fold 8 honestly while its
+    anchors were six folds old.
+
+    Silent on an *empty* lexicon: absence is the caller's own problem and is already
+    reported as an unbuilt layer. This refuses the populated-but-wrong case only.
+    """
+    folds = lexicon_folds(home)
+    if language not in folds:
+        return
+    recorded = folds[language]
+    if recorded == FOLD_VERSION:
+        return
+    said = "does not say which fold built it" if recorded is None else f"was folded at {recorded}"
+    raise LexiconUnavailable(
+        f"the {language} lexicon {said} and this library folds at {FOLD_VERSION}. Its forms "
+        f"are spelled the way the old rule spelled them, so anything built from it now would "
+        f"carry a current stamp over stale lookups. Run `biblereference lemmata --language "
+        f"{language}`, then `biblereference index --lemmata`."
+    )
 
 
 def lexicon_coverage(home: DataHome) -> dict[str, int]:

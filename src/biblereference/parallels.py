@@ -167,8 +167,13 @@ def build_parallels(
     home: DataHome, report: Callable[[str], None] = lambda line: None
 ) -> ParallelsResult:
     """Verify the seed list verbally and write the ``parallel_family`` table."""
-    from .lemmata import Lexicon
+    from .lemmata import Lexicon, require_current_lexicon
     from .search import LemmaWeights, Reading, _tokens, lemma_chain, lemma_readings
+
+    # Every pair below is admitted on surprisal read off the folded lemma index, so a stale
+    # lexicon would put a current stamp over stale scoring -- the fault this table itself
+    # suffered for six folds.
+    require_current_lexicon(home, "grc")
 
     archive = max((home.sources / SOURCE.id).iterdir(), key=lambda path: path.name, default=None)
     if archive is None:

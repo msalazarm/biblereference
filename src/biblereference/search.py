@@ -1176,6 +1176,14 @@ def build_lemma_index(
     the promise that the exact-form index does not move is easier to keep when no code path
     can move both.
     """
+    # The lexicon this indexes through, checked before a row is written. It is the whole
+    # content of the index: forms folded under a superseded rule produce an index that is
+    # stamped current and looks nothing up.
+    from .lemmata import require_current_lexicon
+
+    for language in ("grc", "la"):
+        require_current_lexicon(home, language)
+
     from .lemmata import Lexicon
 
     with open_store(home) as connection:

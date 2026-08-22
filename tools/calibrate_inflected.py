@@ -31,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from biblereference.canon import AmbiguousBookError, UnknownBookError, resolve_book
+from biblereference.emphasis import FOLD_VERSION
 from biblereference.lemmata import Lexicon
 from biblereference.search import (
     GRADES,
@@ -108,9 +109,7 @@ def marks(limit: int | None, seed: int = 0) -> list[Mark]:
                 start = str(context).find(quoted)
             if start > 0:
                 announced = preceding(str(context), start, "grc") is not None
-        out.append(
-            Mark(usfm, int(chapter), int(verse), SYSTEMS[system], quoted, announced)
-        )
+        out.append(Mark(usfm, int(chapter), int(verse), SYSTEMS[system], quoted, announced))
     if limit and len(out) > limit:
         # Sampled deterministically, so two runs of the same size are comparable.
         out = random.Random(seed).sample(out, limit)
@@ -257,8 +256,7 @@ def control_text(cap: int) -> tuple[list[str], int]:
     eras = {key: value.get("era") for key, value in dating.items() if isinstance(value, dict)}
     db = sqlite3.connect(f"file:{MARKS}?mode=ro", uri=True)
     by_witness = {
-        wid: work
-        for wid, work in db.execute("SELECT id, work FROM witness WHERE language = 'grc'")
+        wid: work for wid, work in db.execute("SELECT id, work FROM witness WHERE language = 'grc'")
     }
     #: Textgroup id -> the person, where two catalogues file one author twice. The cap
     #: below counts per *person*, not per id, because it cannot otherwise see them: the
@@ -280,8 +278,7 @@ def control_text(cap: int) -> tuple[list[str], int]:
             # ORDER BY, so the deterministic shuffle below has a deterministic input:
             # without it the ordering rides on rowid order, which a VACUUM may change,
             # and `--resume`'s contiguous-prefix invariant rides on this list.
-            "SELECT id, work, words FROM witness WHERE language = 'grc' AND words > 0 "
-            "ORDER BY id"
+            "SELECT id, work, words FROM witness WHERE language = 'grc' AND words > 0 ORDER BY id"
         )
         if eras.get((work or "").split(".")[0]) in CONTROL_ERAS
     ]
@@ -303,8 +300,7 @@ def control_text(cap: int) -> tuple[list[str], int]:
         if spent.get(author, 0) >= share:
             continue
         for (text,) in db.execute(
-            "SELECT text FROM passage WHERE witness = ? AND text IS NOT NULL "
-            "ORDER BY ordinal",
+            "SELECT text FROM passage WHERE witness = ? AND text IS NOT NULL ORDER BY ordinal",
             (wid,),
         ):
             length = len(str(text).split())
@@ -413,9 +409,7 @@ def _evidence_one(
         windows += 1
         chunk = " ".join(tokens[start : start + window])
         before = " ".join(tokens[max(0, start - REACH) : start])
-        announced = bool(before) and (
-            preceding(before + " ", len(before) + 1, "grc") is not None
-        )
+        announced = bool(before) and (preceding(before + " ", len(before) + 1, "grc") is not None)
         matches = searcher.search(chunk, limit=COLLECT_LIMIT)  # type: ignore[attr-defined]
         if len(matches) == COLLECT_LIMIT:
             truncated += 1
@@ -426,7 +420,9 @@ def _evidence_one(
             if mine is None:
                 mine = lemma_readings(_tokens(chunk, "grc"), "grc", lexicon)  # type: ignore[arg-type]
             theirs = lemma_readings(
-                _tokens(match.witnesses[0].text, "grc"), "grc", lexicon  # type: ignore[arg-type]
+                _tokens(match.witnesses[0].text, "grc"),
+                "grc",
+                lexicon,  # type: ignore[arg-type]
             )
             peak, _ = offset_histogram(mine, theirs, weigh)  # type: ignore[arg-type]
             rows.append(
@@ -558,6 +554,12 @@ def _checkpoint(
             "shard_windows": _SHARD_WINDOWS,
             "cap": cap,
             "complete": complete,
+            # Every axis here came out of `searcher.search` over the folded search and lemma
+            # indexes, so two folds' rows are two distributions and must never be appended
+            # into one. The resume already refuses a different cap, different fields and a
+            # different shard size on the stated ground that "the partial must have been cut
+            # from the same cloth"; the fold was the one thread of that cloth unchecked.
+            "fold_version": FOLD_VERSION,
         }
     )
     scratch = saved.with_suffix(saved.suffix + ".tmp")
@@ -609,6 +611,20 @@ def cmd_control(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
+        recorded_fold = record.get("fold_version")
+        if recorded_fold is None or int(recorded_fold) != FOLD_VERSION:
+            said = (
+                "does not say which fold it was collected under"
+                if recorded_fold is None
+                else f"was collected under fold {recorded_fold}"
+            )
+            print(
+                f"checkpoint {said} and this library folds at {FOLD_VERSION}; its axes were "
+                f"measured over a differently folded index, and appending to them would merge "
+                f"two null distributions into one -- start over",
+                file=sys.stderr,
+            )
+            return 2
         if int(record.get("shard_windows", 0)) != _SHARD_WINDOWS:
             print(
                 f"checkpoint was written with shard_windows="
@@ -641,12 +657,8 @@ def cmd_control(args: argparse.Namespace) -> int:
     last_write = time.monotonic()
     if remaining:
         context = multiprocessing.get_context("spawn")
-        tiers = {
-            name.strip(): True for name in str(args.tiers).split(",") if name.strip()
-        }
-        with context.Pool(
-            args.workers, initializer=_worker_init, initargs=(tiers,)
-        ) as pool:
+        tiers = {name.strip(): True for name in str(args.tiers).split(",") if name.strip()}
+        with context.Pool(args.workers, initializer=_worker_init, initargs=(tiers,)) as pool:
             # Ordered imap: `done` stays a contiguous prefix, which is the whole resume
             # invariant. chunksize amortises the pickle traffic.
             for rows, seen, length, cut in pool.imap(_evidence_shard, remaining, chunksize=4):
@@ -657,18 +669,26 @@ def cmd_control(args: argparse.Namespace) -> int:
                 done += 1
                 if saved and (done % 25 == 0 or time.monotonic() - last_write > 60):
                     _checkpoint(
-                        saved, words=words, windows=windows, rows=found, done=done,
-                        cap=args.control, complete=False,
+                        saved,
+                        words=words,
+                        windows=windows,
+                        rows=found,
+                        done=done,
+                        cap=args.control,
+                        complete=False,
                     )
                     last_write = time.monotonic()
                 if done % 200 == 0:
-                    print(
-                        f"  {done:,}/{len(plan):,} shards, {len(found):,} rows", flush=True
-                    )
+                    print(f"  {done:,}/{len(plan):,} shards, {len(found):,} rows", flush=True)
     if saved:
         _checkpoint(
-            saved, words=words, windows=windows, rows=found, done=done,
-            cap=args.control, complete=True,
+            saved,
+            words=words,
+            windows=windows,
+            rows=found,
+            done=done,
+            cap=args.control,
+            complete=True,
         )
         print(f"evidence written to {saved}\n")
     if truncated:
@@ -689,8 +709,7 @@ def _gate_table(found: list[tuple], fields: list[str], words: int, windows: int)
     for gate in CANDIDATES:
         n = sum(1 for row in found if gate.admits(*(row[c] for c in columns)))
         print(
-            f"  {gate!s:32} {n:>15,} {n / (words or 1) * 1000:>16.4f} "
-            f"{n / (windows or 1):>10.6f}"
+            f"  {gate!s:32} {n:>15,} {n / (words or 1) * 1000:>16.4f} {n / (windows or 1):>10.6f}"
         )
 
 
