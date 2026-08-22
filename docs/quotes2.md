@@ -543,12 +543,17 @@ gains `MAT 18:6-9`, Polycarp 7.1 promotes `1JN 4:2-3` from alternate to match, 1
 
 Two causes, both bounded and neither a scoring question:
 
-* **Seven fail a retrieval budget.** `_sweep` scores at most `_SCAN_CHAPTERS = 40` chapters
-  per query, and every one of these loci hits the cap. Lifted, **six of the seven are
-  nominated after all**, at ranks 84 to 163 — `PSA 66` at 84, `2CO 13` at 101, `2TI 4` at
-  103, `MAT 7` at 126, `ISA 37` at 157, `GAL 5` at 163. Only 1 Clement 34.8's `ISA 64` is
-  never nominated at any depth, and that one is honest: Clement's wording there is 1
-  Corinthians', not Isaiah's.
+* **Seven fail a retrieval budget — and lifting it buys nothing.** `_sweep` scores at most
+  `_SCAN_CHAPTERS = 40` chapters per query, and every one of these loci hits the cap.
+  Lifted, **six of the seven are nominated after all**, at ranks 84 to 163 — `PSA 66` at 84,
+  `2CO 13` at 101, `2TI 4` at 103, `MAT 7` at 126, `ISA 37` at 157, `GAL 5` at 163.
+
+  **Swept at a cap of 200 the golden set does not move**: found 87, unseen 78, identical to
+  40, for 21 extra claims across the corpus and five times the scoring cost per query. The
+  citations are nominated and then still lost — to clustering, to suppression, to the gate.
+  *Nominated* is necessary and is not *found*, and reading the first as the second is how
+  this was briefly the recommended next change. Refused, and the switch kept in
+  `tools/boyce/sweep.py --scan-chapters` so the next person need not re-derive it.
 * **Six fail a one-span-per-chapter rule.** `_exact_cluster` returns a single `Match` per
   chapter-cluster, so Didache 8.2's `MAT 6:5` was measured at similarity 0.107 and discarded
   for `MAT 6:9-13` at 0.807; the chain loop then re-attributes later chains to whichever
