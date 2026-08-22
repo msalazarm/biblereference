@@ -140,7 +140,7 @@ real.
 
 | phase | what | done when |
 |---|---|---|
-| **1** ✅ | Bidirectional admission in the *existing* verification pass | **done: 12,641 → 15,074 pairs, +2,433, +19.2%**, at unchanged floors and from no new data |
+| **1** ✅ | Bidirectional admission in the *existing* verification pass | **done: 12,641 → 15,074 pairs, +2,433, +19.2%**, at unchanged floors and from no new data. Golden recall unmoved — see below |
 | **2** | Proposal pass behind a flag, same floors, Greek only, sharded by book over a process pool | reproduces ≥99% of today's pairs; `1SA 2:10 ‖ ODA 3:10` present |
 | **3** | The conjunction gate, calibrated on a hand-read sample | the 16-pair blind read goes from 6 clear FPs to ≤2 without losing the 6 right ones |
 | **4** | The named-terrain suite: Esther, 1–4 Maccabees, and the war material in Joshua/Judges/Samuel/Kings/Chronicles | proposal rate there reported beside recall, in one table |
@@ -160,6 +160,12 @@ recording too, since a fold number cannot see a missing input.
 ---
 
 ## What this does not buy
+
+**Phase 1 moved the golden set by nothing, and that is now measured rather than predicted.**
+Families 12,641 → 15,074, swept: found 87, gated 44, unseen 78 — identical. Three more
+matches carry a family (107 → 110) and no citation changes status. The pairs the bidirectional
+rule adds are not the pairs Boyce's citations needed, which is what this section already said
+would happen and is worth having confirmed rather than assumed.
 
 **It does not move Boyce recall.** Six of the 209 golden citations name a target in a
 no-family book; three of those are unreachable anyway (Daniel is held as `DNT`, not
