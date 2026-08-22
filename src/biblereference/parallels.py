@@ -221,7 +221,24 @@ def build_parallels(
                     continue
                 seen.add((a, b))
                 resolved += 1
-                chained = lemma_chain(read(a), read(b), weigh)
+                # Chained both ways, and admitted on the better. `lemma_chain` is not
+                # symmetric -- `span_gap=8` on the left against `verse_gap=2` on the right --
+                # so which verse is the query decides what the pair scores. Until now that
+                # was decided by the seed file's From/To column, which is an editorial
+                # accident of a nineteenth-century cross-reference list and says nothing
+                # about the Greek.
+                #
+                # Measured on five stored pairs, every one of them would have been refused
+                # had the seed listed it the other way round: `JON 3:10` against `JER 25:5`
+                # chains 10 links / 14.5 bits one way and 14 / 29.0 the other, and the
+                # floors are 4 and 25. So this table has been arbitrarily thinner than its
+                # own thresholds imply, and the thinning had no relation to the text.
+                #
+                # `max` on bits rather than on length: bits is what the floor is calibrated
+                # in and what the consumer ranks by, and the two axes agreed on all five.
+                forward = lemma_chain(read(a), read(b), weigh)
+                backward = lemma_chain(read(b), read(a), weigh)
+                chained = forward if forward.bits >= backward.bits else backward
                 if chained.length < CHAIN_FLOOR or chained.bits < BITS_FLOOR:
                     continue
                 rows.append(

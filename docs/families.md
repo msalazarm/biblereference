@@ -29,7 +29,8 @@ Three consequences, all measured:
 * **`1SA 2:10 ‖ ODA 3:10` is absent.** They are the same sixty words differing in three —
   φρόνιμος against σοφός, φρονήσει against σοφίᾳ. Asked directly they chain at **73 links
   and 265.72 bits** against floors of 4 and 25. Nothing about the text was ever the problem.
-* **The table is thinner than its own floors imply, for an editorial reason.** `lemma_chain`
+* **The table was thinner than its own floors imply, for an editorial reason** — fixed
+  2026-08-22, and it was worth **+2,433 pairs, +19.2%**. `lemma_chain`
   is asymmetric — `span_gap=8` one way, `verse_gap=2` the other — and *which verse lands on
   the left is decided by the seed's From/To column*. Five stored pairs were tested in both
   directions and **all five would have been refused had the seed listed them the other way
@@ -139,7 +140,7 @@ real.
 
 | phase | what | done when |
 |---|---|---|
-| **1** | Bidirectional admission in the *existing* verification pass | the 5 known asymmetric pairs admit either way; `parallel_family` gains its true size at unchanged floors |
+| **1** ✅ | Bidirectional admission in the *existing* verification pass | **done: 12,641 → 15,074 pairs, +2,433, +19.2%**, at unchanged floors and from no new data |
 | **2** | Proposal pass behind a flag, same floors, Greek only, sharded by book over a process pool | reproduces ≥99% of today's pairs; `1SA 2:10 ‖ ODA 3:10` present |
 | **3** | The conjunction gate, calibrated on a hand-read sample | the 16-pair blind read goes from 6 clear FPs to ≤2 without losing the 6 right ones |
 | **4** | The named-terrain suite: Esther, 1–4 Maccabees, and the war material in Joshua/Judges/Samuel/Kings/Chronicles | proposal rate there reported beside recall, in one table |

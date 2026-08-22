@@ -97,6 +97,52 @@ def test_the_floors_pass_verbal_parallels_and_refuse_topical_links() -> None:
     assert not clears(axes("rahlfs", ("GEN", 1, 1), "rahlfs", ("PSA", 120, 2)))
 
 
+def test_a_pair_is_chained_both_ways_and_admitted_on_the_better() -> None:
+    """`lemma_chain` is not symmetric, and which verse was the query used to be an accident.
+
+    `span_gap=8` on the left against `verse_gap=2` on the right, so the same two verses
+    score differently depending which is asked about — and until 2026-08-22 that was decided
+    by the From/To column of a nineteenth-century cross-reference list, which says nothing
+    about the Greek. Jonah 4:2 against Exodus 34:6 chains 6 links and 23.9 bits one way and
+    6 and 33.4 the other, and the floor is 25.
+
+    Admitting on the better direction added **2,433 pairs, +19.2%**, at unchanged floors and
+    from no new data. The table had been arbitrarily thinner than its own thresholds imply.
+    """
+    import sqlite3
+
+    from biblereference.search import LemmaWeights, _tokens, lemma_chain, lemma_readings
+
+    lexicon = Lexicon(REAL)
+    lexicon.require("grc")
+    weigh = LemmaWeights(REAL).of("grc")
+    db = sqlite3.connect(f"file:{REAL.database}?mode=ro", uri=True)
+
+    def readings(key: tuple) -> list:
+        (text,) = db.execute(
+            "SELECT text FROM verse WHERE corpus IN ('rahlfs', 'n1904') "
+            "AND book=? AND chapter=? AND verse=?",
+            key,
+        ).fetchone()
+        return lemma_readings(_tokens(text, "grc"), "grc", lexicon)
+
+    jonah, exodus = readings(("JON", 4, 2)), readings(("EXO", 34, 6))
+    forward = lemma_chain(jonah, exodus, weigh)
+    backward = lemma_chain(exodus, jonah, weigh)
+
+    assert forward.bits < BITS_FLOOR, "the seed's own direction refuses this pair"
+    assert backward.bits >= BITS_FLOOR, "the other direction admits it"
+    assert max(forward.length, backward.length) >= CHAIN_FLOOR
+
+    # And the built table agrees: the pair is there.
+    (held,) = db.execute(
+        "SELECT COUNT(*) FROM parallel_family WHERE "
+        "(book_a='JON' AND chapter_a=4 AND verse_a=2 AND book_b='EXO') OR "
+        "(book_b='JON' AND chapter_b=4 AND verse_b=2 AND book_a='EXO')"
+    ).fetchone()
+    assert held, "a pair admitted in either direction is stored"
+
+
 @pytest.mark.skipif(
     not REAL.database.exists(),
     reason="needs a built library",
