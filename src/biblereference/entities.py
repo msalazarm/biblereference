@@ -149,9 +149,25 @@ def _parse_tipnr(text: str) -> Iterator[_Record]:
                 surface = strongs.split("=", 1)[1].strip()
                 if surface:
                     language = "grc" if strongs.lstrip("–- ").startswith("G") else "he"
-                    folded = fold(surface, language)
-                    if folded:
-                        forms.append((language, folded))
+                    # Comma-separated, where a name is spelled several ways. TIPNR writes
+                    # David as `G1138=Δαυείδ, Δαυίδ, Δαβίδ`, and folding that whole tail
+                    # stored one form reading `δαυειδ, δαυιδ, δαβιδ` -- a string no verse
+                    # can contain, so `by_form` matched David nowhere at all. Twenty-three
+                    # Greek entities were registered this way, David, Zeus and Judas
+                    # Iscariot among them.
+                    #
+                    # Split on the comma only. A space is not a separator here: `Areopagus`
+                    # really is `Ἄρειος Πάγος`, and splitting on whitespace would register
+                    # Ares and a hill as two entities rather than one place.
+                    #
+                    # Two forms therefore stay unmatchable, and knowingly: `αρειοσ παγοσ`
+                    # and `μαραν αθα`. `by_form` compares single folded tokens, so a
+                    # two-word name cannot meet one however it is stored. That wants
+                    # multi-token lookup, which is a different piece of work from this.
+                    for variant in surface.split(","):
+                        folded = fold(variant.strip(), language)
+                        if folded:
+                            forms.append((language, folded))
             listed = fields[-1] if len(fields) >= 5 else ""
             for token in listed.split(";"):
                 token = token.strip()

@@ -774,6 +774,32 @@ def test_a_rival_covering_less_and_scoring_lower_is_still_dropped() -> None:
     assert only.alternates == ()
 
 
+def test_a_long_match_is_not_deleted_by_a_short_one_sitting_inside_it() -> None:
+    """1 Clement 46.8, where Boyce marks two citations and the scan reported one.
+
+    `MRK 14:21` answers 65 characters and `MAT 18:6-9` answers 166 covering them. Testing
+    the overlap against the *shorter* span made 65 shared characters "most of it" and
+    deleted the longer, better-evidenced match -- although two fifths of what it found was
+    words the winner never touched. Tested against the match's own span, which is the
+    question the function's first line asks, both are reported.
+    """
+    inside = _match("MRK 14:21", (11, 76), 0.455, coverage=0.9)
+    around = _match("MAT 18:6-9", (11, 177), 0.107, coverage=0.29)
+    kept = _without_overlaps([inside, around])
+    assert [str(m.passage) for m in kept] == ["MRK 14:21", "MAT 18:6-9"]
+
+
+def test_the_shorter_rival_is_still_absorbed_when_it_explains_nothing_more() -> None:
+    """The half of the old rule worth keeping: two readings of the same words are one
+    result, and the loser becomes an alternate. Psalm 14 against Psalm 53."""
+    kept = _without_overlaps(
+        [_match("PSA 14:1", (0, 40), 0.9), _match("PSA 53:1", (2, 38), 0.88)]
+    )
+    (only,) = kept
+    assert str(only.passage) == "PSA 14:1"
+    assert [str(p) for p in only.alternates] == ["PSA 53:1"]
+
+
 def test_one_passage_read_as_two_barely_overlapping_spans_is_one_record() -> None:
     """The clause the looser overlap test needs, and the regression that proved it.
 

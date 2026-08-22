@@ -498,36 +498,69 @@ rather than defaulted — but unlike §4.1 there is now something worth offering
 
 ---
 
-## 5. Class B — more than one citation in one span, and it is 17
+## 5. Class B — I called it 17 and a catena rule; it is 2, and four other faults
 
-§4 recovers the case where two *different passages* answer the same words. It does not
-recover the case where a father quotes MAT 5:39 **and** MAT 5:41 in one breath, because
-those are two spans and the scan returns the better one. Measured, that is **17 of 209**:
-loci where the scan reports an admitted match and Boyce names a second citation there that
-it never reaches. 1 Clement 65.2 wants both 2CO 13:13 and JUD 1:25; Polycarp 2.1 wants both
-1PE 1:21 and 2TI 4:1; 1 Clement 60.3 wants three verses of Psalms at once.
+§3 counts 17 citations at a locus the scan has already spoken for, and §2.1's shape made a
+catena rule the obvious reading of them. Classifying all 17 by *why* Boyce's second citation
+is missing says otherwise:
 
-The instrument for this already exists and is half-used. `_claims` distinguishes *the same
-passage read as two spans* (one result) from *two quotations written one after another*
-(two results) by asking whether a different passage claims **most** of the shorter span —
-`shared * 2 > min(length)`, a bare majority. Its own docstring names the case it is
-protecting: *"Two quotations written one after another. Neighbours, not rivals. They share
-the space between them and sometimes a word, and a bare interval intersection — which this
-used to be — deleted the second of them for it."* That fix was made for quotations that
-**adjoin**. A catena interleaves them instead, the shared fraction lands just over half, and
-the second citation is deleted as a duplicate by the very test written to save it.
+| why the second citation is missing | of the 17 |
+|---|---|
+| generated, then deleted as overlapping | **2** |
+| generated, refused by the gate | 3 |
+| reported by the library, refused by the consumer's `admitted()` | 1 |
+| already an alternate on a kept match | 1 |
+| **never generated at all** | **10** |
 
-**Proposal.** Where two matches are at different coordinates *and each clears the gate on
-its own axes*, a bare majority overlap is not sufficient grounds to delete one. Report both,
-each with its own span, and let the consumer dispose. This is the two-stage doctrine the
-project already follows: the retriever proposes, the gate disposes, and a deletion inside
-the retriever is a decision taken in the wrong place.
+**Fifteen of the seventeen are not suppression.** No change to `_claims` or
+`_without_overlaps` can report a passage that was never built, and that is the majority
+case. The catena rule I proposed reaches two citations, not seventeen, and this section is
+rewritten rather than quietly rescoped.
 
-**But it is not shippable the way §4.2 is.** Reporting two matches where one was reported
-adds a finding rather than a field, so it moves what a consumer holds — the same agreement
-that governs §4.1 governs this. It must be offered, measured on the control corpus and on
-§8's named terrain first, and it is the change most exposed to both: a catena rule that
-fires on Esther's rote prayers will fire often.
+### 5.1 The two that are suppression — one line, measured
+
+`_claims` asks whether a rival "has already accounted for what `match` found", and then
+tests the overlap against **the shorter of the two spans**:
+
+```python
+return shared * 2 > min(left[1] - left[0], right[1] - right[0])   # was
+return shared * 2 > right[1] - right[0]                           # is
+```
+
+Those are different questions. At 1 Clement 46.8 a 166-character `MAT 18:6-9` — a citation
+Boyce marked — was deleted for a 65-character `MRK 14:21` sitting inside it, on 65 shared
+characters that are all of the winner and two fifths of the loser. Against the match's own
+span both are reported. Where the loser is the shorter of the two the rules are identical,
+so nothing that motivated the original changes: Psalm 14 against Psalm 53 is still one
+result with an alternate, and the guard test says so.
+
+Measured over all nine works: **found 81 → 82, alternates-read 83 → 84, claims per locus
+0.220 → 0.224, Boyce's fourth column unmoved.** Three concrete recoveries — 1 Clement 46.8
+gains `MAT 18:6-9`, Polycarp 7.1 promotes `1JN 4:2-3` from alternate to match, 1 Clement
+16.10 reports `ISA 53:9-10` beside `1PE 2:22`.
+
+### 5.2 The ten that were never generated, which are worth more
+
+Two causes, both bounded and neither a scoring question:
+
+* **Seven fail a retrieval budget.** `_sweep` scores at most `_SCAN_CHAPTERS = 40` chapters
+  per query, and every one of these loci hits the cap. Lifted, **six of the seven are
+  nominated after all**, at ranks 84 to 163 — `PSA 66` at 84, `2CO 13` at 101, `2TI 4` at
+  103, `MAT 7` at 126, `ISA 37` at 157, `GAL 5` at 163. Only 1 Clement 34.8's `ISA 64` is
+  never nominated at any depth, and that one is honest: Clement's wording there is 1
+  Corinthians', not Isaiah's.
+* **Six fail a one-span-per-chapter rule.** `_exact_cluster` returns a single `Match` per
+  chapter-cluster, so Didache 8.2's `MAT 6:5` was measured at similarity 0.107 and discarded
+  for `MAT 6:9-13` at 0.807; the chain loop then re-attributes later chains to whichever
+  verse-run chains best, so Didache 1.3's second chain went to `MAT 5:43-44` again and never
+  to 46-47.
+
+Both are the §4.3 shape once more — **a budget or a cap, applied before the evidence that
+would justify keeping the thing is available.** Neither is fixed here. The cap in particular
+is a precision decision with a cost on every query in the library, not only on catenae, and
+it wants the control corpus before it is touched.
+
+---
 
 ---
 

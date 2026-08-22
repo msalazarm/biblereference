@@ -147,8 +147,22 @@ def test_a_paradigm_does_not_lose_its_own_cases() -> None:
     *predicts* and yet does not analyse to. Those are paradigm slots orphaned from their own
     word, and the matcher cannot bridge them.
 
-    Measured on this library: **4.6% before the second source was added, 1.5% after.** The
-    ceiling is set at 2% so that the fix holds with headroom and the defect fails hard.
+    Measured on this library: **11.0% before the second source was added, 5.6% after.** The
+    ceiling is 8%: it passes now with headroom and fails hard on a Morpheus-only table.
+
+    It cannot be set near zero, and the reason is a limit of the method rather than of the
+    lexicon. Concatenating stem and ending assumes an invariant stem, which holds for the
+    second declension and breaks for contract verbs, third-declension alternation, augment
+    and reduplication. So the residual concentrates in small classes where the prediction
+    is wrong rather than the reading missing -- and the class that carries the real defect
+    moves exactly as it should:
+
+        -οσ   1,455 slots   12.7% -> 4.0%      the second declension, where the method is sound
+        -αω     112 slots   19.6%              contract verbs, where stem+ending is not a form
+        -υσ      16 slots   25.0%              third declension, same
+
+    A version of this assertion set at 2% was proposed and would have shipped red; the
+    number here is measured on both tables rather than taken from the proposal.
 
     `predicted >= 2500` is the guard that matters most. Without it a half-built or wrongly
     folded table predicts almost nothing, orphans almost nothing, and passes -- which is the
@@ -203,7 +217,7 @@ def test_a_paradigm_does_not_lose_its_own_cases() -> None:
         f"only {predicted} paradigm slots were checked; the lexicon or the index is too "
         f"thin for this measurement to mean anything"
     )
-    assert orphans / predicted <= 0.020, (
+    assert orphans / predicted <= 0.080, (
         f"{orphans}/{predicted} = {orphans / predicted:.1%} of paradigm slots are orphaned "
         f"from the lemma that predicts them"
     )

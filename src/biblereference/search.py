@@ -4068,9 +4068,19 @@ def _claims(winner: Match, match: Match) -> bool:
       space between them and sometimes a word, and a bare interval intersection -- which
       this used to be -- deleted the second of them for it.
 
-    So a different passage has to claim *most* of the shorter span before it counts as
-    reading the same words, while the same passage claims any overlap at all. Without that
-    second clause the same verse came back twice from one sentence.
+    So a different passage has to claim *most of what the match itself found* before it
+    counts as reading the same words, while the same passage claims any overlap at all.
+    Without that second clause the same verse came back twice from one sentence.
+
+    **Most of the match's own span, not most of the shorter of the two.** This tested
+    `min(len(winner), len(match))` until 2026-08-22, which answers a different question from
+    the one in this function's first line: a long match was deleted because a short one sat
+    inside it, even where most of the long match's words were unexplained by the short one.
+    At 1 Clement 46.8 a 166-character `MAT 18:6-9` -- a citation Boyce marked -- was deleted
+    for a 65-character `MRK 14:21` sitting within it, on 65 shared characters that are most
+    of the winner and two fifths of the loser. Where the loser is the shorter of the two the
+    two rules are identical, so nothing that motivated the original -- Psalm 14 against
+    Psalm 53, one passage read as two spans -- changes.
     """
     left, right = winner.span, match.span
     if left is None or right is None:
@@ -4080,7 +4090,7 @@ def _claims(winner: Match, match: Match) -> bool:
         return False
     if _coordinates(winner.passage) == _coordinates(match.passage):
         return True
-    return shared * 2 > min(left[1] - left[0], right[1] - right[0])
+    return shared * 2 > right[1] - right[0]
 
 
 def scan_records(

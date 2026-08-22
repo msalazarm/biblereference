@@ -44,6 +44,35 @@ def test_the_parser_reads_individuals_forms_and_clean_refs() -> None:
     assert records[2].kind == "place"
 
 
+#: Two records the shared fixture deliberately does not carry, because both exist to test
+#: how a *surface field* is split rather than how a record is read.
+VARIANTS = """TIPNR fixture
+$========== PERSON(s)
+David@Rut.4.17-Rev=H1732\tKing\t\t\t\t\t\t#desc\tperson
+– Named\tDavid@Rut.4.17-Rev\tH1732«H1732=דָּוִד\tDavid\thttps://x\tRut.4.17
+– Greek\tDavid@Rut.4.17-Rev\tG1138«G1138=Δαυείδ, Δαυίδ, Δαβίδ\tDavid\thttps://x\tMat.1.1
+$========== PLACE
+Areopagus@Act.17.19=G0697\tHill\t\t\t\t\t\t#desc\tplace
+– Greek\tAreopagus@Act.17.19\tG0697«G0697=Ἄρειος Πάγος\tAreopagus\thttps://x\tAct.17.19
+"""
+
+
+def test_a_name_spelled_several_ways_becomes_several_forms() -> None:
+    """TIPNR writes David as `G1138=Δαυείδ, Δαυίδ, Δαβίδ`, and folding that tail whole
+    stored one form reading `δαυειδ, δαυιδ, δαβιδ` -- a string no verse can contain, so
+    `by_form` matched David nowhere. Twenty-three Greek entities were registered that way.
+
+    The comma is the separator and the space is not: `Areopagus` really is two words.
+    """
+    records = {r.entity.split("@")[0]: r for r in _parse_tipnr(VARIANTS)}
+    david = {form for language, form in records["David"].forms if language == "grc"}
+    assert david == {"δαυειδ", "δαυιδ", "δαβιδ"}
+    assert not any("," in form for _, form in records["David"].forms)
+
+    (areopagus,) = [f for lang, f in records["Areopagus"].forms if lang == "grc"]
+    assert areopagus == fold("Ἄρειος Πάγος", "grc"), "a two-word name stays one form"
+
+
 def test_the_build_converts_and_the_reader_clusters(tmp_path: Path) -> None:
     home = DataHome(tmp_path)
     archive = home.sources / "tipnr" / "2026-08-17"
@@ -106,10 +135,15 @@ def test_an_allusive_gesture_activates_on_the_residue_only() -> None:
     """The two-pass design: the quotation is scan's and stays scan's; the entity gesture
     in the remainder becomes an allusion with its own grade, its evidence named, and
     what lost carried in alternates."""
+    # The sentence this used to carry -- "Abraham met Melchizedek king of Salem and was
+    # blessed by him" -- stopped being a residue on 2026-08-22, for a good reason: it is a
+    # close retelling of Hebrews 7:1-2, and once the Greek lexicon was assembled from two
+    # upstreams the lemma channel began finding it. `scan` returns HEB 7:1-2 over that span
+    # at 42.9 bits now, so the allusion pass rightly declines to explain what a quotation
+    # already has. This wording names the same two people without borrowing any phrasing.
     doc = (
         CLEMENT_17_3
-        + " καὶ γὰρ ὁ Ἀβραὰμ ἀπήντησεν τῷ Μελχισέδεκ βασιλεῖ Σαλὴμ καὶ εὐλογήθη ὑπ' "
-        "αὐτοῦ καθὼς ἴσμεν ἐκ τῶν γραφῶν."
+        + " περὶ δὲ τοῦ Ἀβραὰμ καὶ τοῦ Μελχισέδεκ πολλὰ λέγουσιν ἡμῖν οἱ πρεσβύτεροι."
     )
     with greek(inflected=True) as rich:
         found = rich.scan(doc)
