@@ -822,6 +822,38 @@ floor *and* at least one term below a df ceiling. The library holds **36,705 Gre
 across `rahlfs` and `n1904`, so singling one out costs log₂(36,705) ≈ **15.2 bits**, and that
 is the number the floor is calibrated against.
 
+**The bare statistic is not the gate, and here is the measurement that says so.** Scoring
+each of the 102 genuinely unreached citations by the summed surprisal of the lemmas its
+father's passage shares with Boyce's verse — the unordered, gap-unbounded intersection this
+section proposes — and scoring 4,000 unrelated (father passage, random verse) pairs the same
+way:
+
+| floor | share of *unrelated* pairs clearing it | false proposals per query, ×36,700 verses | citations reached |
+|---|---|---|---|
+| 25 bits | 7.9% | **2,908** | 87 |
+| 40 | 1.3% | 486 | 63 |
+| 60 | 0.10% | 37 | 26 |
+| **76** | **0.00%** | **0** | **9** |
+
+**At 25 bits, 87 of the 102 are "reachable" — and so is nearly one verse in twelve of
+scripture, chosen at random.** The null's median is 9.2 bits and its 95th percentile is 30.6;
+a father's passage and an unrelated verse share a great deal of ordinary Greek. Where the
+null runs out, at about 76 bits, the channel reaches nine.
+
+So the ~15.2 bits that singles one verse out of 36,700 is the cost of *independent* evidence,
+and a sum over shared lemma types is not independent evidence — it accumulates with passage
+length and with how much ordinary vocabulary two texts happen to share. This is the same
+arithmetic that makes §6.4's family proposal 35-40% wrong at floors calibrated for
+verification: **summed term surprisal inflates on a conjunction, and it inflates most where
+the text is formulaic or merely long.**
+
+That does not refute the channel; it locates the work. Everything the design adds over the
+bare sum — entity ids, which are far rarer than lemmas; containment normalised against the
+shorter unit; a df ceiling requiring at least one genuinely rare term; the composite
+downstream — is not decoration. It is the whole discriminator, and the table above is the
+baseline it has to beat. **Nine citations is what this channel is worth if none of that
+works.**
+
 **Disposition.** This channel **proposes only**. The composite scores it, `verify` may check
 it, families report rivals, and the existing gate disposes. That two-stage split is the
 doctrine the project already follows, and it is what keeps a loose retriever from becoming a
